@@ -1,0 +1,32 @@
+[package]
+name = "carryon-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Carry-On C ABI: panic-safe, versioned FFI driving the full import→carry→relaunch lifecycle. The adapter-by-id factory is the honest 'import a program' entry point (C passes data, never behavior)."
+
+[lib]
+# cdylib for Android .so, staticlib for iOS XCFramework, rlib for the in-workspace
+# Rust-as-C-caller green-gate test.
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+carryon-core = { workspace = true }
+carryon-adapter-api = { workspace = true }
+carryon-adapter-file = { path = "../carryon-adapter-file" }
+carryon-adapter-launcher = { path = "../carryon-adapter-launcher" }
+carryon-adapter-graph = { path = "../carryon-adapter-graph" }
+carryon-adapter-image = { path = "../carryon-adapter-image" }
+carryon-adapter-editor = { path = "../carryon-adapter-editor" }
+carryon-adapter-unsupported = { path = "../carryon-adapter-unsupported" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+
+[features]
+# Enables a test-only entry point that deliberately panics, to prove the catch_unwind
+# boundary returns an error code instead of aborting the process (§8.1).
+test-panic = []
+
+[dev-dependencies]
+tempfile = { workspace = true }

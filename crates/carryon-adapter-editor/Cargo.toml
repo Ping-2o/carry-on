@@ -1,0 +1,17 @@
+[package]
+name = "carryon-adapter-editor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Carry-On cooperative editor adapter (L4): single-writer mutable document with authority transfer."
+
+[dependencies]
+carryon-adapter-api = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+
+[dev-dependencies]
+carryon-core = { workspace = true }
+carryon-net = { workspace = true }
+tempfile = { workspace = true }

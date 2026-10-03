@@ -1,0 +1,16 @@
+[package]
+name = "carryon-math-core"
+version = "0.1.0"
+edition = "2021"
+description = "Carry-On block-sum encoder: PROVED q+1 construction (spec §5.9). First prototype."
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "carryon_math_core"
+path = "src/lib.rs"
+
+# No runtime dependencies: lib is std-only so test vectors are reproducible with zero deps.
+[dependencies]
+
+[dev-dependencies]
+proptest = "1"

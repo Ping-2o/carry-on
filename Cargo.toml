@@ -1,0 +1,48 @@
+# Carry-On workspace.
+# Phase 1 = shared core + local reference (spec §28). LOCAL ONLY.
+# Phase 2 = desktop engine core: TLS 1.3 transport, pairing, destination import,
+#   file (L1) + launcher (L0) adapters. Headless/testable; no GUI shells, no
+#   signing, no real cross-device claim (loopback evidence is labeled local).
+[workspace]
+resolver = "2"
+members = [
+    "prototype/math-core",
+    "crates/carryon-adapter-api",
+    "crates/carryon-core",
+    "crates/carryon-net",
+    "crates/carryon-adapter-graph",
+    "crates/carryon-adapter-image",
+    "crates/carryon-adapter-file",
+    "crates/carryon-adapter-editor",
+    "crates/carryon-adapter-launcher",
+    "crates/carryon-adapter-unsupported",
+    "crates/carryon-ffi",
+    "xtask",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+# Internal crates
+carryon-math-core = { path = "prototype/math-core" }
+carryon-adapter-api = { path = "crates/carryon-adapter-api" }
+carryon-core = { path = "crates/carryon-core" }
+carryon-net = { path = "crates/carryon-net" }
+# External, pinned, minimal.
+rusqlite = { version = "0.31", features = ["bundled"] }
+sha2 = "0.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4", "v5", "serde"] }
+thiserror = "1"
+# Phase 2 transport: real TLS 1.3 (no custom crypto, spec §8.7). Blocking I/O to
+# match the core's blocking API — no async runtime. `ring` provider pinned (pure-ish,
+# no C toolchain surprise vs aws-lc-rs default).
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+rcgen = "0.13"
+# Dev-only
+tempfile = "3"
+proptest = "1"

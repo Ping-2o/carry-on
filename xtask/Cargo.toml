@@ -1,0 +1,16 @@
+[package]
+name = "xtask"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Carry-On dev tasks: deterministic fixtures + one local evidence bundle."
+publish = false
+
+[dependencies]
+carryon-core = { workspace = true }
+carryon-adapter-api = { workspace = true }
+carryon-adapter-graph = { path = "../crates/carryon-adapter-graph" }
+carryon-adapter-editor = { path = "../crates/carryon-adapter-editor" }
+carryon-ffi = { path = "../crates/carryon-ffi" }
+serde_json = { workspace = true }
+uuid = { workspace = true }

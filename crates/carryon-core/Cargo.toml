@@ -1,0 +1,23 @@
+[package]
+name = "carryon-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Carry-On shared core: session/cut/object graph, content-addressed store, journal, policy, adapter host. Phase 1, local only."
+
+[dependencies]
+carryon-adapter-api = { workspace = true }
+carryon-math-core = { workspace = true }
+carryon-net = { workspace = true }
+rusqlite = { workspace = true }
+sha2 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+proptest = { workspace = true }
+carryon-adapter-graph = { path = "../carryon-adapter-graph" }
+carryon-adapter-file = { path = "../carryon-adapter-file" }

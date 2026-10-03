@@ -1,0 +1,10 @@
+[package]
+name = "carryon-adapter-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Carry-On §10.5 adapter API: trait + manifest/consent/plan types. No core dependency (§7.4 boundary)."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

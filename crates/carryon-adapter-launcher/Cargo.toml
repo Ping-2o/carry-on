@@ -1,0 +1,16 @@
+[package]
+name = "carryon-adapter-launcher"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Carry-On universal launcher adapter (L0): activation-only open of any app/URI/file. No state capture (spec §10.2 L0, §4.4 non-goals)."
+
+[dependencies]
+carryon-adapter-api = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+
+[dev-dependencies]
+carryon-core = { workspace = true }
+tempfile = { workspace = true }
