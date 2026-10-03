@@ -1074,6 +1074,7 @@ dependencies = [
  "carryon-adapter-graph",
  "carryon-core",
  "carryon-ffi",
+ "serde",
  "serde_json",
  "uuid",
 ]

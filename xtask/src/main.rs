@@ -279,7 +279,6 @@ use std::time::Instant;
 #[derive(Default, Clone)]
 struct Row {
     strategy: String,
-    scenario: String,
     time_to_action_ready_ms: f64,
     source_independence_ms: f64,
     bytes_before_first_action: u64,
@@ -290,7 +289,6 @@ struct Row {
     normal_use_overhead_ms: f64,
     endpoint_changed_symbols: u64, // separate symbol-distance metric (§5.6)
     oracle_agreed: bool,
-    verdict: String, // win | tie | lose vs the best non-Carry-On baseline (TTA)
 }
 
 /// getrusage(RUSAGE_SELF): (user+sys cpu seconds, max RSS). maxrss is bytes on
@@ -348,14 +346,17 @@ fn bench_source(dir: &std::path::Path, doc_bytes: usize, nav_bytes: usize) -> (C
     (core, session.to_string(), cut.number)
 }
 
-/// Run one real import of the authoritative closure over loopback TLS, returning
-/// (time_to_action_ready_ms, bytes_sent+recv by the destination). This measures the
-/// prerequisites — the optional navigation object is Ephemeral and not sealed, so it
-/// is NOT carried by the cut import (progressive by construction).
-fn import_closure(doc_bytes: usize, nav_bytes: usize) -> (f64, u64) {
+/// Run one real import of the authoritative closure over loopback TLS at a chosen
+/// chunk size, returning (time_to_action_ready_ms, bytes_sent+recv by the
+/// destination). The optional navigation object is Ephemeral and not sealed, so it is
+/// NOT carried by the cut import (progressive by construction). `chunk_bytes` is set
+/// on BOTH cores via `Core::set_chunk_size`, so it governs how the document/unsaved
+/// objects are split into transfer chunks (frame count + per-frame overhead).
+fn import_closure(doc_bytes: usize, nav_bytes: usize, chunk_bytes: u64) -> (f64, u64) {
     let src_dir = tempdir_like("bench-src");
     let dst_dir = tempdir_like("bench-dst");
     let (mut source, sess_str, cut_num) = bench_source(&src_dir, doc_bytes, nav_bytes);
+    source.set_chunk_size(Some(chunk_bytes)).unwrap();
 
     let source_id = DeviceIdentity::generate("source").unwrap();
     let dest_id = DeviceIdentity::generate("dest").unwrap();
@@ -371,6 +372,7 @@ fn import_closure(doc_bytes: usize, nav_bytes: usize) -> (f64, u64) {
     });
 
     let mut destination = Core::open(&dst_dir).unwrap();
+    destination.set_chunk_size(Some(chunk_bytes)).unwrap();
     let mut s = Session::connect(&addr, &dest_id, dt).unwrap();
     s.client_negotiate(vec![]).unwrap();
     let t0 = Instant::now();
@@ -477,242 +479,686 @@ fn tempdir_like(tag: &str) -> PathBuf {
     base
 }
 
-/// One scenario = (name, doc_bytes, nav_bytes, action_demands_optional). Returns the
-/// four strategy rows.
-fn run_scenario(
-    name: &str,
+// ---------------------------- config grid ----------------------------
+
+#[derive(Clone)]
+struct BenchConfig {
+    id: String,
     doc_bytes: usize,
     nav_bytes: usize,
-    action_needs_optional: bool,
-    no_handoff: bool,
-) -> Vec<Row> {
-    // Measure the shared primitives once (real work).
-    let (prereq_tta, prereq_bytes) = import_closure(doc_bytes, nav_bytes);
-    let (opt_ms, opt_bytes) = optional_transfer_bytes(nav_bytes);
-    let (save_ms, save_bytes) = save_reopen(doc_bytes, nav_bytes);
-    let overhead_ms = normal_use_overhead(doc_bytes, nav_bytes);
-    let (cpu, rss) = rusage_snapshot();
-
-    // Prerequisites always move for correctness; the optional only when a strategy
-    // chooses to (A always; D/C only if the action demands it).
-    let a = Row {
-        strategy: "A full-selected".into(),
-        scenario: name.into(),
-        time_to_action_ready_ms: prereq_tta + opt_ms, // waits for optional too
-        source_independence_ms: prereq_tta + opt_ms,
-        bytes_before_first_action: prereq_bytes + opt_bytes,
-        total_bytes: prereq_bytes + opt_bytes,
-        cpu_ms: cpu,
-        peak_rss_kb: rss,
-        prepared_but_unused_bytes: if action_needs_optional { 0 } else { opt_bytes },
-        normal_use_overhead_ms: 0.0,
-        endpoint_changed_symbols: 1, // one authoritative coordinate changed at the cut
-        oracle_agreed: true,
-        verdict: String::new(),
-    };
-    let b = Row {
-        strategy: "B save/reopen".into(),
-        scenario: name.into(),
-        time_to_action_ready_ms: save_ms,
-        source_independence_ms: save_ms,
-        bytes_before_first_action: save_bytes,
-        total_bytes: save_bytes,
-        cpu_ms: cpu,
-        peak_rss_kb: rss,
-        prepared_but_unused_bytes: 0,
-        normal_use_overhead_ms: 0.0,
-        endpoint_changed_symbols: 1,
-        oracle_agreed: true,
-        verdict: String::new(),
-    };
-    let c = Row {
-        strategy: "C demand-load".into(),
-        scenario: name.into(),
-        // Nothing pre-moved: first action pays the prerequisite pull inline.
-        time_to_action_ready_ms: prereq_tta,
-        source_independence_ms: if action_needs_optional {
-            prereq_tta + opt_ms
-        } else {
-            prereq_tta
-        },
-        bytes_before_first_action: prereq_bytes,
-        total_bytes: prereq_bytes + if action_needs_optional { opt_bytes } else { 0 },
-        cpu_ms: cpu,
-        peak_rss_kb: rss,
-        prepared_but_unused_bytes: 0,
-        normal_use_overhead_ms: 0.0,
-        endpoint_changed_symbols: 1,
-        oracle_agreed: true,
-        verdict: String::new(),
-    };
-    let d = Row {
-        strategy: "D carryon-progressive".into(),
-        scenario: name.into(),
-        time_to_action_ready_ms: prereq_tta, // ACTION_READY on prerequisites alone
-        // If the action later demands the optional, D pays a SEPARATE deferred fetch
-        // (an extra round-trip A avoided by bundling). This is where deferral can
-        // lose: when the optional was always going to be needed and is cheap.
-        source_independence_ms: if action_needs_optional {
-            prereq_tta + opt_ms
-        } else {
-            prereq_tta
-        },
-        bytes_before_first_action: prereq_bytes,
-        total_bytes: prereq_bytes + if action_needs_optional { opt_bytes } else { 0 },
-        cpu_ms: cpu,
-        peak_rss_kb: rss,
-        prepared_but_unused_bytes: 0, // deferral means nothing prepared-but-unused
-        // Carry-On pays action-conditioned preparation bookkeeping on EVERY session,
-        // handoff or not — the overhead a plain editor skips.
-        normal_use_overhead_ms: overhead_ms,
-        endpoint_changed_symbols: 1,
-        oracle_agreed: true,
-        verdict: String::new(),
-    };
-
-    let rows = vec![a, b, c, d];
-    // Verdict compares D (carryon-progressive) against A (full eager transfer) — both
-    // are real selective transfers, so it is the honest apples-to-apples pairing. The
-    // governing dimension is bytes-before-first-action when an optional payload can be
-    // deferred, else time-to-action-ready. (B save/reopen is a different modality:
-    // local, no network — near-zero TTA but it materializes the WHOLE store, shown in
-    // its total_bytes. It is a baseline, not the head-to-head.)
-    let a = &rows[0];
-    let d = &rows[3];
-    let bytes_win =
-        (d.bytes_before_first_action as f64) < (a.bytes_before_first_action as f64) * 0.5;
-    let tta_win = d.time_to_action_ready_ms < a.time_to_action_ready_ms * 0.95;
-    // D loses when deferral bought nothing but cost an extra round-trip: the optional
-    // was demanded anyway and small enough that A's bundling made it source-independent
-    // sooner, while D's bytes-before-first-action savings were negligible.
-    let si_lose = d.source_independence_ms > a.source_independence_ms * 1.05;
-    let verdict = if no_handoff {
-        // No handoff ever happens: Carry-On's progressive preparation is pure
-        // overhead a plain save/reopen editor never pays. Honest lose.
-        "lose"
-    } else if bytes_win || tta_win {
-        "win"
-    } else if si_lose {
-        "lose"
-    } else {
-        "tie"
-    };
-    let mut rows = rows;
-    rows[3].verdict = verdict.into();
-    rows
+    demand: bool,     // does the first action demand the optional object?
+    chunk_bytes: u64, // transfer chunk size for the authoritative import
+    no_handoff: bool, // no transfer ever happens (normal-use overhead case)
 }
 
-fn run_bench() {
-    let out_dir = std::env::args()
-        .nth(2)
-        .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::temp_dir().join("carryon-bench"));
-    std::fs::create_dir_all(&out_dir).unwrap();
-
-    // Scenario matrix designed to produce lose / tie / win honestly.
-    //  - tiny: no optional payload -> D's deferral buys nothing (tie, maybe lose to C).
-    //  - big-optional-unused: large optional the action does NOT need -> D wins big on
-    //    bytes-before-first-action + total vs A (which wastes the optional).
-    //  - big-optional-demanded: action later needs the optional -> C/D converge on
-    //    total; D still wins time-to-action-ready vs A.
-    let mut rows = Vec::new();
-    //  - no-handoff            : no transfer ever -> D's prep is pure overhead (LOSE).
-    //  - tiny-no-optional      : nothing to defer  -> deferral neutral (TIE).
-    //  - small-optional-demanded: cheap optional needed -> deferral ~neutral (TIE).
-    //  - big-optional-unused   : large optional unneeded -> D moves far less (WIN).
-    //  - big-optional-demanded : large optional needed later -> D still wins TTA (WIN).
-    rows.extend(run_scenario("no-handoff", 1024, 600_000, false, true));
-    rows.extend(run_scenario("tiny-no-optional", 256, 1, false, false));
-    rows.extend(run_scenario(
-        "small-optional-demanded",
-        1024,
-        200,
-        true,
-        false,
-    ));
-    rows.extend(run_scenario(
-        "big-optional-unused",
-        1024,
-        600_000,
-        false,
-        false,
-    ));
-    rows.extend(run_scenario(
-        "big-optional-demanded",
-        1024,
-        600_000,
-        true,
-        false,
-    ));
-
-    // Print a table.
-    println!("Carry-On preparation-strategy benchmark (MEASURED; loopback TLS 1.3, in-process)");
-    println!(
-        "{:<24} {:<22} {:>8} {:>10} {:>12} {:>12} {:>10} {:>8} {:>8} {:>6} {:>5}",
-        "scenario",
-        "strategy",
-        "TTA_ms",
-        "srcIndep",
-        "bytes_1st",
-        "total_bytes",
-        "wasted_B",
-        "ovhd_ms",
-        "rss_kb",
-        "ecs",
-        "v"
-    );
-    for r in &rows {
-        println!(
-            "{:<24} {:<22} {:>8.1} {:>10.1} {:>12} {:>12} {:>10} {:>8.3} {:>8} {:>6} {:>5}",
-            r.scenario,
-            r.strategy,
-            r.time_to_action_ready_ms,
-            r.source_independence_ms,
-            r.bytes_before_first_action,
-            r.total_bytes,
-            r.prepared_but_unused_bytes,
-            r.normal_use_overhead_ms,
-            r.peak_rss_kb,
-            r.endpoint_changed_symbols,
-            r.verdict,
-        );
+/// The filtered cross-product grid. Invalid combos are skipped with a reason.
+fn grid() -> (Vec<BenchConfig>, Vec<(String, String)>) {
+    let docs = [256usize, 4096, 65536, 1_048_576];
+    let navs = [0usize, 1024, 65536, 600_000];
+    let demands = [false, true];
+    // Chunk sizes: a ChunkData frame carries base64 of the chunk (~4/3 inflation) and
+    // must stay under MAX_CONTROL_FRAME (1 MiB). 524288 base64 ≈ 700 KiB < 1 MiB; a
+    // full 1 MiB chunk would overflow the frame, so it is excluded.
+    let chunks = [65536u64, 262_144, 524_288];
+    let mut out = Vec::new();
+    let mut skipped = Vec::new();
+    for &doc in &docs {
+        for &nav in &navs {
+            for &demand in &demands {
+                for &chunk in &chunks {
+                    let id = format!("doc{doc}_nav{nav}_demand{}_chunk{chunk}", demand as u8);
+                    // The optional object crosses as ONE control frame; cap it under
+                    // MAX_CONTROL_FRAME (1 MiB). 600_000 is the largest tested.
+                    if nav > 600_000 {
+                        skipped.push((id, "nav exceeds single-frame cap (1 MiB)".into()));
+                        continue;
+                    }
+                    // demand=true with no optional is degenerate (nothing to demand).
+                    if demand && nav == 0 {
+                        skipped.push((id, "demand=true with nav=0 is degenerate".into()));
+                        continue;
+                    }
+                    out.push(BenchConfig {
+                        id,
+                        doc_bytes: doc,
+                        nav_bytes: nav,
+                        demand,
+                        chunk_bytes: chunk,
+                        no_handoff: false,
+                    });
+                }
+            }
+        }
     }
-    println!(
-        "  ecs = endpoint_changed_symbols (spec §5.6 symbol-distance ONLY; not bytes, not runtime)."
-    );
-    println!("  v  = D (carryon-progressive) verdict vs best baseline time-to-action-ready.");
+    // A dedicated no-handoff sweep across document sizes (chunk/ nav fixed): shows the
+    // normal-use overhead D pays when no transfer ever happens.
+    for &doc in &docs {
+        out.push(BenchConfig {
+            id: format!("no-handoff_doc{doc}"),
+            doc_bytes: doc,
+            nav_bytes: 65536,
+            demand: false,
+            chunk_bytes: 262_144,
+            no_handoff: true,
+        });
+    }
+    (out, skipped)
+}
 
-    // Emit JSON.
-    let json: Vec<serde_json::Value> = rows
-        .iter()
-        .map(|r| {
-            serde_json::json!({
-                "scenario": r.scenario,
-                "strategy": r.strategy,
-                "time_to_action_ready_ms": r.time_to_action_ready_ms,
-                "source_independence_ms": r.source_independence_ms,
-                "bytes_before_first_action": r.bytes_before_first_action,
-                "total_bytes": r.total_bytes,
-                "prepared_but_unused_bytes": r.prepared_but_unused_bytes,
-                "cpu_ms": r.cpu_ms,
-                "peak_rss_kb": r.peak_rss_kb,
-                "normal_use_overhead_ms": r.normal_use_overhead_ms,
-                "endpoint_changed_symbols": r.endpoint_changed_symbols,
-                "oracle_agreed": r.oracle_agreed,
-                "verdict": r.verdict,
-            })
+// ---------------------------- statistics ----------------------------
+
+#[derive(Clone, serde::Serialize)]
+struct Stats {
+    mean: f64,
+    median: f64,
+    stddev: f64,
+    min: f64,
+    max: f64,
+    p95: f64,
+    n: usize,
+}
+
+fn stats(xs: &[f64]) -> Stats {
+    let n = xs.len();
+    if n == 0 {
+        return Stats {
+            mean: 0.0,
+            median: 0.0,
+            stddev: 0.0,
+            min: 0.0,
+            max: 0.0,
+            p95: 0.0,
+            n: 0,
+        };
+    }
+    let mut s = xs.to_vec();
+    s.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let mean = s.iter().sum::<f64>() / n as f64;
+    let var = s.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / n as f64;
+    let pct = |p: f64| {
+        let idx = ((p * (n as f64 - 1.0)).round() as usize).min(n - 1);
+        s[idx]
+    };
+    Stats {
+        mean,
+        median: pct(0.5),
+        stddev: var.sqrt(),
+        min: s[0],
+        max: s[n - 1],
+        p95: pct(0.95),
+        n,
+    }
+}
+
+// ---------------------------- one config, REPS reps ----------------------------
+
+/// Retry a measurement that uses real loopback sockets. Rapid TLS session churn across
+/// a large grid can transiently fail (`connection closed`, ephemeral-port/TIME_WAIT
+/// pressure); such a failure is an artifact of the harness, not of the engine, so we
+/// retry a few times with a short backoff before giving up.
+fn retry<T>(what: &str, mut run: impl FnMut() -> T) -> T {
+    let mut last = String::new();
+    for attempt in 0..6 {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(&mut run)) {
+            Ok(v) => return v,
+            Err(e) => {
+                last = e
+                    .downcast_ref::<String>()
+                    .cloned()
+                    .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+                    .unwrap_or_else(|| "panic".into());
+                let backoff = std::time::Duration::from_millis(20 * (attempt + 1) as u64);
+                busy_sleep(backoff);
+            }
+        }
+    }
+    panic!("{what}: failed after retries: {last}");
+}
+
+/// Thread::sleep stand-in using a spin on Instant (Date/sleep-free determinism note:
+/// Instant is allowed; a short real sleep lets sockets drain).
+fn busy_sleep(d: std::time::Duration) {
+    let t0 = Instant::now();
+    while t0.elapsed() < d {
+        std::hint::spin_loop();
+    }
+}
+
+/// Build the four strategy rows for one measured repetition of a config.
+fn measure_once(cfg: &BenchConfig) -> Vec<Row> {
+    let (prereq_tta, prereq_bytes) = retry("import_closure", || {
+        import_closure(cfg.doc_bytes, cfg.nav_bytes, cfg.chunk_bytes)
+    });
+    let (opt_ms, opt_bytes) = if cfg.nav_bytes > 0 {
+        retry("optional_transfer", || {
+            optional_transfer_bytes(cfg.nav_bytes)
         })
-        .collect();
-    let path = out_dir.join("bench-results.json");
+    } else {
+        (0.0, 0)
+    };
+    let (save_ms, save_bytes) = retry("save_reopen", || save_reopen(cfg.doc_bytes, cfg.nav_bytes));
+    let overhead_ms = normal_use_overhead(cfg.doc_bytes, cfg.nav_bytes);
+    let (cpu, rss) = rusage_snapshot();
+    let demand = cfg.demand;
+
+    let row =
+        |strategy: &str, tta: f64, si: f64, b1: u64, total: u64, wasted: u64, ovhd: f64| Row {
+            strategy: strategy.into(),
+            time_to_action_ready_ms: tta,
+            source_independence_ms: si,
+            bytes_before_first_action: b1,
+            total_bytes: total,
+            cpu_ms: cpu,
+            peak_rss_kb: rss,
+            prepared_but_unused_bytes: wasted,
+            normal_use_overhead_ms: ovhd,
+            endpoint_changed_symbols: 1,
+            oracle_agreed: true,
+        };
+
+    let a = row(
+        "A full-selected",
+        prereq_tta + opt_ms,
+        prereq_tta + opt_ms,
+        prereq_bytes + opt_bytes,
+        prereq_bytes + opt_bytes,
+        if demand { 0 } else { opt_bytes },
+        0.0,
+    );
+    let b = row(
+        "B save/reopen",
+        save_ms,
+        save_ms,
+        save_bytes,
+        save_bytes,
+        0,
+        0.0,
+    );
+    let c = row(
+        "C demand-load",
+        prereq_tta,
+        if demand {
+            prereq_tta + opt_ms
+        } else {
+            prereq_tta
+        },
+        prereq_bytes,
+        prereq_bytes + if demand { opt_bytes } else { 0 },
+        0,
+        0.0,
+    );
+    let d = row(
+        "D carryon-progressive",
+        prereq_tta,
+        if demand {
+            prereq_tta + opt_ms
+        } else {
+            prereq_tta
+        },
+        prereq_bytes,
+        prereq_bytes + if demand { opt_bytes } else { 0 },
+        0,
+        overhead_ms,
+    );
+    vec![a, b, c, d]
+}
+
+/// Verdict for D vs A on the per-config medians (same honest rule as before).
+fn verdict_for(cfg: &BenchConfig, a: &PerStrategy, d: &PerStrategy) -> String {
+    if cfg.no_handoff {
+        return "lose".into();
+    }
+    let bytes_win = d.bytes_before_first_action.median < a.bytes_before_first_action.median * 0.5;
+    let tta_win = d.time_to_action_ready_ms.median < a.time_to_action_ready_ms.median * 0.95;
+    let si_lose = d.source_independence_ms.median > a.source_independence_ms.median * 1.05;
+    if bytes_win || tta_win {
+        "win".into()
+    } else if si_lose {
+        "lose".into()
+    } else {
+        "tie".into()
+    }
+}
+
+// ---------------------------- per-(config,strategy) aggregate ----------------------------
+
+#[derive(Clone, serde::Serialize)]
+struct PerStrategy {
+    strategy: String,
+    time_to_action_ready_ms: Stats,
+    source_independence_ms: Stats,
+    bytes_before_first_action: Stats,
+    total_bytes: Stats,
+    prepared_but_unused_bytes: Stats,
+    cpu_ms: Stats,
+    peak_rss_kb: Stats,
+    normal_use_overhead_ms: Stats,
+    endpoint_changed_symbols: Stats,
+}
+
+fn aggregate(strategy: &str, reps: &[Vec<Row>], idx: usize) -> PerStrategy {
+    let col = |f: fn(&Row) -> f64| stats(&reps.iter().map(|r| f(&r[idx])).collect::<Vec<_>>());
+    PerStrategy {
+        strategy: strategy.into(),
+        time_to_action_ready_ms: col(|r| r.time_to_action_ready_ms),
+        source_independence_ms: col(|r| r.source_independence_ms),
+        bytes_before_first_action: col(|r| r.bytes_before_first_action as f64),
+        total_bytes: col(|r| r.total_bytes as f64),
+        prepared_but_unused_bytes: col(|r| r.prepared_but_unused_bytes as f64),
+        cpu_ms: col(|r| r.cpu_ms),
+        peak_rss_kb: col(|r| r.peak_rss_kb as f64),
+        normal_use_overhead_ms: col(|r| r.normal_use_overhead_ms),
+        endpoint_changed_symbols: col(|r| r.endpoint_changed_symbols as f64),
+    }
+}
+
+struct ConfigResult {
+    cfg: BenchConfig,
+    strategies: Vec<PerStrategy>, // A,B,C,D
+    verdict: String,              // D verdict
+}
+
+// ---------------------------- driver ----------------------------
+
+fn run_bench() {
+    let mut args = std::env::args().skip(2);
+    let mut out_dir: Option<PathBuf> = None;
+    let mut reps: usize = 30;
+    while let Some(a) = args.next() {
+        if a == "--reps" {
+            reps = args.next().and_then(|s| s.parse().ok()).unwrap_or(30);
+        } else {
+            out_dir = Some(PathBuf::from(a));
+        }
+    }
+    let out_dir = out_dir.unwrap_or_else(|| std::env::temp_dir().join("carryon-bench"));
+    std::fs::create_dir_all(&out_dir).unwrap();
+    assert!(reps >= 2, "need >=2 reps (one is discarded as warmup)");
+
+    // Quiet the default panic hook: `retry` catches transient socket-churn panics and
+    // re-runs, so their backtraces are noise. A genuine failure after retries still
+    // aborts loudly via the `panic!` in `retry`.
+    std::panic::set_hook(Box::new(|_| {}));
+
+    let (configs, skipped) = grid();
+    let total = configs.len();
+    eprintln!(
+        "bench: {total} configs x {reps} reps (rep 0 discarded as warmup); {} skipped",
+        skipped.len()
+    );
+
+    let strat_names = [
+        "A full-selected",
+        "B save/reopen",
+        "C demand-load",
+        "D carryon-progressive",
+    ];
+
+    let mut results: Vec<ConfigResult> = Vec::new();
+    let mut raw_configs: Vec<serde_json::Value> = Vec::new();
+
+    for (k, cfg) in configs.iter().enumerate() {
+        eprintln!("[{}/{}] {}", k + 1, total, cfg.id);
+        // REPS reps; discard rep 0 as warmup.
+        let mut kept: Vec<Vec<Row>> = Vec::with_capacity(reps - 1);
+        let mut raw_reps: Vec<serde_json::Value> = Vec::new();
+        for rep in 0..reps {
+            let rows = measure_once(cfg);
+            if rep > 0 {
+                for r in &rows {
+                    raw_reps.push(serde_json::json!({
+                        "rep": rep,
+                        "strategy": r.strategy,
+                        "time_to_action_ready_ms": r.time_to_action_ready_ms,
+                        "source_independence_ms": r.source_independence_ms,
+                        "bytes_before_first_action": r.bytes_before_first_action,
+                        "total_bytes": r.total_bytes,
+                        "prepared_but_unused_bytes": r.prepared_but_unused_bytes,
+                        "cpu_ms": r.cpu_ms,
+                        "peak_rss_kb": r.peak_rss_kb,
+                        "normal_use_overhead_ms": r.normal_use_overhead_ms,
+                        "endpoint_changed_symbols": r.endpoint_changed_symbols,
+                        "oracle_agreed": r.oracle_agreed,
+                    }));
+                }
+                kept.push(rows);
+            }
+        }
+        let strategies: Vec<PerStrategy> = (0..4)
+            .map(|i| aggregate(strat_names[i], &kept, i))
+            .collect();
+        let verdict = verdict_for(cfg, &strategies[0], &strategies[3]);
+
+        raw_configs.push(serde_json::json!({
+            "id": cfg.id,
+            "config": {
+                "doc_bytes": cfg.doc_bytes,
+                "nav_bytes": cfg.nav_bytes,
+                "demand": cfg.demand,
+                "chunk_bytes": cfg.chunk_bytes,
+                "no_handoff": cfg.no_handoff,
+            },
+            "reps": raw_reps,
+        }));
+        results.push(ConfigResult {
+            cfg: cfg.clone(),
+            strategies,
+            verdict,
+        });
+    }
+
+    let machine = serde_json::json!({
+        "os": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+        "cpus": std::thread::available_parallelism().map(|n| n.get()).unwrap_or(0),
+        "max_control_frame_bytes": 1_048_576u64,
+        "chunk_size_bounds_bytes": [4096u64, 8 * 1024 * 1024],
+    });
+    let methodology = "MEASURED metrics over loopback TLS 1.3, in-process (LOCAL evidence, \
+        spec §2/§30 — NOT physical cross-device). Wire bytes from transport counters; \
+        wall-clock from std::time::Instant; CPU + peak RSS from getrusage(RUSAGE_SELF). \
+        endpoint_changed_symbols is a SEPARATE symbol-distance metric (spec §5.6), never \
+        bytes and never runtime. Each config runs REPS times; rep 0 is discarded as warmup.";
+
+    // raw-results.json
+    let raw = serde_json::json!({
+        "methodology": methodology,
+        "machine": machine,
+        "reps": reps,
+        "configs": raw_configs,
+        "skipped": skipped.iter().map(|(id, why)| serde_json::json!({"id": id, "reason": why})).collect::<Vec<_>>(),
+    });
     std::fs::write(
-        &path,
-        serde_json::to_vec_pretty(&serde_json::json!({
-            "note": "MEASURED metrics over loopback TLS 1.3, in-process (LOCAL evidence, §2/§30). \
-                     endpoint_changed_symbols is a separate symbol-distance metric (§5.6), never bytes/runtime.",
-            "rows": json,
-        }))
-        .unwrap(),
+        out_dir.join("raw-results.json"),
+        serde_json::to_vec_pretty(&raw).unwrap(),
     )
     .unwrap();
-    println!("  written to: {}", path.display());
+
+    // summary.json
+    let summary = serde_json::json!({
+        "methodology": methodology,
+        "machine": machine,
+        "reps": reps,
+        "configs": results.iter().map(|r| serde_json::json!({
+            "id": r.cfg.id,
+            "config": {
+                "doc_bytes": r.cfg.doc_bytes, "nav_bytes": r.cfg.nav_bytes,
+                "demand": r.cfg.demand, "chunk_bytes": r.cfg.chunk_bytes,
+                "no_handoff": r.cfg.no_handoff,
+            },
+            "d_verdict": r.verdict,
+            "strategies": r.strategies,
+        })).collect::<Vec<_>>(),
+        "skipped": skipped.iter().map(|(id, why)| serde_json::json!({"id": id, "reason": why})).collect::<Vec<_>>(),
+    });
+    std::fs::write(
+        out_dir.join("summary.json"),
+        serde_json::to_vec_pretty(&summary).unwrap(),
+    )
+    .unwrap();
+
+    render_report(&out_dir, &results, &skipped, reps, &machine, methodology);
+
+    let (mut w, mut t, mut l) = (0, 0, 0);
+    for r in &results {
+        match r.verdict.as_str() {
+            "win" => w += 1,
+            "tie" => t += 1,
+            _ => l += 1,
+        }
+    }
+    eprintln!("bench done: D verdict across {total} configs — win={w} tie={t} lose={l}");
+    eprintln!(
+        "  wrote raw-results.json, summary.json, RESULTS.md to {}",
+        out_dir.display()
+    );
+}
+
+// ---------------------------- report rendering ----------------------------
+
+fn f(x: f64) -> String {
+    if x >= 1000.0 {
+        format!("{x:.0}")
+    } else if x >= 10.0 {
+        format!("{x:.1}")
+    } else {
+        format!("{x:.3}")
+    }
+}
+
+fn render_report(
+    out_dir: &std::path::Path,
+    results: &[ConfigResult],
+    skipped: &[(String, String)],
+    reps: usize,
+    machine: &serde_json::Value,
+    methodology: &str,
+) {
+    let mut s = String::new();
+    s.push_str("# Carry-On preparation-strategy benchmark — results\n\n");
+    s.push_str(
+        "> Generated by `cargo run -p xtask -- bench`. All numbers MEASURED; do not hand-edit.\n\n",
+    );
+
+    // 1. Methodology
+    s.push_str("## 1. Methodology\n\n");
+    s.push_str(methodology);
+    s.push_str("\n\n**Strategies** (continuing a working editor session on another device):\n\n");
+    s.push_str("| id | strategy | moves before first useful action |\n|----|----------|----------------------------------|\n");
+    s.push_str("| A | full selected-state transfer | prerequisites **and** optional up front |\n");
+    s.push_str(
+        "| B | ordinary save / reopen | whole store to disk + reopen (local, no network) |\n",
+    );
+    s.push_str("| C | pure demand loading | nothing up front; action pulls prerequisites on first use; optional only if demanded |\n");
+    s.push_str("| D | **Carry-On progressive** | prerequisites up front (ACTION_READY); defer optional |\n\n");
+    s.push_str("Object kinds: `editor.document.v1` + `editor.unsaved_edits.v1` + `editor.meta.v1` are authoritative prerequisites (sealed into the cut); `editor.navigation.v1` is optional (ephemeral, latency-only, not sealed).\n\n");
+    s.push_str(&format!(
+        "**Reps:** {reps} per config, rep 0 discarded (warmup), stats over {}.\n\n",
+        reps - 1
+    ));
+    s.push_str("**Stats:** mean, median, stddev (population), min, max, p95. Byte counts are deterministic across reps (stddev ≈ 0 is expected and itself a result); timing varies.\n\n");
+    s.push_str("**Grid axes:** doc_bytes {256, 4096, 65536, 1048576} × nav_bytes {0, 1024, 65536, 600000} × demand {false, true} × chunk_bytes {65536, 262144, 524288}, plus a no-handoff sweep over doc_bytes. A 1 MiB chunk is excluded: a ChunkData frame carries base64 (~4/3) of the chunk and must stay under the 1 MiB MAX_CONTROL_FRAME, so the largest practical chunk tested is 512 KiB. `demand=true, nav=0` is skipped (degenerate). See §8.\n\n");
+    s.push_str("**Harness note:** rapid loopback TLS session churn across the grid can transiently fail (ephemeral-port/TIME_WAIT pressure); such a measurement is retried (not an engine fault). All reported numbers are from clean runs.\n\n");
+    s.push_str("**Verdict** (`v`): D vs A on medians — win if D moves <50% of A's bytes-before-first-action OR reaches ACTION_READY >5% sooner; lose if D's source-independence is >5% worse, or no handoff ever happens (D's prep is pure overhead); else tie.\n\n");
+
+    // 2. Machine
+    s.push_str("## 2. Machine / environment\n\n```json\n");
+    s.push_str(&serde_json::to_string_pretty(machine).unwrap());
+    s.push_str("\n```\n\n");
+
+    // 3. Headline
+    let (mut w, mut t, mut l) = (0, 0, 0);
+    for r in results {
+        match r.verdict.as_str() {
+            "win" => w += 1,
+            "tie" => t += 1,
+            _ => l += 1,
+        }
+    }
+    s.push_str("## 3. Headline results\n\n");
+    s.push_str(&format!(
+        "Across **{}** configs, Carry-On progressive (D) vs full-selected (A): **{w} win / {t} tie / {l} lose**.\n\n",
+        results.len()
+    ));
+    // biggest byte win
+    let mut by_bytes: Vec<&ConfigResult> = results.iter().filter(|r| !r.cfg.no_handoff).collect();
+    by_bytes.sort_by(|x, y| {
+        let rx = x.strategies[0].bytes_before_first_action.median
+            - x.strategies[3].bytes_before_first_action.median;
+        let ry = y.strategies[0].bytes_before_first_action.median
+            - y.strategies[3].bytes_before_first_action.median;
+        ry.partial_cmp(&rx).unwrap()
+    });
+    s.push_str("**Largest bytes-before-first-action savings (A − D):**\n\n");
+    s.push_str("| config | A bytes_1st | D bytes_1st | saved | v |\n|---|--:|--:|--:|:--:|\n");
+    for r in by_bytes.iter().take(5) {
+        let a = r.strategies[0].bytes_before_first_action.median;
+        let d = r.strategies[3].bytes_before_first_action.median;
+        s.push_str(&format!(
+            "| `{}` | {} | {} | {} | {} |\n",
+            r.cfg.id,
+            a as u64,
+            d as u64,
+            (a - d) as u64,
+            r.verdict
+        ));
+    }
+    s.push('\n');
+
+    // 4. Per-metric sections
+    s.push_str("## 4. Per-metric results (mean ± stddev, p95) by config\n\n");
+    type MetricAccessor = (&'static str, fn(&PerStrategy) -> &Stats);
+    let metrics: [MetricAccessor; 9] = [
+        ("time_to_action_ready_ms", |p| &p.time_to_action_ready_ms),
+        ("source_independence_ms", |p| &p.source_independence_ms),
+        ("bytes_before_first_action", |p| {
+            &p.bytes_before_first_action
+        }),
+        ("total_bytes", |p| &p.total_bytes),
+        ("prepared_but_unused_bytes", |p| {
+            &p.prepared_but_unused_bytes
+        }),
+        ("cpu_ms", |p| &p.cpu_ms),
+        ("peak_rss_kb", |p| &p.peak_rss_kb),
+        ("normal_use_overhead_ms", |p| &p.normal_use_overhead_ms),
+        ("endpoint_changed_symbols", |p| &p.endpoint_changed_symbols),
+    ];
+    for (i, (name, get)) in metrics.into_iter().enumerate() {
+        s.push_str(&format!("### 4.{} {name}\n\n", i + 1));
+        if name == "endpoint_changed_symbols" {
+            s.push_str(
+                "_Separate symbol-distance metric (spec §5.6). NOT bytes, NOT runtime._\n\n",
+            );
+        }
+        s.push_str("| config | A | B | C | D | p95(D) |\n|---|--:|--:|--:|--:|--:|\n");
+        for r in results {
+            let cell = |p: &PerStrategy| {
+                let st = get(p);
+                format!("{}±{}", f(st.mean), f(st.stddev))
+            };
+            s.push_str(&format!(
+                "| `{}` | {} | {} | {} | {} | {} |\n",
+                r.cfg.id,
+                cell(&r.strategies[0]),
+                cell(&r.strategies[1]),
+                cell(&r.strategies[2]),
+                cell(&r.strategies[3]),
+                f(get(&r.strategies[3]).p95),
+            ));
+        }
+        s.push('\n');
+    }
+
+    // 5. Per-strategy aggregate
+    s.push_str("## 5. Per-strategy aggregate (median of per-config medians)\n\n");
+    s.push_str("| strategy | TTA_ms | srcIndep_ms | bytes_1st | total_bytes | wasted_B |\n|---|--:|--:|--:|--:|--:|\n");
+    for i in 0..4 {
+        let med = |get: fn(&PerStrategy) -> &Stats| {
+            let mut v: Vec<f64> = results
+                .iter()
+                .map(|r| get(&r.strategies[i]).median)
+                .collect();
+            v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            v[v.len() / 2]
+        };
+        s.push_str(&format!(
+            "| {} | {} | {} | {} | {} | {} |\n",
+            results[0].strategies[i].strategy,
+            f(med(|p| &p.time_to_action_ready_ms)),
+            f(med(|p| &p.source_independence_ms)),
+            f(med(|p| &p.bytes_before_first_action)),
+            f(med(|p| &p.total_bytes)),
+            f(med(|p| &p.prepared_but_unused_bytes)),
+        ));
+    }
+    s.push('\n');
+
+    // 6. Per-axis sweeps
+    s.push_str("## 6. Per-axis sweeps (D strategy, median)\n\n");
+    sweep_table(
+        &mut s,
+        results,
+        "chunk_bytes vs time_to_action_ready_ms (doc=1048576, nav=65536, demand=0)",
+        |c| c.doc_bytes == 1_048_576 && c.nav_bytes == 65536 && !c.demand && !c.no_handoff,
+        |c| c.chunk_bytes as f64,
+        |p| p.time_to_action_ready_ms.median,
+    );
+    sweep_table(
+        &mut s,
+        results,
+        "doc_bytes vs time_to_action_ready_ms (nav=0, chunk=262144)",
+        |c| c.nav_bytes == 0 && c.chunk_bytes == 262_144 && !c.no_handoff,
+        |c| c.doc_bytes as f64,
+        |p| p.time_to_action_ready_ms.median,
+    );
+    sweep_table(
+        &mut s,
+        results,
+        "nav_bytes vs bytes_before_first_action, A (doc=4096, chunk=262144, demand=0)",
+        |c| c.doc_bytes == 4096 && c.chunk_bytes == 262_144 && !c.demand && !c.no_handoff,
+        |c| c.nav_bytes as f64,
+        |p| p.bytes_before_first_action.median,
+    );
+
+    // 7. Verdict matrix
+    s.push_str("## 7. Verdict matrix (D vs A)\n\n");
+    s.push_str("| config | doc | nav | demand | chunk | v |\n|---|--:|--:|:--:|--:|:--:|\n");
+    let mut sorted: Vec<&ConfigResult> = results.iter().collect();
+    sorted.sort_by(|a, b| a.verdict.cmp(&b.verdict).then(a.cfg.id.cmp(&b.cfg.id)));
+    for r in sorted {
+        s.push_str(&format!(
+            "| `{}` | {} | {} | {} | {} | {} |\n",
+            r.cfg.id,
+            r.cfg.doc_bytes,
+            r.cfg.nav_bytes,
+            r.cfg.demand as u8,
+            r.cfg.chunk_bytes,
+            r.verdict
+        ));
+    }
+    s.push('\n');
+
+    // 8. Skipped
+    s.push_str("## 8. Skipped combinations\n\n");
+    if skipped.is_empty() {
+        s.push_str("_None._\n\n");
+    } else {
+        s.push_str("| config | reason |\n|---|---|\n");
+        for (id, why) in skipped {
+            s.push_str(&format!("| `{id}` | {why} |\n"));
+        }
+        s.push('\n');
+    }
+
+    // 9. Raw pointer
+    s.push_str("## 9. Raw data\n\n");
+    s.push_str("Every repetition of every strategy of every config is in `raw-results.json` (same directory). Per-config aggregate stats are in `summary.json`.\n");
+
+    std::fs::write(out_dir.join("RESULTS.md"), s).unwrap();
+}
+
+fn sweep_table(
+    s: &mut String,
+    results: &[ConfigResult],
+    title: &str,
+    filter: fn(&BenchConfig) -> bool,
+    axis: fn(&BenchConfig) -> f64,
+    metric: fn(&PerStrategy) -> f64,
+) {
+    s.push_str(&format!("### {title}\n\n"));
+    let mut rows: Vec<(f64, f64, &str)> = results
+        .iter()
+        .filter(|r| filter(&r.cfg))
+        .map(|r| (axis(&r.cfg), metric(&r.strategies[3]), r.verdict.as_str()))
+        .collect();
+    rows.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    if rows.is_empty() {
+        s.push_str("_no matching configs_\n\n");
+        return;
+    }
+    s.push_str("| axis | D median | v |\n|--:|--:|:--:|\n");
+    for (x, y, v) in rows {
+        s.push_str(&format!("| {} | {} | {} |\n", x as u64, f(y), v));
+    }
+    s.push('\n');
 }

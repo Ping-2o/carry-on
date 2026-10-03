@@ -12,5 +12,6 @@ carryon-adapter-api = { workspace = true }
 carryon-adapter-graph = { path = "../crates/carryon-adapter-graph" }
 carryon-adapter-editor = { path = "../crates/carryon-adapter-editor" }
 carryon-ffi = { path = "../crates/carryon-ffi" }
+serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
