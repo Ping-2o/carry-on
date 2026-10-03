@@ -384,6 +384,10 @@ fn import_closure(doc_bytes: usize, nav_bytes: usize, chunk_bytes: u64) -> (f64,
     let tta = t0.elapsed().as_secs_f64() * 1000.0;
     let bytes = s.bytes_sent() + s.bytes_recv();
     src.join().unwrap();
+    // Reclaim the per-measurement stores so a long sweep does not fill the disk
+    // (two full object stores per import × thousands of imports).
+    let _ = std::fs::remove_dir_all(&src_dir);
+    let _ = std::fs::remove_dir_all(&dst_dir);
     (tta, bytes)
 }
 
@@ -439,7 +443,10 @@ fn normal_use_overhead(doc_bytes: usize, nav_bytes: usize) -> f64 {
     // decide what to prepare — the bookkeeping a non-Carry-On editor skips.
     let _ = core.list_available_actions(cut, &["session.restore".into()]);
     let _ = core.cut_authoritative_objects(cut);
-    t0.elapsed().as_secs_f64() * 1000.0
+    let ms = t0.elapsed().as_secs_f64() * 1000.0;
+    drop(core);
+    let _ = std::fs::remove_dir_all(&dir);
+    ms
 }
 
 /// Save/reopen baseline: serialize the whole source store to disk and reopen a core
@@ -450,8 +457,10 @@ fn save_reopen(doc_bytes: usize, nav_bytes: usize) -> (f64, u64) {
     // Sum the on-disk store bytes (the whole session materialized), then reopen.
     let bytes = dir_size(&dir);
     let t0 = Instant::now();
-    let _reopened = Core::open(&dir).unwrap();
+    let reopened = Core::open(&dir).unwrap();
     let ms = t0.elapsed().as_secs_f64() * 1000.0;
+    drop(reopened);
+    let _ = std::fs::remove_dir_all(&dir);
     (ms, bytes)
 }
 
@@ -492,20 +501,35 @@ struct BenchConfig {
 }
 
 /// The filtered cross-product grid. Invalid combos are skipped with a reason.
-fn grid() -> (Vec<BenchConfig>, Vec<(String, String)>) {
-    let docs = [256usize, 4096, 65536, 1_048_576];
-    let navs = [0usize, 1024, 65536, 600_000];
+fn grid(small: bool) -> (Vec<BenchConfig>, Vec<(String, String)>) {
+    // `small` = a reduced grid for slower hardware (on-device physical runs): drop the
+    // redundant mid-points, keep the extremes that carry the lose/tie/win signal and the
+    // size/chunk sweep endpoints.
+    let docs: &[usize] = if small {
+        &[4096, 1_048_576]
+    } else {
+        &[256, 4096, 65536, 1_048_576]
+    };
+    let navs: &[usize] = if small {
+        &[0, 600_000]
+    } else {
+        &[0, 1024, 65536, 600_000]
+    };
     let demands = [false, true];
     // Chunk sizes: a ChunkData frame carries base64 of the chunk (~4/3 inflation) and
     // must stay under MAX_CONTROL_FRAME (1 MiB). 524288 base64 ≈ 700 KiB < 1 MiB; a
     // full 1 MiB chunk would overflow the frame, so it is excluded.
-    let chunks = [65536u64, 262_144, 524_288];
+    let chunks: &[u64] = if small {
+        &[65536, 524_288]
+    } else {
+        &[65536, 262_144, 524_288]
+    };
     let mut out = Vec::new();
     let mut skipped = Vec::new();
-    for &doc in &docs {
-        for &nav in &navs {
+    for &doc in docs {
+        for &nav in navs {
             for &demand in &demands {
-                for &chunk in &chunks {
+                for &chunk in chunks {
                     let id = format!("doc{doc}_nav{nav}_demand{}_chunk{chunk}", demand as u8);
                     // The optional object crosses as ONE control frame; cap it under
                     // MAX_CONTROL_FRAME (1 MiB). 600_000 is the largest tested.
@@ -532,7 +556,7 @@ fn grid() -> (Vec<BenchConfig>, Vec<(String, String)>) {
     }
     // A dedicated no-handoff sweep across document sizes (chunk/ nav fixed): shows the
     // normal-use overhead D pays when no transfer ever happens.
-    for &doc in &docs {
+    for &doc in docs {
         out.push(BenchConfig {
             id: format!("no-handoff_doc{doc}"),
             doc_bytes: doc,
@@ -598,7 +622,7 @@ fn stats(xs: &[f64]) -> Stats {
 /// retry a few times with a short backoff before giving up.
 fn retry<T>(what: &str, mut run: impl FnMut() -> T) -> T {
     let mut last = String::new();
-    for attempt in 0..6 {
+    for attempt in 0..12 {
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(&mut run)) {
             Ok(v) => return v,
             Err(e) => {
@@ -607,21 +631,15 @@ fn retry<T>(what: &str, mut run: impl FnMut() -> T) -> T {
                     .cloned()
                     .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
                     .unwrap_or_else(|| "panic".into());
-                let backoff = std::time::Duration::from_millis(20 * (attempt + 1) as u64);
-                busy_sleep(backoff);
+                // A REAL sleep (not a spin) so the OS can drain TIME_WAIT sockets;
+                // spinning keeps the CPU busy and makes ephemeral-port pressure worse,
+                // which matters on the slower device. Capped linear backoff.
+                let ms = (50 * (attempt + 1) as u64).min(500);
+                std::thread::sleep(std::time::Duration::from_millis(ms));
             }
         }
     }
     panic!("{what}: failed after retries: {last}");
-}
-
-/// Thread::sleep stand-in using a spin on Instant (Date/sleep-free determinism note:
-/// Instant is allowed; a short real sleep lets sockets drain).
-fn busy_sleep(d: std::time::Duration) {
-    let t0 = Instant::now();
-    while t0.elapsed() < d {
-        std::hint::spin_loop();
-    }
 }
 
 /// Build the four strategy rows for one measured repetition of a config.
@@ -764,11 +782,16 @@ fn run_bench() {
     let mut args = std::env::args().skip(2);
     let mut out_dir: Option<PathBuf> = None;
     let mut reps: usize = 30;
+    let mut small = false;
+    let mut postfix = String::new();
     while let Some(a) = args.next() {
-        if a == "--reps" {
-            reps = args.next().and_then(|s| s.parse().ok()).unwrap_or(30);
-        } else {
-            out_dir = Some(PathBuf::from(a));
+        match a.as_str() {
+            "--reps" => reps = args.next().and_then(|s| s.parse().ok()).unwrap_or(30),
+            // Reduced grid for slower hardware (on-device physical runs).
+            "--grid" => small = args.next().as_deref() == Some("small"),
+            // Filename postfix, e.g. `-physical` → RESULTS-physical.md.
+            "--postfix" => postfix = args.next().unwrap_or_default(),
+            _ => out_dir = Some(PathBuf::from(a)),
         }
     }
     let out_dir = out_dir.unwrap_or_else(|| std::env::temp_dir().join("carryon-bench"));
@@ -780,7 +803,7 @@ fn run_bench() {
     // aborts loudly via the `panic!` in `retry`.
     std::panic::set_hook(Box::new(|_| {}));
 
-    let (configs, skipped) = grid();
+    let (configs, skipped) = grid(small);
     let total = configs.len();
     eprintln!(
         "bench: {total} configs x {reps} reps (rep 0 discarded as warmup); {} skipped",
@@ -869,7 +892,7 @@ fn run_bench() {
         "skipped": skipped.iter().map(|(id, why)| serde_json::json!({"id": id, "reason": why})).collect::<Vec<_>>(),
     });
     std::fs::write(
-        out_dir.join("raw-results.json"),
+        out_dir.join(format!("raw-results{postfix}.json")),
         serde_json::to_vec_pretty(&raw).unwrap(),
     )
     .unwrap();
@@ -892,12 +915,20 @@ fn run_bench() {
         "skipped": skipped.iter().map(|(id, why)| serde_json::json!({"id": id, "reason": why})).collect::<Vec<_>>(),
     });
     std::fs::write(
-        out_dir.join("summary.json"),
+        out_dir.join(format!("summary{postfix}.json")),
         serde_json::to_vec_pretty(&summary).unwrap(),
     )
     .unwrap();
 
-    render_report(&out_dir, &results, &skipped, reps, &machine, methodology);
+    render_report(
+        &out_dir,
+        &results,
+        &skipped,
+        reps,
+        &machine,
+        methodology,
+        &postfix,
+    );
 
     let (mut w, mut t, mut l) = (0, 0, 0);
     for r in &results {
@@ -909,7 +940,7 @@ fn run_bench() {
     }
     eprintln!("bench done: D verdict across {total} configs — win={w} tie={t} lose={l}");
     eprintln!(
-        "  wrote raw-results.json, summary.json, RESULTS.md to {}",
+        "  wrote raw-results{postfix}.json, summary{postfix}.json, RESULTS{postfix}.md to {}",
         out_dir.display()
     );
 }
@@ -926,6 +957,7 @@ fn f(x: f64) -> String {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_report(
     out_dir: &std::path::Path,
     results: &[ConfigResult],
@@ -933,12 +965,16 @@ fn render_report(
     reps: usize,
     machine: &serde_json::Value,
     methodology: &str,
+    postfix: &str,
 ) {
     let mut s = String::new();
     s.push_str("# Carry-On preparation-strategy benchmark — results\n\n");
     s.push_str(
         "> Generated by `cargo run -p xtask -- bench`. All numbers MEASURED; do not hand-edit.\n\n",
     );
+    if postfix == "-physical" {
+        s.push_str("> **PHYSICAL run:** executed on the Android device CPU (Galaxy A04, arm64) over the device's own loopback — real ARM hardware, reduced grid. Still loopback-within-one-device (not mac↔device network); LOCAL evidence (§2/§30).\n\n");
+    }
 
     // 1. Methodology
     s.push_str("## 1. Methodology\n\n");
@@ -1132,9 +1168,11 @@ fn render_report(
 
     // 9. Raw pointer
     s.push_str("## 9. Raw data\n\n");
-    s.push_str("Every repetition of every strategy of every config is in `raw-results.json` (same directory). Per-config aggregate stats are in `summary.json`.\n");
+    s.push_str(&format!(
+        "Every repetition of every strategy of every config is in `raw-results{postfix}.json` (same directory). Per-config aggregate stats are in `summary{postfix}.json`.\n"
+    ));
 
-    std::fs::write(out_dir.join("RESULTS.md"), s).unwrap();
+    std::fs::write(out_dir.join(format!("RESULTS{postfix}.md")), s).unwrap();
 }
 
 fn sweep_table(

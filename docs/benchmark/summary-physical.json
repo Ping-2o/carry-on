@@ -1,0 +1,4920 @@
+{
+  "configs": [
+    {
+      "config": {
+        "chunk_bytes": 65536,
+        "demand": false,
+        "doc_bytes": 4096,
+        "nav_bytes": 0,
+        "no_handoff": false
+      },
+      "d_verdict": "tie",
+      "id": "doc4096_nav0_demand0_chunk65536",
+      "strategies": [
+        {
+          "bytes_before_first_action": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 4299.013,
+            "mean": 2708.295857142857,
+            "median": 2716.706,
+            "min": 1114.861,
+            "n": 7,
+            "p95": 4299.013,
+            "stddev": 1065.3896117046206
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 6092.0,
+            "mean": 6073.714285714285,
+            "median": 6088.0,
+            "min": 6044.0,
+            "n": 7,
+            "p95": 6092.0,
+            "stddev": 19.225832961440826
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 472.89284599999996,
+            "mean": 442.66830757142856,
+            "median": 437.645616,
+            "min": 435.89907700000003,
+            "n": 7,
+            "p95": 472.89284599999996,
+            "stddev": 12.462815745065068
+          },
+          "strategy": "A full-selected",
+          "time_to_action_ready_ms": {
+            "max": 472.89284599999996,
+            "mean": 442.66830757142856,
+            "median": 437.645616,
+            "min": 435.89907700000003,
+            "n": 7,
+            "p95": 472.89284599999996,
+            "stddev": 12.462815745065068
+          },
+          "total_bytes": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 433105.0,
+            "mean": 433096.4285714286,
+            "median": 433093.0,
+            "min": 433093.0,
+            "n": 7,
+            "p95": 433105.0,
+            "stddev": 5.421047417431507
+          },
+          "cpu_ms": {
+            "max": 4299.013,
+            "mean": 2708.295857142857,
+            "median": 2716.706,
+            "min": 1114.861,
+            "n": 7,
+            "p95": 4299.013,
+            "stddev": 1065.3896117046206
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 6092.0,
+            "mean": 6073.714285714285,
+            "median": 6088.0,
+            "min": 6044.0,
+            "n": 7,
+            "p95": 6092.0,
+            "stddev": 19.225832961440826
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 58.444615,
+            "mean": 18.22402214285714,
+            "median": 11.463154,
+            "min": 10.071076999999999,
+            "n": 7,
+            "p95": 58.444615,
+            "stddev": 16.45138889427438
+          },
+          "strategy": "B save/reopen",
+          "time_to_action_ready_ms": {
+            "max": 58.444615,
+            "mean": 18.22402214285714,
+            "median": 11.463154,
+            "min": 10.071076999999999,
+            "n": 7,
+            "p95": 58.444615,
+            "stddev": 16.45138889427438
+          },
+          "total_bytes": {
+            "max": 433105.0,
+            "mean": 433096.4285714286,
+            "median": 433093.0,
+            "min": 433093.0,
+            "n": 7,
+            "p95": 433105.0,
+            "stddev": 5.421047417431507
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 4299.013,
+            "mean": 2708.295857142857,
+            "median": 2716.706,
+            "min": 1114.861,
+            "n": 7,
+            "p95": 4299.013,
+            "stddev": 1065.3896117046206
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 6092.0,
+            "mean": 6073.714285714285,
+            "median": 6088.0,
+            "min": 6044.0,
+            "n": 7,
+            "p95": 6092.0,
+            "stddev": 19.225832961440826
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 472.89284599999996,
+            "mean": 442.66830757142856,
+            "median": 437.645616,
+            "min": 435.89907700000003,
+            "n": 7,
+            "p95": 472.89284599999996,
+            "stddev": 12.462815745065068
+          },
+          "strategy": "C demand-load",
+          "time_to_action_ready_ms": {
+            "max": 472.89284599999996,
+            "mean": 442.66830757142856,
+            "median": 437.645616,
+            "min": 435.89907700000003,
+            "n": 7,
+            "p95": 472.89284599999996,
+            "stddev": 12.462815745065068
+          },
+          "total_bytes": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 4299.013,
+            "mean": 2708.295857142857,
+            "median": 2716.706,
+            "min": 1114.861,
+            "n": 7,
+            "p95": 4299.013,
+            "stddev": 1065.3896117046206
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 1.252923,
+            "mean": 1.0249008571428573,
+            "median": 1.050846,
+            "min": 0.766461,
+            "n": 7,
+            "p95": 1.252923,
+            "stddev": 0.16446464844061134
+          },
+          "peak_rss_kb": {
+            "max": 6092.0,
+            "mean": 6073.714285714285,
+            "median": 6088.0,
+            "min": 6044.0,
+            "n": 7,
+            "p95": 6092.0,
+            "stddev": 19.225832961440826
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 472.89284599999996,
+            "mean": 442.66830757142856,
+            "median": 437.645616,
+            "min": 435.89907700000003,
+            "n": 7,
+            "p95": 472.89284599999996,
+            "stddev": 12.462815745065068
+          },
+          "strategy": "D carryon-progressive",
+          "time_to_action_ready_ms": {
+            "max": 472.89284599999996,
+            "mean": 442.66830757142856,
+            "median": 437.645616,
+            "min": 435.89907700000003,
+            "n": 7,
+            "p95": 472.89284599999996,
+            "stddev": 12.462815745065068
+          },
+          "total_bytes": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "config": {
+        "chunk_bytes": 524288,
+        "demand": false,
+        "doc_bytes": 4096,
+        "nav_bytes": 0,
+        "no_handoff": false
+      },
+      "d_verdict": "tie",
+      "id": "doc4096_nav0_demand0_chunk524288",
+      "strategies": [
+        {
+          "bytes_before_first_action": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 8655.108,
+            "mean": 7017.763428571428,
+            "median": 7044.602,
+            "min": 5379.398,
+            "n": 7,
+            "p95": 8655.108,
+            "stddev": 1091.2179225173595
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 6204.0,
+            "mean": 6185.714285714285,
+            "median": 6204.0,
+            "min": 6120.0,
+            "n": 7,
+            "p95": 6204.0,
+            "stddev": 30.825380478311256
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 507.48438500000003,
+            "mean": 446.51305514285724,
+            "median": 435.72923099999997,
+            "min": 428.784308,
+            "n": 7,
+            "p95": 507.48438500000003,
+            "stddev": 25.964289128615437
+          },
+          "strategy": "A full-selected",
+          "time_to_action_ready_ms": {
+            "max": 507.48438500000003,
+            "mean": 446.51305514285724,
+            "median": 435.72923099999997,
+            "min": 428.784308,
+            "n": 7,
+            "p95": 507.48438500000003,
+            "stddev": 25.964289128615437
+          },
+          "total_bytes": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 433105.0,
+            "mean": 433105.0,
+            "median": 433105.0,
+            "min": 433105.0,
+            "n": 7,
+            "p95": 433105.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 8655.108,
+            "mean": 7017.763428571428,
+            "median": 7044.602,
+            "min": 5379.398,
+            "n": 7,
+            "p95": 8655.108,
+            "stddev": 1091.2179225173595
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 6204.0,
+            "mean": 6185.714285714285,
+            "median": 6204.0,
+            "min": 6120.0,
+            "n": 7,
+            "p95": 6204.0,
+            "stddev": 30.825380478311256
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 16.688923000000003,
+            "mean": 12.17680242857143,
+            "median": 11.359385,
+            "min": 10.517923,
+            "n": 7,
+            "p95": 16.688923000000003,
+            "stddev": 1.9611492125284145
+          },
+          "strategy": "B save/reopen",
+          "time_to_action_ready_ms": {
+            "max": 16.688923000000003,
+            "mean": 12.17680242857143,
+            "median": 11.359385,
+            "min": 10.517923,
+            "n": 7,
+            "p95": 16.688923000000003,
+            "stddev": 1.9611492125284145
+          },
+          "total_bytes": {
+            "max": 433105.0,
+            "mean": 433105.0,
+            "median": 433105.0,
+            "min": 433105.0,
+            "n": 7,
+            "p95": 433105.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 8655.108,
+            "mean": 7017.763428571428,
+            "median": 7044.602,
+            "min": 5379.398,
+            "n": 7,
+            "p95": 8655.108,
+            "stddev": 1091.2179225173595
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 6204.0,
+            "mean": 6185.714285714285,
+            "median": 6204.0,
+            "min": 6120.0,
+            "n": 7,
+            "p95": 6204.0,
+            "stddev": 30.825380478311256
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 507.48438500000003,
+            "mean": 446.51305514285724,
+            "median": 435.72923099999997,
+            "min": 428.784308,
+            "n": 7,
+            "p95": 507.48438500000003,
+            "stddev": 25.964289128615437
+          },
+          "strategy": "C demand-load",
+          "time_to_action_ready_ms": {
+            "max": 507.48438500000003,
+            "mean": 446.51305514285724,
+            "median": 435.72923099999997,
+            "min": 428.784308,
+            "n": 7,
+            "p95": 507.48438500000003,
+            "stddev": 25.964289128615437
+          },
+          "total_bytes": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 8655.108,
+            "mean": 7017.763428571428,
+            "median": 7044.602,
+            "min": 5379.398,
+            "n": 7,
+            "p95": 8655.108,
+            "stddev": 1091.2179225173595
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 1.763616,
+            "mean": 1.3453627142857145,
+            "median": 1.2474610000000002,
+            "min": 1.088077,
+            "n": 7,
+            "p95": 1.763616,
+            "stddev": 0.2557891486862425
+          },
+          "peak_rss_kb": {
+            "max": 6204.0,
+            "mean": 6185.714285714285,
+            "median": 6204.0,
+            "min": 6120.0,
+            "n": 7,
+            "p95": 6204.0,
+            "stddev": 30.825380478311256
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 507.48438500000003,
+            "mean": 446.51305514285724,
+            "median": 435.72923099999997,
+            "min": 428.784308,
+            "n": 7,
+            "p95": 507.48438500000003,
+            "stddev": 25.964289128615437
+          },
+          "strategy": "D carryon-progressive",
+          "time_to_action_ready_ms": {
+            "max": 507.48438500000003,
+            "mean": 446.51305514285724,
+            "median": 435.72923099999997,
+            "min": 428.784308,
+            "n": 7,
+            "p95": 507.48438500000003,
+            "stddev": 25.964289128615437
+          },
+          "total_bytes": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "config": {
+        "chunk_bytes": 65536,
+        "demand": false,
+        "doc_bytes": 4096,
+        "nav_bytes": 600000,
+        "no_handoff": false
+      },
+      "d_verdict": "win",
+      "id": "doc4096_nav600000_demand0_chunk65536",
+      "strategies": [
+        {
+          "bytes_before_first_action": {
+            "max": 809732.0,
+            "mean": 809732.0,
+            "median": 809732.0,
+            "min": 809732.0,
+            "n": 7,
+            "p95": 809732.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 14772.319,
+            "mean": 12483.873000000001,
+            "median": 12487.081,
+            "min": 10204.292,
+            "n": 7,
+            "p95": 14772.319,
+            "stddev": 1528.0113805146498
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 8672.0,
+            "mean": 8672.0,
+            "median": 8672.0,
+            "min": 8672.0,
+            "n": 7,
+            "p95": 8672.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 800488.0,
+            "mean": 800488.0,
+            "median": 800488.0,
+            "min": 800488.0,
+            "n": 7,
+            "p95": 800488.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 499.924001,
+            "mean": 474.67853871428576,
+            "median": 470.342154,
+            "min": 448.88977000000006,
+            "n": 7,
+            "p95": 499.924001,
+            "stddev": 16.255335405042217
+          },
+          "strategy": "A full-selected",
+          "time_to_action_ready_ms": {
+            "max": 499.924001,
+            "mean": 474.67853871428576,
+            "median": 470.342154,
+            "min": 448.88977000000006,
+            "n": 7,
+            "p95": 499.924001,
+            "stddev": 16.255335405042217
+          },
+          "total_bytes": {
+            "max": 809732.0,
+            "mean": 809732.0,
+            "median": 809732.0,
+            "min": 809732.0,
+            "n": 7,
+            "p95": 809732.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1033105.0,
+            "mean": 1033105.0,
+            "median": 1033105.0,
+            "min": 1033105.0,
+            "n": 7,
+            "p95": 1033105.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 14772.319,
+            "mean": 12483.873000000001,
+            "median": 12487.081,
+            "min": 10204.292,
+            "n": 7,
+            "p95": 14772.319,
+            "stddev": 1528.0113805146498
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 8672.0,
+            "mean": 8672.0,
+            "median": 8672.0,
+            "min": 8672.0,
+            "n": 7,
+            "p95": 8672.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 13.395153,
+            "mean": 10.997219571428571,
+            "median": 10.38,
+            "min": 9.372231,
+            "n": 7,
+            "p95": 13.395153,
+            "stddev": 1.375144016871569
+          },
+          "strategy": "B save/reopen",
+          "time_to_action_ready_ms": {
+            "max": 13.395153,
+            "mean": 10.997219571428571,
+            "median": 10.38,
+            "min": 9.372231,
+            "n": 7,
+            "p95": 13.395153,
+            "stddev": 1.375144016871569
+          },
+          "total_bytes": {
+            "max": 1033105.0,
+            "mean": 1033105.0,
+            "median": 1033105.0,
+            "min": 1033105.0,
+            "n": 7,
+            "p95": 1033105.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 14772.319,
+            "mean": 12483.873000000001,
+            "median": 12487.081,
+            "min": 10204.292,
+            "n": 7,
+            "p95": 14772.319,
+            "stddev": 1528.0113805146498
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 8672.0,
+            "mean": 8672.0,
+            "median": 8672.0,
+            "min": 8672.0,
+            "n": 7,
+            "p95": 8672.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 470.185462,
+            "mean": 448.17796714285714,
+            "median": 441.524231,
+            "min": 422.65130800000003,
+            "n": 7,
+            "p95": 470.185462,
+            "stddev": 17.007795417096478
+          },
+          "strategy": "C demand-load",
+          "time_to_action_ready_ms": {
+            "max": 470.185462,
+            "mean": 448.17796714285714,
+            "median": 441.524231,
+            "min": 422.65130800000003,
+            "n": 7,
+            "p95": 470.185462,
+            "stddev": 17.007795417096478
+          },
+          "total_bytes": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 14772.319,
+            "mean": 12483.873000000001,
+            "median": 12487.081,
+            "min": 10204.292,
+            "n": 7,
+            "p95": 14772.319,
+            "stddev": 1528.0113805146498
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 1.526461,
+            "mean": 1.2907691428571428,
+            "median": 1.301769,
+            "min": 0.996077,
+            "n": 7,
+            "p95": 1.526461,
+            "stddev": 0.18235640798128466
+          },
+          "peak_rss_kb": {
+            "max": 8672.0,
+            "mean": 8672.0,
+            "median": 8672.0,
+            "min": 8672.0,
+            "n": 7,
+            "p95": 8672.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 470.185462,
+            "mean": 448.17796714285714,
+            "median": 441.524231,
+            "min": 422.65130800000003,
+            "n": 7,
+            "p95": 470.185462,
+            "stddev": 17.007795417096478
+          },
+          "strategy": "D carryon-progressive",
+          "time_to_action_ready_ms": {
+            "max": 470.185462,
+            "mean": 448.17796714285714,
+            "median": 441.524231,
+            "min": 422.65130800000003,
+            "n": 7,
+            "p95": 470.185462,
+            "stddev": 17.007795417096478
+          },
+          "total_bytes": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "config": {
+        "chunk_bytes": 524288,
+        "demand": false,
+        "doc_bytes": 4096,
+        "nav_bytes": 600000,
+        "no_handoff": false
+      },
+      "d_verdict": "win",
+      "id": "doc4096_nav600000_demand0_chunk524288",
+      "strategies": [
+        {
+          "bytes_before_first_action": {
+            "max": 809732.0,
+            "mean": 809732.0,
+            "median": 809732.0,
+            "min": 809732.0,
+            "n": 7,
+            "p95": 809732.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 21020.022,
+            "mean": 18665.269714285714,
+            "median": 18680.808,
+            "min": 16314.908,
+            "n": 7,
+            "p95": 21020.022,
+            "stddev": 1579.8498494835976
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 8772.0,
+            "mean": 8714.857142857143,
+            "median": 8672.0,
+            "min": 8672.0,
+            "n": 7,
+            "p95": 8772.0,
+            "stddev": 49.48716593053935
+          },
+          "prepared_but_unused_bytes": {
+            "max": 800488.0,
+            "mean": 800488.0,
+            "median": 800488.0,
+            "min": 800488.0,
+            "n": 7,
+            "p95": 800488.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 503.664846,
+            "mean": 478.3663952857143,
+            "median": 477.265153,
+            "min": 455.62161599999996,
+            "n": 7,
+            "p95": 503.664846,
+            "stddev": 16.216584961447122
+          },
+          "strategy": "A full-selected",
+          "time_to_action_ready_ms": {
+            "max": 503.664846,
+            "mean": 478.3663952857143,
+            "median": 477.265153,
+            "min": 455.62161599999996,
+            "n": 7,
+            "p95": 503.664846,
+            "stddev": 16.216584961447122
+          },
+          "total_bytes": {
+            "max": 809732.0,
+            "mean": 809732.0,
+            "median": 809732.0,
+            "min": 809732.0,
+            "n": 7,
+            "p95": 809732.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1033105.0,
+            "mean": 1033105.0,
+            "median": 1033105.0,
+            "min": 1033105.0,
+            "n": 7,
+            "p95": 1033105.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 21020.022,
+            "mean": 18665.269714285714,
+            "median": 18680.808,
+            "min": 16314.908,
+            "n": 7,
+            "p95": 21020.022,
+            "stddev": 1579.8498494835976
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 8772.0,
+            "mean": 8714.857142857143,
+            "median": 8672.0,
+            "min": 8672.0,
+            "n": 7,
+            "p95": 8772.0,
+            "stddev": 49.48716593053935
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 12.390768999999999,
+            "mean": 11.143428428571427,
+            "median": 10.967615,
+            "min": 10.146154,
+            "n": 7,
+            "p95": 12.390768999999999,
+            "stddev": 0.7660189624456071
+          },
+          "strategy": "B save/reopen",
+          "time_to_action_ready_ms": {
+            "max": 12.390768999999999,
+            "mean": 11.143428428571427,
+            "median": 10.967615,
+            "min": 10.146154,
+            "n": 7,
+            "p95": 12.390768999999999,
+            "stddev": 0.7660189624456071
+          },
+          "total_bytes": {
+            "max": 1033105.0,
+            "mean": 1033105.0,
+            "median": 1033105.0,
+            "min": 1033105.0,
+            "n": 7,
+            "p95": 1033105.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 21020.022,
+            "mean": 18665.269714285714,
+            "median": 18680.808,
+            "min": 16314.908,
+            "n": 7,
+            "p95": 21020.022,
+            "stddev": 1579.8498494835976
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 8772.0,
+            "mean": 8714.857142857143,
+            "median": 8672.0,
+            "min": 8672.0,
+            "n": 7,
+            "p95": 8772.0,
+            "stddev": 49.48716593053935
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 463.611923,
+            "mean": 448.9642307142857,
+            "median": 447.380923,
+            "min": 429.75146199999995,
+            "n": 7,
+            "p95": 463.611923,
+            "stddev": 11.706877883698448
+          },
+          "strategy": "C demand-load",
+          "time_to_action_ready_ms": {
+            "max": 463.611923,
+            "mean": 448.9642307142857,
+            "median": 447.380923,
+            "min": 429.75146199999995,
+            "n": 7,
+            "p95": 463.611923,
+            "stddev": 11.706877883698448
+          },
+          "total_bytes": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 21020.022,
+            "mean": 18665.269714285714,
+            "median": 18680.808,
+            "min": 16314.908,
+            "n": 7,
+            "p95": 21020.022,
+            "stddev": 1579.8498494835976
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 2.3153840000000003,
+            "mean": 1.3062967142857145,
+            "median": 1.1800000000000002,
+            "min": 0.7859240000000001,
+            "n": 7,
+            "p95": 2.3153840000000003,
+            "stddev": 0.4417966619005737
+          },
+          "peak_rss_kb": {
+            "max": 8772.0,
+            "mean": 8714.857142857143,
+            "median": 8672.0,
+            "min": 8672.0,
+            "n": 7,
+            "p95": 8772.0,
+            "stddev": 49.48716593053935
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 463.611923,
+            "mean": 448.9642307142857,
+            "median": 447.380923,
+            "min": 429.75146199999995,
+            "n": 7,
+            "p95": 463.611923,
+            "stddev": 11.706877883698448
+          },
+          "strategy": "D carryon-progressive",
+          "time_to_action_ready_ms": {
+            "max": 463.611923,
+            "mean": 448.9642307142857,
+            "median": 447.380923,
+            "min": 429.75146199999995,
+            "n": 7,
+            "p95": 463.611923,
+            "stddev": 11.706877883698448
+          },
+          "total_bytes": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "config": {
+        "chunk_bytes": 65536,
+        "demand": true,
+        "doc_bytes": 4096,
+        "nav_bytes": 600000,
+        "no_handoff": false
+      },
+      "d_verdict": "win",
+      "id": "doc4096_nav600000_demand1_chunk65536",
+      "strategies": [
+        {
+          "bytes_before_first_action": {
+            "max": 809732.0,
+            "mean": 809732.0,
+            "median": 809732.0,
+            "min": 809732.0,
+            "n": 7,
+            "p95": 809732.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 27130.579,
+            "mean": 24887.650428571425,
+            "median": 24888.806999999997,
+            "min": 22600.487999999998,
+            "n": 7,
+            "p95": 27130.579,
+            "stddev": 1512.2223191116414
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 8788.0,
+            "mean": 8776.57142857143,
+            "median": 8772.0,
+            "min": 8772.0,
+            "n": 7,
+            "p95": 8788.0,
+            "stddev": 7.22806322324201
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 484.464077,
+            "mean": 464.39682428571433,
+            "median": 463.054538,
+            "min": 449.88246100000003,
+            "n": 7,
+            "p95": 484.464077,
+            "stddev": 12.995032194329823
+          },
+          "strategy": "A full-selected",
+          "time_to_action_ready_ms": {
+            "max": 484.464077,
+            "mean": 464.39682428571433,
+            "median": 463.054538,
+            "min": 449.88246100000003,
+            "n": 7,
+            "p95": 484.464077,
+            "stddev": 12.995032194329823
+          },
+          "total_bytes": {
+            "max": 809732.0,
+            "mean": 809732.0,
+            "median": 809732.0,
+            "min": 809732.0,
+            "n": 7,
+            "p95": 809732.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1033105.0,
+            "mean": 1033105.0,
+            "median": 1033105.0,
+            "min": 1033105.0,
+            "n": 7,
+            "p95": 1033105.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 27130.579,
+            "mean": 24887.650428571425,
+            "median": 24888.806999999997,
+            "min": 22600.487999999998,
+            "n": 7,
+            "p95": 27130.579,
+            "stddev": 1512.2223191116414
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 8788.0,
+            "mean": 8776.57142857143,
+            "median": 8772.0,
+            "min": 8772.0,
+            "n": 7,
+            "p95": 8788.0,
+            "stddev": 7.22806322324201
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 16.824307,
+            "mean": 12.689000000000002,
+            "median": 12.399385,
+            "min": 10.393769,
+            "n": 7,
+            "p95": 16.824307,
+            "stddev": 2.001612567496161
+          },
+          "strategy": "B save/reopen",
+          "time_to_action_ready_ms": {
+            "max": 16.824307,
+            "mean": 12.689000000000002,
+            "median": 12.399385,
+            "min": 10.393769,
+            "n": 7,
+            "p95": 16.824307,
+            "stddev": 2.001612567496161
+          },
+          "total_bytes": {
+            "max": 1033105.0,
+            "mean": 1033105.0,
+            "median": 1033105.0,
+            "min": 1033105.0,
+            "n": 7,
+            "p95": 1033105.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 27130.579,
+            "mean": 24887.650428571425,
+            "median": 24888.806999999997,
+            "min": 22600.487999999998,
+            "n": 7,
+            "p95": 27130.579,
+            "stddev": 1512.2223191116414
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 8788.0,
+            "mean": 8776.57142857143,
+            "median": 8772.0,
+            "min": 8772.0,
+            "n": 7,
+            "p95": 8788.0,
+            "stddev": 7.22806322324201
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 484.464077,
+            "mean": 464.39682428571433,
+            "median": 463.054538,
+            "min": 449.88246100000003,
+            "n": 7,
+            "p95": 484.464077,
+            "stddev": 12.995032194329823
+          },
+          "strategy": "C demand-load",
+          "time_to_action_ready_ms": {
+            "max": 453.620615,
+            "mean": 436.5974834285715,
+            "median": 432.865307,
+            "min": 422.205461,
+            "n": 7,
+            "p95": 453.620615,
+            "stddev": 10.832648064118608
+          },
+          "total_bytes": {
+            "max": 809732.0,
+            "mean": 809732.0,
+            "median": 809732.0,
+            "min": 809732.0,
+            "n": 7,
+            "p95": 809732.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 27130.579,
+            "mean": 24887.650428571425,
+            "median": 24888.806999999997,
+            "min": 22600.487999999998,
+            "n": 7,
+            "p95": 27130.579,
+            "stddev": 1512.2223191116414
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 1.924,
+            "mean": 1.197022,
+            "median": 1.146462,
+            "min": 0.937308,
+            "n": 7,
+            "p95": 1.924,
+            "stddev": 0.3153058794930046
+          },
+          "peak_rss_kb": {
+            "max": 8788.0,
+            "mean": 8776.57142857143,
+            "median": 8772.0,
+            "min": 8772.0,
+            "n": 7,
+            "p95": 8788.0,
+            "stddev": 7.22806322324201
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 484.464077,
+            "mean": 464.39682428571433,
+            "median": 463.054538,
+            "min": 449.88246100000003,
+            "n": 7,
+            "p95": 484.464077,
+            "stddev": 12.995032194329823
+          },
+          "strategy": "D carryon-progressive",
+          "time_to_action_ready_ms": {
+            "max": 453.620615,
+            "mean": 436.5974834285715,
+            "median": 432.865307,
+            "min": 422.205461,
+            "n": 7,
+            "p95": 453.620615,
+            "stddev": 10.832648064118608
+          },
+          "total_bytes": {
+            "max": 809732.0,
+            "mean": 809732.0,
+            "median": 809732.0,
+            "min": 809732.0,
+            "n": 7,
+            "p95": 809732.0,
+            "stddev": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "config": {
+        "chunk_bytes": 524288,
+        "demand": true,
+        "doc_bytes": 4096,
+        "nav_bytes": 600000,
+        "no_handoff": false
+      },
+      "d_verdict": "win",
+      "id": "doc4096_nav600000_demand1_chunk524288",
+      "strategies": [
+        {
+          "bytes_before_first_action": {
+            "max": 809732.0,
+            "mean": 809732.0,
+            "median": 809732.0,
+            "min": 809732.0,
+            "n": 7,
+            "p95": 809732.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 33146.062,
+            "mean": 30897.492999999995,
+            "median": 30875.047,
+            "min": 28673.517000000003,
+            "n": 7,
+            "p95": 33146.062,
+            "stddev": 1482.5038104840437
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 8916.0,
+            "mean": 8888.57142857143,
+            "median": 8916.0,
+            "min": 8852.0,
+            "n": 7,
+            "p95": 8916.0,
+            "stddev": 31.671786195545184
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 507.520615,
+            "mean": 477.61465957142855,
+            "median": 468.577231,
+            "min": 463.225308,
+            "n": 7,
+            "p95": 507.520615,
+            "stddev": 16.12198341604254
+          },
+          "strategy": "A full-selected",
+          "time_to_action_ready_ms": {
+            "max": 507.520615,
+            "mean": 477.61465957142855,
+            "median": 468.577231,
+            "min": 463.225308,
+            "n": 7,
+            "p95": 507.520615,
+            "stddev": 16.12198341604254
+          },
+          "total_bytes": {
+            "max": 809732.0,
+            "mean": 809732.0,
+            "median": 809732.0,
+            "min": 809732.0,
+            "n": 7,
+            "p95": 809732.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1033105.0,
+            "mean": 1033105.0,
+            "median": 1033105.0,
+            "min": 1033105.0,
+            "n": 7,
+            "p95": 1033105.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 33146.062,
+            "mean": 30897.492999999995,
+            "median": 30875.047,
+            "min": 28673.517000000003,
+            "n": 7,
+            "p95": 33146.062,
+            "stddev": 1482.5038104840437
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 8916.0,
+            "mean": 8888.57142857143,
+            "median": 8916.0,
+            "min": 8852.0,
+            "n": 7,
+            "p95": 8916.0,
+            "stddev": 31.671786195545184
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 12.874154,
+            "mean": 11.652758142857143,
+            "median": 11.470385,
+            "min": 10.452538,
+            "n": 7,
+            "p95": 12.874154,
+            "stddev": 0.9371648580932704
+          },
+          "strategy": "B save/reopen",
+          "time_to_action_ready_ms": {
+            "max": 12.874154,
+            "mean": 11.652758142857143,
+            "median": 11.470385,
+            "min": 10.452538,
+            "n": 7,
+            "p95": 12.874154,
+            "stddev": 0.9371648580932704
+          },
+          "total_bytes": {
+            "max": 1033105.0,
+            "mean": 1033105.0,
+            "median": 1033105.0,
+            "min": 1033105.0,
+            "n": 7,
+            "p95": 1033105.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 33146.062,
+            "mean": 30897.492999999995,
+            "median": 30875.047,
+            "min": 28673.517000000003,
+            "n": 7,
+            "p95": 33146.062,
+            "stddev": 1482.5038104840437
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 8916.0,
+            "mean": 8888.57142857143,
+            "median": 8916.0,
+            "min": 8852.0,
+            "n": 7,
+            "p95": 8916.0,
+            "stddev": 31.671786195545184
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 507.520615,
+            "mean": 477.61465957142855,
+            "median": 468.577231,
+            "min": 463.225308,
+            "n": 7,
+            "p95": 507.520615,
+            "stddev": 16.12198341604254
+          },
+          "strategy": "C demand-load",
+          "time_to_action_ready_ms": {
+            "max": 481.986538,
+            "mean": 448.69901100000004,
+            "median": 440.90707699999996,
+            "min": 432.771385,
+            "n": 7,
+            "p95": 481.986538,
+            "stddev": 17.694676873035064
+          },
+          "total_bytes": {
+            "max": 809732.0,
+            "mean": 809732.0,
+            "median": 809732.0,
+            "min": 809732.0,
+            "n": 7,
+            "p95": 809732.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 33146.062,
+            "mean": 30897.492999999995,
+            "median": 30875.047,
+            "min": 28673.517000000003,
+            "n": 7,
+            "p95": 33146.062,
+            "stddev": 1482.5038104840437
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 2.6470000000000002,
+            "mean": 1.5039451428571429,
+            "median": 1.302077,
+            "min": 0.986769,
+            "n": 7,
+            "p95": 2.6470000000000002,
+            "stddev": 0.5530970846759
+          },
+          "peak_rss_kb": {
+            "max": 8916.0,
+            "mean": 8888.57142857143,
+            "median": 8916.0,
+            "min": 8852.0,
+            "n": 7,
+            "p95": 8916.0,
+            "stddev": 31.671786195545184
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 507.520615,
+            "mean": 477.61465957142855,
+            "median": 468.577231,
+            "min": 463.225308,
+            "n": 7,
+            "p95": 507.520615,
+            "stddev": 16.12198341604254
+          },
+          "strategy": "D carryon-progressive",
+          "time_to_action_ready_ms": {
+            "max": 481.986538,
+            "mean": 448.69901100000004,
+            "median": 440.90707699999996,
+            "min": 432.771385,
+            "n": 7,
+            "p95": 481.986538,
+            "stddev": 17.694676873035064
+          },
+          "total_bytes": {
+            "max": 809732.0,
+            "mean": 809732.0,
+            "median": 809732.0,
+            "min": 809732.0,
+            "n": 7,
+            "p95": 809732.0,
+            "stddev": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "config": {
+        "chunk_bytes": 65536,
+        "demand": false,
+        "doc_bytes": 1048576,
+        "nav_bytes": 0,
+        "no_handoff": false
+      },
+      "d_verdict": "tie",
+      "id": "doc1048576_nav0_demand0_chunk65536",
+      "strategies": [
+        {
+          "bytes_before_first_action": {
+            "max": 1410617.0,
+            "mean": 1410617.0,
+            "median": 1410617.0,
+            "min": 1410617.0,
+            "n": 7,
+            "p95": 1410617.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 43447.795,
+            "mean": 39594.73628571428,
+            "median": 39616.223999999995,
+            "min": 35716.863000000005,
+            "n": 7,
+            "p95": 43447.795,
+            "stddev": 2574.9155245641796
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 9400.0,
+            "mean": 9368.57142857143,
+            "median": 9400.0,
+            "min": 9308.0,
+            "n": 7,
+            "p95": 9400.0,
+            "stddev": 37.305139986170204
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 2924.586154,
+            "mean": 2441.6398132857144,
+            "median": 2379.1688459999996,
+            "min": 2271.767308,
+            "n": 7,
+            "p95": 2924.586154,
+            "stddev": 201.79173145608206
+          },
+          "strategy": "A full-selected",
+          "time_to_action_ready_ms": {
+            "max": 2924.586154,
+            "mean": 2441.6398132857144,
+            "median": 2379.1688459999996,
+            "min": 2271.767308,
+            "n": 7,
+            "p95": 2924.586154,
+            "stddev": 201.79173145608206
+          },
+          "total_bytes": {
+            "max": 1410617.0,
+            "mean": 1410617.0,
+            "median": 1410617.0,
+            "min": 1410617.0,
+            "n": 7,
+            "p95": 1410617.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1477597.0,
+            "mean": 1477593.5714285714,
+            "median": 1477597.0,
+            "min": 1477585.0,
+            "n": 7,
+            "p95": 1477597.0,
+            "stddev": 5.421047417431508
+          },
+          "cpu_ms": {
+            "max": 43447.795,
+            "mean": 39594.73628571428,
+            "median": 39616.223999999995,
+            "min": 35716.863000000005,
+            "n": 7,
+            "p95": 43447.795,
+            "stddev": 2574.9155245641796
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 9400.0,
+            "mean": 9368.57142857143,
+            "median": 9400.0,
+            "min": 9308.0,
+            "n": 7,
+            "p95": 9400.0,
+            "stddev": 37.305139986170204
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 12.046538,
+            "mean": 11.095021857142857,
+            "median": 10.990768999999998,
+            "min": 9.840615,
+            "n": 7,
+            "p95": 12.046538,
+            "stddev": 0.6610224212515527
+          },
+          "strategy": "B save/reopen",
+          "time_to_action_ready_ms": {
+            "max": 12.046538,
+            "mean": 11.095021857142857,
+            "median": 10.990768999999998,
+            "min": 9.840615,
+            "n": 7,
+            "p95": 12.046538,
+            "stddev": 0.6610224212515527
+          },
+          "total_bytes": {
+            "max": 1477597.0,
+            "mean": 1477593.5714285714,
+            "median": 1477597.0,
+            "min": 1477585.0,
+            "n": 7,
+            "p95": 1477597.0,
+            "stddev": 5.421047417431508
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1410617.0,
+            "mean": 1410617.0,
+            "median": 1410617.0,
+            "min": 1410617.0,
+            "n": 7,
+            "p95": 1410617.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 43447.795,
+            "mean": 39594.73628571428,
+            "median": 39616.223999999995,
+            "min": 35716.863000000005,
+            "n": 7,
+            "p95": 43447.795,
+            "stddev": 2574.9155245641796
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 9400.0,
+            "mean": 9368.57142857143,
+            "median": 9400.0,
+            "min": 9308.0,
+            "n": 7,
+            "p95": 9400.0,
+            "stddev": 37.305139986170204
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 2924.586154,
+            "mean": 2441.6398132857144,
+            "median": 2379.1688459999996,
+            "min": 2271.767308,
+            "n": 7,
+            "p95": 2924.586154,
+            "stddev": 201.79173145608206
+          },
+          "strategy": "C demand-load",
+          "time_to_action_ready_ms": {
+            "max": 2924.586154,
+            "mean": 2441.6398132857144,
+            "median": 2379.1688459999996,
+            "min": 2271.767308,
+            "n": 7,
+            "p95": 2924.586154,
+            "stddev": 201.79173145608206
+          },
+          "total_bytes": {
+            "max": 1410617.0,
+            "mean": 1410617.0,
+            "median": 1410617.0,
+            "min": 1410617.0,
+            "n": 7,
+            "p95": 1410617.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1410617.0,
+            "mean": 1410617.0,
+            "median": 1410617.0,
+            "min": 1410617.0,
+            "n": 7,
+            "p95": 1410617.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 43447.795,
+            "mean": 39594.73628571428,
+            "median": 39616.223999999995,
+            "min": 35716.863000000005,
+            "n": 7,
+            "p95": 43447.795,
+            "stddev": 2574.9155245641796
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 1.433539,
+            "mean": 1.291231,
+            "median": 1.310846,
+            "min": 1.1258469999999998,
+            "n": 7,
+            "p95": 1.433539,
+            "stddev": 0.08832510234517545
+          },
+          "peak_rss_kb": {
+            "max": 9400.0,
+            "mean": 9368.57142857143,
+            "median": 9400.0,
+            "min": 9308.0,
+            "n": 7,
+            "p95": 9400.0,
+            "stddev": 37.305139986170204
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 2924.586154,
+            "mean": 2441.6398132857144,
+            "median": 2379.1688459999996,
+            "min": 2271.767308,
+            "n": 7,
+            "p95": 2924.586154,
+            "stddev": 201.79173145608206
+          },
+          "strategy": "D carryon-progressive",
+          "time_to_action_ready_ms": {
+            "max": 2924.586154,
+            "mean": 2441.6398132857144,
+            "median": 2379.1688459999996,
+            "min": 2271.767308,
+            "n": 7,
+            "p95": 2924.586154,
+            "stddev": 201.79173145608206
+          },
+          "total_bytes": {
+            "max": 1410617.0,
+            "mean": 1410617.0,
+            "median": 1410617.0,
+            "min": 1410617.0,
+            "n": 7,
+            "p95": 1410617.0,
+            "stddev": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "config": {
+        "chunk_bytes": 524288,
+        "demand": false,
+        "doc_bytes": 1048576,
+        "nav_bytes": 0,
+        "no_handoff": false
+      },
+      "d_verdict": "tie",
+      "id": "doc1048576_nav0_demand0_chunk524288",
+      "strategies": [
+        {
+          "bytes_before_first_action": {
+            "max": 1402468.0,
+            "mean": 1402468.0,
+            "median": 1402468.0,
+            "min": 1402468.0,
+            "n": 7,
+            "p95": 1402468.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 51020.484000000004,
+            "mean": 48161.810999999994,
+            "median": 48152.699,
+            "min": 45318.645,
+            "n": 7,
+            "p95": 51020.484000000004,
+            "stddev": 1899.2387471836494
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 10632.0,
+            "mean": 10318.285714285714,
+            "median": 10632.0,
+            "min": 9876.0,
+            "n": 7,
+            "p95": 10632.0,
+            "stddev": 362.4163802217847
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 697.026154,
+            "mean": 656.6266482857143,
+            "median": 676.558769,
+            "min": 594.2486150000001,
+            "n": 7,
+            "p95": 697.026154,
+            "stddev": 34.30149367267041
+          },
+          "strategy": "A full-selected",
+          "time_to_action_ready_ms": {
+            "max": 697.026154,
+            "mean": 656.6266482857143,
+            "median": 676.558769,
+            "min": 594.2486150000001,
+            "n": 7,
+            "p95": 697.026154,
+            "stddev": 34.30149367267041
+          },
+          "total_bytes": {
+            "max": 1402468.0,
+            "mean": 1402468.0,
+            "median": 1402468.0,
+            "min": 1402468.0,
+            "n": 7,
+            "p95": 1402468.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1477597.0,
+            "mean": 1477597.0,
+            "median": 1477597.0,
+            "min": 1477597.0,
+            "n": 7,
+            "p95": 1477597.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 51020.484000000004,
+            "mean": 48161.810999999994,
+            "median": 48152.699,
+            "min": 45318.645,
+            "n": 7,
+            "p95": 51020.484000000004,
+            "stddev": 1899.2387471836494
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 10632.0,
+            "mean": 10318.285714285714,
+            "median": 10632.0,
+            "min": 9876.0,
+            "n": 7,
+            "p95": 10632.0,
+            "stddev": 362.4163802217847
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 12.504230999999999,
+            "mean": 11.170978285714286,
+            "median": 10.875615999999999,
+            "min": 10.261231,
+            "n": 7,
+            "p95": 12.504230999999999,
+            "stddev": 0.7293651921350538
+          },
+          "strategy": "B save/reopen",
+          "time_to_action_ready_ms": {
+            "max": 12.504230999999999,
+            "mean": 11.170978285714286,
+            "median": 10.875615999999999,
+            "min": 10.261231,
+            "n": 7,
+            "p95": 12.504230999999999,
+            "stddev": 0.7293651921350538
+          },
+          "total_bytes": {
+            "max": 1477597.0,
+            "mean": 1477597.0,
+            "median": 1477597.0,
+            "min": 1477597.0,
+            "n": 7,
+            "p95": 1477597.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1402468.0,
+            "mean": 1402468.0,
+            "median": 1402468.0,
+            "min": 1402468.0,
+            "n": 7,
+            "p95": 1402468.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 51020.484000000004,
+            "mean": 48161.810999999994,
+            "median": 48152.699,
+            "min": 45318.645,
+            "n": 7,
+            "p95": 51020.484000000004,
+            "stddev": 1899.2387471836494
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 10632.0,
+            "mean": 10318.285714285714,
+            "median": 10632.0,
+            "min": 9876.0,
+            "n": 7,
+            "p95": 10632.0,
+            "stddev": 362.4163802217847
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 697.026154,
+            "mean": 656.6266482857143,
+            "median": 676.558769,
+            "min": 594.2486150000001,
+            "n": 7,
+            "p95": 697.026154,
+            "stddev": 34.30149367267041
+          },
+          "strategy": "C demand-load",
+          "time_to_action_ready_ms": {
+            "max": 697.026154,
+            "mean": 656.6266482857143,
+            "median": 676.558769,
+            "min": 594.2486150000001,
+            "n": 7,
+            "p95": 697.026154,
+            "stddev": 34.30149367267041
+          },
+          "total_bytes": {
+            "max": 1402468.0,
+            "mean": 1402468.0,
+            "median": 1402468.0,
+            "min": 1402468.0,
+            "n": 7,
+            "p95": 1402468.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1402468.0,
+            "mean": 1402468.0,
+            "median": 1402468.0,
+            "min": 1402468.0,
+            "n": 7,
+            "p95": 1402468.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 51020.484000000004,
+            "mean": 48161.810999999994,
+            "median": 48152.699,
+            "min": 45318.645,
+            "n": 7,
+            "p95": 51020.484000000004,
+            "stddev": 1899.2387471836494
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 1.823154,
+            "mean": 1.3625824285714285,
+            "median": 1.313846,
+            "min": 1.080385,
+            "n": 7,
+            "p95": 1.823154,
+            "stddev": 0.228350137917852
+          },
+          "peak_rss_kb": {
+            "max": 10632.0,
+            "mean": 10318.285714285714,
+            "median": 10632.0,
+            "min": 9876.0,
+            "n": 7,
+            "p95": 10632.0,
+            "stddev": 362.4163802217847
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 697.026154,
+            "mean": 656.6266482857143,
+            "median": 676.558769,
+            "min": 594.2486150000001,
+            "n": 7,
+            "p95": 697.026154,
+            "stddev": 34.30149367267041
+          },
+          "strategy": "D carryon-progressive",
+          "time_to_action_ready_ms": {
+            "max": 697.026154,
+            "mean": 656.6266482857143,
+            "median": 676.558769,
+            "min": 594.2486150000001,
+            "n": 7,
+            "p95": 697.026154,
+            "stddev": 34.30149367267041
+          },
+          "total_bytes": {
+            "max": 1402468.0,
+            "mean": 1402468.0,
+            "median": 1402468.0,
+            "min": 1402468.0,
+            "n": 7,
+            "p95": 1402468.0,
+            "stddev": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "config": {
+        "chunk_bytes": 65536,
+        "demand": false,
+        "doc_bytes": 1048576,
+        "nav_bytes": 600000,
+        "no_handoff": false
+      },
+      "d_verdict": "tie",
+      "id": "doc1048576_nav600000_demand0_chunk65536",
+      "strategies": [
+        {
+          "bytes_before_first_action": {
+            "max": 2211105.0,
+            "mean": 2211105.0,
+            "median": 2211105.0,
+            "min": 2211105.0,
+            "n": 7,
+            "p95": 2211105.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 62490.559,
+            "mean": 58188.91857142858,
+            "median": 58210.489,
+            "min": 53843.42600000001,
+            "n": 7,
+            "p95": 62490.559,
+            "stddev": 2908.5265615303206
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 10632.0,
+            "mean": 10632.0,
+            "median": 10632.0,
+            "min": 10632.0,
+            "n": 7,
+            "p95": 10632.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 800488.0,
+            "mean": 800488.0,
+            "median": 800488.0,
+            "min": 800488.0,
+            "n": 7,
+            "p95": 800488.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 2406.218154,
+            "mean": 2319.2815164285707,
+            "median": 2364.370539,
+            "min": 2172.603922,
+            "n": 7,
+            "p95": 2406.218154,
+            "stddev": 77.65802823908508
+          },
+          "strategy": "A full-selected",
+          "time_to_action_ready_ms": {
+            "max": 2406.218154,
+            "mean": 2319.2815164285707,
+            "median": 2364.370539,
+            "min": 2172.603922,
+            "n": 7,
+            "p95": 2406.218154,
+            "stddev": 77.65802823908508
+          },
+          "total_bytes": {
+            "max": 2211105.0,
+            "mean": 2211105.0,
+            "median": 2211105.0,
+            "min": 2211105.0,
+            "n": 7,
+            "p95": 2211105.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 2077597.0,
+            "mean": 2077597.0,
+            "median": 2077597.0,
+            "min": 2077597.0,
+            "n": 7,
+            "p95": 2077597.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 62490.559,
+            "mean": 58188.91857142858,
+            "median": 58210.489,
+            "min": 53843.42600000001,
+            "n": 7,
+            "p95": 62490.559,
+            "stddev": 2908.5265615303206
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 10632.0,
+            "mean": 10632.0,
+            "median": 10632.0,
+            "min": 10632.0,
+            "n": 7,
+            "p95": 10632.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 10.957308000000001,
+            "mean": 10.052604571428573,
+            "median": 10.083769,
+            "min": 8.908,
+            "n": 7,
+            "p95": 10.957308000000001,
+            "stddev": 0.6426743726789216
+          },
+          "strategy": "B save/reopen",
+          "time_to_action_ready_ms": {
+            "max": 10.957308000000001,
+            "mean": 10.052604571428573,
+            "median": 10.083769,
+            "min": 8.908,
+            "n": 7,
+            "p95": 10.957308000000001,
+            "stddev": 0.6426743726789216
+          },
+          "total_bytes": {
+            "max": 2077597.0,
+            "mean": 2077597.0,
+            "median": 2077597.0,
+            "min": 2077597.0,
+            "n": 7,
+            "p95": 2077597.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1410617.0,
+            "mean": 1410617.0,
+            "median": 1410617.0,
+            "min": 1410617.0,
+            "n": 7,
+            "p95": 1410617.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 62490.559,
+            "mean": 58188.91857142858,
+            "median": 58210.489,
+            "min": 53843.42600000001,
+            "n": 7,
+            "p95": 62490.559,
+            "stddev": 2908.5265615303206
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 10632.0,
+            "mean": 10632.0,
+            "median": 10632.0,
+            "min": 10632.0,
+            "n": 7,
+            "p95": 10632.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 2376.469462,
+            "mean": 2291.9644725714284,
+            "median": 2340.804308,
+            "min": 2151.279615,
+            "n": 7,
+            "p95": 2376.469462,
+            "stddev": 76.83631196527537
+          },
+          "strategy": "C demand-load",
+          "time_to_action_ready_ms": {
+            "max": 2376.469462,
+            "mean": 2291.9644725714284,
+            "median": 2340.804308,
+            "min": 2151.279615,
+            "n": 7,
+            "p95": 2376.469462,
+            "stddev": 76.83631196527537
+          },
+          "total_bytes": {
+            "max": 1410617.0,
+            "mean": 1410617.0,
+            "median": 1410617.0,
+            "min": 1410617.0,
+            "n": 7,
+            "p95": 1410617.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1410617.0,
+            "mean": 1410617.0,
+            "median": 1410617.0,
+            "min": 1410617.0,
+            "n": 7,
+            "p95": 1410617.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 62490.559,
+            "mean": 58188.91857142858,
+            "median": 58210.489,
+            "min": 53843.42600000001,
+            "n": 7,
+            "p95": 62490.559,
+            "stddev": 2908.5265615303206
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 1.725615,
+            "mean": 1.4062747142857142,
+            "median": 1.500308,
+            "min": 0.966769,
+            "n": 7,
+            "p95": 1.725615,
+            "stddev": 0.2819500311380999
+          },
+          "peak_rss_kb": {
+            "max": 10632.0,
+            "mean": 10632.0,
+            "median": 10632.0,
+            "min": 10632.0,
+            "n": 7,
+            "p95": 10632.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 2376.469462,
+            "mean": 2291.9644725714284,
+            "median": 2340.804308,
+            "min": 2151.279615,
+            "n": 7,
+            "p95": 2376.469462,
+            "stddev": 76.83631196527537
+          },
+          "strategy": "D carryon-progressive",
+          "time_to_action_ready_ms": {
+            "max": 2376.469462,
+            "mean": 2291.9644725714284,
+            "median": 2340.804308,
+            "min": 2151.279615,
+            "n": 7,
+            "p95": 2376.469462,
+            "stddev": 76.83631196527537
+          },
+          "total_bytes": {
+            "max": 1410617.0,
+            "mean": 1410617.0,
+            "median": 1410617.0,
+            "min": 1410617.0,
+            "n": 7,
+            "p95": 1410617.0,
+            "stddev": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "config": {
+        "chunk_bytes": 524288,
+        "demand": false,
+        "doc_bytes": 1048576,
+        "nav_bytes": 600000,
+        "no_handoff": false
+      },
+      "d_verdict": "tie",
+      "id": "doc1048576_nav600000_demand0_chunk524288",
+      "strategies": [
+        {
+          "bytes_before_first_action": {
+            "max": 2202956.0,
+            "mean": 2202956.0,
+            "median": 2202956.0,
+            "min": 2202956.0,
+            "n": 7,
+            "p95": 2202956.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 71621.568,
+            "mean": 68175.45757142857,
+            "median": 68163.412,
+            "min": 64744.485,
+            "n": 7,
+            "p95": 71621.568,
+            "stddev": 2289.579348225586
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 11348.0,
+            "mean": 10940.57142857143,
+            "median": 10644.0,
+            "min": 10632.0,
+            "n": 7,
+            "p95": 11348.0,
+            "stddev": 352.86535560135894
+          },
+          "prepared_but_unused_bytes": {
+            "max": 800488.0,
+            "mean": 800488.0,
+            "median": 800488.0,
+            "min": 800488.0,
+            "n": 7,
+            "p95": 800488.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 732.0735390000001,
+            "mean": 711.0152858571429,
+            "median": 709.3849230000001,
+            "min": 680.682154,
+            "n": 7,
+            "p95": 732.0735390000001,
+            "stddev": 15.539320034972947
+          },
+          "strategy": "A full-selected",
+          "time_to_action_ready_ms": {
+            "max": 732.0735390000001,
+            "mean": 711.0152858571429,
+            "median": 709.3849230000001,
+            "min": 680.682154,
+            "n": 7,
+            "p95": 732.0735390000001,
+            "stddev": 15.539320034972947
+          },
+          "total_bytes": {
+            "max": 2202956.0,
+            "mean": 2202956.0,
+            "median": 2202956.0,
+            "min": 2202956.0,
+            "n": 7,
+            "p95": 2202956.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 2077597.0,
+            "mean": 2077597.0,
+            "median": 2077597.0,
+            "min": 2077597.0,
+            "n": 7,
+            "p95": 2077597.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 71621.568,
+            "mean": 68175.45757142857,
+            "median": 68163.412,
+            "min": 64744.485,
+            "n": 7,
+            "p95": 71621.568,
+            "stddev": 2289.579348225586
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 11348.0,
+            "mean": 10940.57142857143,
+            "median": 10644.0,
+            "min": 10632.0,
+            "n": 7,
+            "p95": 11348.0,
+            "stddev": 352.86535560135894
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 11.830692,
+            "mean": 10.483670000000002,
+            "median": 10.279077,
+            "min": 9.843461,
+            "n": 7,
+            "p95": 11.830692,
+            "stddev": 0.6422456602377988
+          },
+          "strategy": "B save/reopen",
+          "time_to_action_ready_ms": {
+            "max": 11.830692,
+            "mean": 10.483670000000002,
+            "median": 10.279077,
+            "min": 9.843461,
+            "n": 7,
+            "p95": 11.830692,
+            "stddev": 0.6422456602377988
+          },
+          "total_bytes": {
+            "max": 2077597.0,
+            "mean": 2077597.0,
+            "median": 2077597.0,
+            "min": 2077597.0,
+            "n": 7,
+            "p95": 2077597.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1402468.0,
+            "mean": 1402468.0,
+            "median": 1402468.0,
+            "min": 1402468.0,
+            "n": 7,
+            "p95": 1402468.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 71621.568,
+            "mean": 68175.45757142857,
+            "median": 68163.412,
+            "min": 64744.485,
+            "n": 7,
+            "p95": 71621.568,
+            "stddev": 2289.579348225586
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 11348.0,
+            "mean": 10940.57142857143,
+            "median": 10644.0,
+            "min": 10632.0,
+            "n": 7,
+            "p95": 11348.0,
+            "stddev": 352.86535560135894
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 703.9332310000001,
+            "mean": 683.4150001428571,
+            "median": 685.744,
+            "min": 651.833846,
+            "n": 7,
+            "p95": 703.9332310000001,
+            "stddev": 15.626952174217543
+          },
+          "strategy": "C demand-load",
+          "time_to_action_ready_ms": {
+            "max": 703.9332310000001,
+            "mean": 683.4150001428571,
+            "median": 685.744,
+            "min": 651.833846,
+            "n": 7,
+            "p95": 703.9332310000001,
+            "stddev": 15.626952174217543
+          },
+          "total_bytes": {
+            "max": 1402468.0,
+            "mean": 1402468.0,
+            "median": 1402468.0,
+            "min": 1402468.0,
+            "n": 7,
+            "p95": 1402468.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1402468.0,
+            "mean": 1402468.0,
+            "median": 1402468.0,
+            "min": 1402468.0,
+            "n": 7,
+            "p95": 1402468.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 71621.568,
+            "mean": 68175.45757142857,
+            "median": 68163.412,
+            "min": 64744.485,
+            "n": 7,
+            "p95": 71621.568,
+            "stddev": 2289.579348225586
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 1.752077,
+            "mean": 1.3746372857142857,
+            "median": 1.353308,
+            "min": 1.207693,
+            "n": 7,
+            "p95": 1.752077,
+            "stddev": 0.1641579253147184
+          },
+          "peak_rss_kb": {
+            "max": 11348.0,
+            "mean": 10940.57142857143,
+            "median": 10644.0,
+            "min": 10632.0,
+            "n": 7,
+            "p95": 11348.0,
+            "stddev": 352.86535560135894
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 703.9332310000001,
+            "mean": 683.4150001428571,
+            "median": 685.744,
+            "min": 651.833846,
+            "n": 7,
+            "p95": 703.9332310000001,
+            "stddev": 15.626952174217543
+          },
+          "strategy": "D carryon-progressive",
+          "time_to_action_ready_ms": {
+            "max": 703.9332310000001,
+            "mean": 683.4150001428571,
+            "median": 685.744,
+            "min": 651.833846,
+            "n": 7,
+            "p95": 703.9332310000001,
+            "stddev": 15.626952174217543
+          },
+          "total_bytes": {
+            "max": 1402468.0,
+            "mean": 1402468.0,
+            "median": 1402468.0,
+            "min": 1402468.0,
+            "n": 7,
+            "p95": 1402468.0,
+            "stddev": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "config": {
+        "chunk_bytes": 65536,
+        "demand": true,
+        "doc_bytes": 1048576,
+        "nav_bytes": 600000,
+        "no_handoff": false
+      },
+      "d_verdict": "tie",
+      "id": "doc1048576_nav600000_demand1_chunk65536",
+      "strategies": [
+        {
+          "bytes_before_first_action": {
+            "max": 2211105.0,
+            "mean": 2211105.0,
+            "median": 2211105.0,
+            "min": 2211105.0,
+            "n": 7,
+            "p95": 2211105.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 83271.794,
+            "mean": 78898.9397142857,
+            "median": 78877.05900000001,
+            "min": 74545.955,
+            "n": 7,
+            "p95": 83271.794,
+            "stddev": 2916.7847173136024
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 11348.0,
+            "mean": 11348.0,
+            "median": 11348.0,
+            "min": 11348.0,
+            "n": 7,
+            "p95": 11348.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 2442.006155,
+            "mean": 2386.6788134285716,
+            "median": 2384.69923,
+            "min": 2320.215308,
+            "n": 7,
+            "p95": 2442.006155,
+            "stddev": 35.46729847916871
+          },
+          "strategy": "A full-selected",
+          "time_to_action_ready_ms": {
+            "max": 2442.006155,
+            "mean": 2386.6788134285716,
+            "median": 2384.69923,
+            "min": 2320.215308,
+            "n": 7,
+            "p95": 2442.006155,
+            "stddev": 35.46729847916871
+          },
+          "total_bytes": {
+            "max": 2211105.0,
+            "mean": 2211105.0,
+            "median": 2211105.0,
+            "min": 2211105.0,
+            "n": 7,
+            "p95": 2211105.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 2077597.0,
+            "mean": 2077597.0,
+            "median": 2077597.0,
+            "min": 2077597.0,
+            "n": 7,
+            "p95": 2077597.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 83271.794,
+            "mean": 78898.9397142857,
+            "median": 78877.05900000001,
+            "min": 74545.955,
+            "n": 7,
+            "p95": 83271.794,
+            "stddev": 2916.7847173136024
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 11348.0,
+            "mean": 11348.0,
+            "median": 11348.0,
+            "min": 11348.0,
+            "n": 7,
+            "p95": 11348.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 13.231077,
+            "mean": 10.908989142857143,
+            "median": 10.537924,
+            "min": 10.125231,
+            "n": 7,
+            "p95": 13.231077,
+            "stddev": 1.0030503869057814
+          },
+          "strategy": "B save/reopen",
+          "time_to_action_ready_ms": {
+            "max": 13.231077,
+            "mean": 10.908989142857143,
+            "median": 10.537924,
+            "min": 10.125231,
+            "n": 7,
+            "p95": 13.231077,
+            "stddev": 1.0030503869057814
+          },
+          "total_bytes": {
+            "max": 2077597.0,
+            "mean": 2077597.0,
+            "median": 2077597.0,
+            "min": 2077597.0,
+            "n": 7,
+            "p95": 2077597.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1410617.0,
+            "mean": 1410617.0,
+            "median": 1410617.0,
+            "min": 1410617.0,
+            "n": 7,
+            "p95": 1410617.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 83271.794,
+            "mean": 78898.9397142857,
+            "median": 78877.05900000001,
+            "min": 74545.955,
+            "n": 7,
+            "p95": 83271.794,
+            "stddev": 2916.7847173136024
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 11348.0,
+            "mean": 11348.0,
+            "median": 11348.0,
+            "min": 11348.0,
+            "n": 7,
+            "p95": 11348.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 2442.006155,
+            "mean": 2386.6788134285716,
+            "median": 2384.69923,
+            "min": 2320.215308,
+            "n": 7,
+            "p95": 2442.006155,
+            "stddev": 35.46729847916871
+          },
+          "strategy": "C demand-load",
+          "time_to_action_ready_ms": {
+            "max": 2409.268616,
+            "mean": 2359.296637428571,
+            "median": 2363.164384,
+            "min": 2292.4371539999997,
+            "n": 7,
+            "p95": 2409.268616,
+            "stddev": 34.52845787683035
+          },
+          "total_bytes": {
+            "max": 2211105.0,
+            "mean": 2211105.0,
+            "median": 2211105.0,
+            "min": 2211105.0,
+            "n": 7,
+            "p95": 2211105.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1410617.0,
+            "mean": 1410617.0,
+            "median": 1410617.0,
+            "min": 1410617.0,
+            "n": 7,
+            "p95": 1410617.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 83271.794,
+            "mean": 78898.9397142857,
+            "median": 78877.05900000001,
+            "min": 74545.955,
+            "n": 7,
+            "p95": 83271.794,
+            "stddev": 2916.7847173136024
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 1.42977,
+            "mean": 1.2880331428571428,
+            "median": 1.2862310000000001,
+            "min": 1.136846,
+            "n": 7,
+            "p95": 1.42977,
+            "stddev": 0.10122234394416588
+          },
+          "peak_rss_kb": {
+            "max": 11348.0,
+            "mean": 11348.0,
+            "median": 11348.0,
+            "min": 11348.0,
+            "n": 7,
+            "p95": 11348.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 2442.006155,
+            "mean": 2386.6788134285716,
+            "median": 2384.69923,
+            "min": 2320.215308,
+            "n": 7,
+            "p95": 2442.006155,
+            "stddev": 35.46729847916871
+          },
+          "strategy": "D carryon-progressive",
+          "time_to_action_ready_ms": {
+            "max": 2409.268616,
+            "mean": 2359.296637428571,
+            "median": 2363.164384,
+            "min": 2292.4371539999997,
+            "n": 7,
+            "p95": 2409.268616,
+            "stddev": 34.52845787683035
+          },
+          "total_bytes": {
+            "max": 2211105.0,
+            "mean": 2211105.0,
+            "median": 2211105.0,
+            "min": 2211105.0,
+            "n": 7,
+            "p95": 2211105.0,
+            "stddev": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "config": {
+        "chunk_bytes": 524288,
+        "demand": true,
+        "doc_bytes": 1048576,
+        "nav_bytes": 600000,
+        "no_handoff": false
+      },
+      "d_verdict": "tie",
+      "id": "doc1048576_nav600000_demand1_chunk524288",
+      "strategies": [
+        {
+          "bytes_before_first_action": {
+            "max": 2202956.0,
+            "mean": 2202956.0,
+            "median": 2202956.0,
+            "min": 2202956.0,
+            "n": 7,
+            "p95": 2202956.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 92397.24399999999,
+            "mean": 88978.54185714285,
+            "median": 88966.375,
+            "min": 85567.65400000001,
+            "n": 7,
+            "p95": 92397.24399999999,
+            "stddev": 2278.837365766985
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 11444.0,
+            "mean": 11444.0,
+            "median": 11444.0,
+            "min": 11444.0,
+            "n": 7,
+            "p95": 11444.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 725.0536159999999,
+            "mean": 702.459725,
+            "median": 700.835538,
+            "min": 675.492923,
+            "n": 7,
+            "p95": 725.0536159999999,
+            "stddev": 16.040920489708366
+          },
+          "strategy": "A full-selected",
+          "time_to_action_ready_ms": {
+            "max": 725.0536159999999,
+            "mean": 702.459725,
+            "median": 700.835538,
+            "min": 675.492923,
+            "n": 7,
+            "p95": 725.0536159999999,
+            "stddev": 16.040920489708366
+          },
+          "total_bytes": {
+            "max": 2202956.0,
+            "mean": 2202956.0,
+            "median": 2202956.0,
+            "min": 2202956.0,
+            "n": 7,
+            "p95": 2202956.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 2077597.0,
+            "mean": 2077597.0,
+            "median": 2077597.0,
+            "min": 2077597.0,
+            "n": 7,
+            "p95": 2077597.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 92397.24399999999,
+            "mean": 88978.54185714285,
+            "median": 88966.375,
+            "min": 85567.65400000001,
+            "n": 7,
+            "p95": 92397.24399999999,
+            "stddev": 2278.837365766985
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 11444.0,
+            "mean": 11444.0,
+            "median": 11444.0,
+            "min": 11444.0,
+            "n": 7,
+            "p95": 11444.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 13.391077,
+            "mean": 10.151143142857142,
+            "median": 9.648308,
+            "min": 8.647461999999999,
+            "n": 7,
+            "p95": 13.391077,
+            "stddev": 1.4470761549104485
+          },
+          "strategy": "B save/reopen",
+          "time_to_action_ready_ms": {
+            "max": 13.391077,
+            "mean": 10.151143142857142,
+            "median": 9.648308,
+            "min": 8.647461999999999,
+            "n": 7,
+            "p95": 13.391077,
+            "stddev": 1.4470761549104485
+          },
+          "total_bytes": {
+            "max": 2077597.0,
+            "mean": 2077597.0,
+            "median": 2077597.0,
+            "min": 2077597.0,
+            "n": 7,
+            "p95": 2077597.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1402468.0,
+            "mean": 1402468.0,
+            "median": 1402468.0,
+            "min": 1402468.0,
+            "n": 7,
+            "p95": 1402468.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 92397.24399999999,
+            "mean": 88978.54185714285,
+            "median": 88966.375,
+            "min": 85567.65400000001,
+            "n": 7,
+            "p95": 92397.24399999999,
+            "stddev": 2278.837365766985
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 11444.0,
+            "mean": 11444.0,
+            "median": 11444.0,
+            "min": 11444.0,
+            "n": 7,
+            "p95": 11444.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 725.0536159999999,
+            "mean": 702.459725,
+            "median": 700.835538,
+            "min": 675.492923,
+            "n": 7,
+            "p95": 725.0536159999999,
+            "stddev": 16.040920489708366
+          },
+          "strategy": "C demand-load",
+          "time_to_action_ready_ms": {
+            "max": 698.012,
+            "mean": 674.7860437142856,
+            "median": 674.4785380000001,
+            "min": 648.391385,
+            "n": 7,
+            "p95": 698.012,
+            "stddev": 17.274430049118788
+          },
+          "total_bytes": {
+            "max": 2202956.0,
+            "mean": 2202956.0,
+            "median": 2202956.0,
+            "min": 2202956.0,
+            "n": 7,
+            "p95": 2202956.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1402468.0,
+            "mean": 1402468.0,
+            "median": 1402468.0,
+            "min": 1402468.0,
+            "n": 7,
+            "p95": 1402468.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 92397.24399999999,
+            "mean": 88978.54185714285,
+            "median": 88966.375,
+            "min": 85567.65400000001,
+            "n": 7,
+            "p95": 92397.24399999999,
+            "stddev": 2278.837365766985
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 1.891385,
+            "mean": 1.4083078571428571,
+            "median": 1.347308,
+            "min": 1.147154,
+            "n": 7,
+            "p95": 1.891385,
+            "stddev": 0.23118044356329637
+          },
+          "peak_rss_kb": {
+            "max": 11444.0,
+            "mean": 11444.0,
+            "median": 11444.0,
+            "min": 11444.0,
+            "n": 7,
+            "p95": 11444.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 725.0536159999999,
+            "mean": 702.459725,
+            "median": 700.835538,
+            "min": 675.492923,
+            "n": 7,
+            "p95": 725.0536159999999,
+            "stddev": 16.040920489708366
+          },
+          "strategy": "D carryon-progressive",
+          "time_to_action_ready_ms": {
+            "max": 698.012,
+            "mean": 674.7860437142856,
+            "median": 674.4785380000001,
+            "min": 648.391385,
+            "n": 7,
+            "p95": 698.012,
+            "stddev": 17.274430049118788
+          },
+          "total_bytes": {
+            "max": 2202956.0,
+            "mean": 2202956.0,
+            "median": 2202956.0,
+            "min": 2202956.0,
+            "n": 7,
+            "p95": 2202956.0,
+            "stddev": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "config": {
+        "chunk_bytes": 262144,
+        "demand": false,
+        "doc_bytes": 4096,
+        "nav_bytes": 65536,
+        "no_handoff": true
+      },
+      "d_verdict": "lose",
+      "id": "no-handoff_doc4096",
+      "strategies": [
+        {
+          "bytes_before_first_action": {
+            "max": 97116.0,
+            "mean": 97116.0,
+            "median": 97116.0,
+            "min": 97116.0,
+            "n": 7,
+            "p95": 97116.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 96949.956,
+            "mean": 95262.57671428572,
+            "median": 95281.00000000001,
+            "min": 93543.91100000001,
+            "n": 7,
+            "p95": 96949.956,
+            "stddev": 1130.0439351205664
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 11444.0,
+            "mean": 11444.0,
+            "median": 11444.0,
+            "min": 11444.0,
+            "n": 7,
+            "p95": 11444.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 87872.0,
+            "mean": 87872.0,
+            "median": 87872.0,
+            "min": 87872.0,
+            "n": 7,
+            "p95": 87872.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 450.86346100000003,
+            "mean": 436.16963714285714,
+            "median": 436.70876899999996,
+            "min": 425.122077,
+            "n": 7,
+            "p95": 450.86346100000003,
+            "stddev": 9.14552403607495
+          },
+          "strategy": "A full-selected",
+          "time_to_action_ready_ms": {
+            "max": 450.86346100000003,
+            "mean": 436.16963714285714,
+            "median": 436.70876899999996,
+            "min": 425.122077,
+            "n": 7,
+            "p95": 450.86346100000003,
+            "stddev": 9.14552403607495
+          },
+          "total_bytes": {
+            "max": 97116.0,
+            "mean": 97116.0,
+            "median": 97116.0,
+            "min": 97116.0,
+            "n": 7,
+            "p95": 97116.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 498653.0,
+            "mean": 498653.0,
+            "median": 498653.0,
+            "min": 498653.0,
+            "n": 7,
+            "p95": 498653.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 96949.956,
+            "mean": 95262.57671428572,
+            "median": 95281.00000000001,
+            "min": 93543.91100000001,
+            "n": 7,
+            "p95": 96949.956,
+            "stddev": 1130.0439351205664
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 11444.0,
+            "mean": 11444.0,
+            "median": 11444.0,
+            "min": 11444.0,
+            "n": 7,
+            "p95": 11444.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 62.669846,
+            "mean": 23.10172514285714,
+            "median": 13.468308,
+            "min": 9.451461,
+            "n": 7,
+            "p95": 62.669846,
+            "stddev": 18.041242755437406
+          },
+          "strategy": "B save/reopen",
+          "time_to_action_ready_ms": {
+            "max": 62.669846,
+            "mean": 23.10172514285714,
+            "median": 13.468308,
+            "min": 9.451461,
+            "n": 7,
+            "p95": 62.669846,
+            "stddev": 18.041242755437406
+          },
+          "total_bytes": {
+            "max": 498653.0,
+            "mean": 498653.0,
+            "median": 498653.0,
+            "min": 498653.0,
+            "n": 7,
+            "p95": 498653.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 96949.956,
+            "mean": 95262.57671428572,
+            "median": 95281.00000000001,
+            "min": 93543.91100000001,
+            "n": 7,
+            "p95": 96949.956,
+            "stddev": 1130.0439351205664
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 11444.0,
+            "mean": 11444.0,
+            "median": 11444.0,
+            "min": 11444.0,
+            "n": 7,
+            "p95": 11444.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 447.891769,
+            "mean": 433.7908019999999,
+            "median": 434.177153,
+            "min": 423.16369199999997,
+            "n": 7,
+            "p95": 447.891769,
+            "stddev": 8.854521086164816
+          },
+          "strategy": "C demand-load",
+          "time_to_action_ready_ms": {
+            "max": 447.891769,
+            "mean": 433.7908019999999,
+            "median": 434.177153,
+            "min": 423.16369199999997,
+            "n": 7,
+            "p95": 447.891769,
+            "stddev": 8.854521086164816
+          },
+          "total_bytes": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 96949.956,
+            "mean": 95262.57671428572,
+            "median": 95281.00000000001,
+            "min": 93543.91100000001,
+            "n": 7,
+            "p95": 96949.956,
+            "stddev": 1130.0439351205664
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 2.273846,
+            "mean": 1.3203627142857142,
+            "median": 1.2423849999999999,
+            "min": 0.731307,
+            "n": 7,
+            "p95": 2.273846,
+            "stddev": 0.5045941909134831
+          },
+          "peak_rss_kb": {
+            "max": 11444.0,
+            "mean": 11444.0,
+            "median": 11444.0,
+            "min": 11444.0,
+            "n": 7,
+            "p95": 11444.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 447.891769,
+            "mean": 433.7908019999999,
+            "median": 434.177153,
+            "min": 423.16369199999997,
+            "n": 7,
+            "p95": 447.891769,
+            "stddev": 8.854521086164816
+          },
+          "strategy": "D carryon-progressive",
+          "time_to_action_ready_ms": {
+            "max": 447.891769,
+            "mean": 433.7908019999999,
+            "median": 434.177153,
+            "min": 423.16369199999997,
+            "n": 7,
+            "p95": 447.891769,
+            "stddev": 8.854521086164816
+          },
+          "total_bytes": {
+            "max": 9244.0,
+            "mean": 9244.0,
+            "median": 9244.0,
+            "min": 9244.0,
+            "n": 7,
+            "p95": 9244.0,
+            "stddev": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "config": {
+        "chunk_bytes": 262144,
+        "demand": false,
+        "doc_bytes": 1048576,
+        "nav_bytes": 65536,
+        "no_handoff": true
+      },
+      "d_verdict": "lose",
+      "id": "no-handoff_doc1048576",
+      "strategies": [
+        {
+          "bytes_before_first_action": {
+            "max": 1491506.0,
+            "mean": 1491506.0,
+            "median": 1491506.0,
+            "min": 1491506.0,
+            "n": 7,
+            "p95": 1491506.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 105426.898,
+            "mean": 102276.16100000001,
+            "median": 102266.754,
+            "min": 99100.236,
+            "n": 7,
+            "p95": 105426.898,
+            "stddev": 2112.429149163929
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 11444.0,
+            "mean": 11444.0,
+            "median": 11444.0,
+            "min": 11444.0,
+            "n": 7,
+            "p95": 11444.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 87872.0,
+            "mean": 87872.0,
+            "median": 87872.0,
+            "min": 87872.0,
+            "n": 7,
+            "p95": 87872.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 997.675769,
+            "mean": 900.5936374285715,
+            "median": 895.296307,
+            "min": 863.068693,
+            "n": 7,
+            "p95": 997.675769,
+            "stddev": 41.90303870871166
+          },
+          "strategy": "A full-selected",
+          "time_to_action_ready_ms": {
+            "max": 997.675769,
+            "mean": 900.5936374285715,
+            "median": 895.296307,
+            "min": 863.068693,
+            "n": 7,
+            "p95": 997.675769,
+            "stddev": 41.90303870871166
+          },
+          "total_bytes": {
+            "max": 1491506.0,
+            "mean": 1491506.0,
+            "median": 1491506.0,
+            "min": 1491506.0,
+            "n": 7,
+            "p95": 1491506.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1543133.0,
+            "mean": 1543133.0,
+            "median": 1543133.0,
+            "min": 1543133.0,
+            "n": 7,
+            "p95": 1543133.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 105426.898,
+            "mean": 102276.16100000001,
+            "median": 102266.754,
+            "min": 99100.236,
+            "n": 7,
+            "p95": 105426.898,
+            "stddev": 2112.429149163929
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 11444.0,
+            "mean": 11444.0,
+            "median": 11444.0,
+            "min": 11444.0,
+            "n": 7,
+            "p95": 11444.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 11.047692,
+            "mean": 10.043296571428572,
+            "median": 10.398461,
+            "min": 8.950462,
+            "n": 7,
+            "p95": 11.047692,
+            "stddev": 0.7738278450884567
+          },
+          "strategy": "B save/reopen",
+          "time_to_action_ready_ms": {
+            "max": 11.047692,
+            "mean": 10.043296571428572,
+            "median": 10.398461,
+            "min": 8.950462,
+            "n": 7,
+            "p95": 11.047692,
+            "stddev": 0.7738278450884567
+          },
+          "total_bytes": {
+            "max": 1543133.0,
+            "mean": 1543133.0,
+            "median": 1543133.0,
+            "min": 1543133.0,
+            "n": 7,
+            "p95": 1543133.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1403634.0,
+            "mean": 1403634.0,
+            "median": 1403634.0,
+            "min": 1403634.0,
+            "n": 7,
+            "p95": 1403634.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 105426.898,
+            "mean": 102276.16100000001,
+            "median": 102266.754,
+            "min": 99100.236,
+            "n": 7,
+            "p95": 105426.898,
+            "stddev": 2112.429149163929
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "peak_rss_kb": {
+            "max": 11444.0,
+            "mean": 11444.0,
+            "median": 11444.0,
+            "min": 11444.0,
+            "n": 7,
+            "p95": 11444.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 995.085923,
+            "mean": 898.105956142857,
+            "median": 893.283384,
+            "min": 861.072385,
+            "n": 7,
+            "p95": 995.085923,
+            "stddev": 41.83995891928802
+          },
+          "strategy": "C demand-load",
+          "time_to_action_ready_ms": {
+            "max": 995.085923,
+            "mean": 898.105956142857,
+            "median": 893.283384,
+            "min": 861.072385,
+            "n": 7,
+            "p95": 995.085923,
+            "stddev": 41.83995891928802
+          },
+          "total_bytes": {
+            "max": 1403634.0,
+            "mean": 1403634.0,
+            "median": 1403634.0,
+            "min": 1403634.0,
+            "n": 7,
+            "p95": 1403634.0,
+            "stddev": 0.0
+          }
+        },
+        {
+          "bytes_before_first_action": {
+            "max": 1403634.0,
+            "mean": 1403634.0,
+            "median": 1403634.0,
+            "min": 1403634.0,
+            "n": 7,
+            "p95": 1403634.0,
+            "stddev": 0.0
+          },
+          "cpu_ms": {
+            "max": 105426.898,
+            "mean": 102276.16100000001,
+            "median": 102266.754,
+            "min": 99100.236,
+            "n": 7,
+            "p95": 105426.898,
+            "stddev": 2112.429149163929
+          },
+          "endpoint_changed_symbols": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 7,
+            "p95": 1.0,
+            "stddev": 0.0
+          },
+          "normal_use_overhead_ms": {
+            "max": 2.036231,
+            "mean": 1.5985604285714285,
+            "median": 1.5802310000000002,
+            "min": 1.320077,
+            "n": 7,
+            "p95": 2.036231,
+            "stddev": 0.2509163140479067
+          },
+          "peak_rss_kb": {
+            "max": 11444.0,
+            "mean": 11444.0,
+            "median": 11444.0,
+            "min": 11444.0,
+            "n": 7,
+            "p95": 11444.0,
+            "stddev": 0.0
+          },
+          "prepared_but_unused_bytes": {
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "n": 7,
+            "p95": 0.0,
+            "stddev": 0.0
+          },
+          "source_independence_ms": {
+            "max": 995.085923,
+            "mean": 898.105956142857,
+            "median": 893.283384,
+            "min": 861.072385,
+            "n": 7,
+            "p95": 995.085923,
+            "stddev": 41.83995891928802
+          },
+          "strategy": "D carryon-progressive",
+          "time_to_action_ready_ms": {
+            "max": 995.085923,
+            "mean": 898.105956142857,
+            "median": 893.283384,
+            "min": 861.072385,
+            "n": 7,
+            "p95": 995.085923,
+            "stddev": 41.83995891928802
+          },
+          "total_bytes": {
+            "max": 1403634.0,
+            "mean": 1403634.0,
+            "median": 1403634.0,
+            "min": 1403634.0,
+            "n": 7,
+            "p95": 1403634.0,
+            "stddev": 0.0
+          }
+        }
+      ]
+    }
+  ],
+  "machine": {
+    "arch": "aarch64",
+    "chunk_size_bounds_bytes": [
+      4096,
+      8388608
+    ],
+    "cpus": 8,
+    "max_control_frame_bytes": 1048576,
+    "os": "android"
+  },
+  "methodology": "MEASURED metrics over loopback TLS 1.3, in-process (LOCAL evidence, spec §2/§30 — NOT physical cross-device). Wire bytes from transport counters; wall-clock from std::time::Instant; CPU + peak RSS from getrusage(RUSAGE_SELF). endpoint_changed_symbols is a SEPARATE symbol-distance metric (spec §5.6), never bytes and never runtime. Each config runs REPS times; rep 0 is discarded as warmup.",
+  "reps": 8,
+  "skipped": [
+    {
+      "id": "doc4096_nav0_demand1_chunk65536",
+      "reason": "demand=true with nav=0 is degenerate"
+    },
+    {
+      "id": "doc4096_nav0_demand1_chunk524288",
+      "reason": "demand=true with nav=0 is degenerate"
+    },
+    {
+      "id": "doc1048576_nav0_demand1_chunk65536",
+      "reason": "demand=true with nav=0 is degenerate"
+    },
+    {
+      "id": "doc1048576_nav0_demand1_chunk524288",
+      "reason": "demand=true with nav=0 is degenerate"
+    }
+  ]
+}

@@ -3,11 +3,17 @@
 The preparation-strategy benchmark is now a repeated, swept, statistical study.
 
 - **Run it:** `cargo run -p xtask -- bench docs/benchmark --reps 30`
-- **Full results:** [`benchmark/RESULTS.md`](benchmark/RESULTS.md) — categorized report
-  (methodology, machine, headline, per-metric, per-strategy, per-axis sweeps, verdict
-  matrix, skipped combos).
-- **Raw data:** `benchmark/raw-results.json` (every repetition of every strategy of
-  every config) + `benchmark/summary.json` (per-config aggregate stats + verdict).
+- **Full results (mac, loopback):** [`benchmark/RESULTS.md`](benchmark/RESULTS.md) —
+  88 configs × 30 reps, categorized report (methodology, machine, headline, per-metric,
+  per-strategy, per-axis sweeps, verdict matrix, skipped combos).
+- **Physical results (Android device CPU):**
+  [`benchmark/RESULTS-physical.md`](benchmark/RESULTS-physical.md) — Galaxy A04 (arm64,
+  8 cpu), reduced grid (14 configs × 8 reps) run on real ARM hardware over the device's
+  own loopback. `cargo run -p xtask -- bench <dir> --grid small --postfix -physical`,
+  cross-compiled for `aarch64-linux-android` and run via adb. Still loopback-within-one-
+  device, not mac↔device network.
+- **Raw data:** `benchmark/raw-results.json` / `raw-results-physical.json` (every rep of
+  every strategy of every config) + `summary.json` / `summary-physical.json` (aggregates).
 
 Compares four strategies — full selected-state transfer (A), ordinary save/reopen (B),
 pure demand loading (C), Carry-On progressive / action-conditioned preparation (D) —
