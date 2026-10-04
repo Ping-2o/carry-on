@@ -19,5 +19,7 @@ thiserror = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 proptest = { workspace = true }
+carryon-adapter-api = { workspace = true }
 carryon-adapter-graph = { path = "../carryon-adapter-graph" }
 carryon-adapter-file = { path = "../carryon-adapter-file" }
+carryon-adapter-editor = { path = "../carryon-adapter-editor" }

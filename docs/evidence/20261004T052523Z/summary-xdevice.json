@@ -1,0 +1,172 @@
+{
+  "machine": {
+    "destination": "android device (adb)",
+    "note": "PHYSICAL cross-device evidence (PLAT-001). Still no APK/signing; no §30 platform acceptance.",
+    "path": "real LAN TLS 1.3 (two machines, two NICs)",
+    "source": "mac (host)"
+  },
+  "methodology": "Each trial is ONE independent end-to-end execution of ONE strategy (A full / C demand / D progressive) over a real Mac→Android LAN TLS 1.3 transfer. A/C/D are NOT composed from shared measurements. Stats: median, p95, mean, stddev, 95% CI (normal approx). Failures counted per strategy.",
+  "per_strategy": [
+    {
+      "attempted": 9,
+      "bytes_before_first_action": {
+        "ci95_hi": 1437645.511806856,
+        "ci95_lo": 586486.2659709218,
+        "max": 2205387.0,
+        "mean": 1012065.8888888889,
+        "median": 892330.0,
+        "min": 4122.0,
+        "n": 9,
+        "p95": 2205387.0,
+        "stddev": 651397.3820172964
+      },
+      "failure_rate": 0.0,
+      "failures": 0,
+      "n_ok": 9,
+      "source_independence_ms": {
+        "ci95_hi": 1837.0221811781428,
+        "ci95_lo": 1056.3960410440793,
+        "max": 2139.613,
+        "mean": 1446.709111111111,
+        "median": 1623.358,
+        "min": 361.561,
+        "n": 9,
+        "p95": 2139.613,
+        "stddev": 597.4179643883137
+      },
+      "strategy": "A",
+      "time_to_action_ready_ms": {
+        "ci95_hi": 1810.1475347667124,
+        "ci95_lo": 1039.90868745551,
+        "max": 2112.652,
+        "mean": 1425.0281111111112,
+        "median": 1600.398,
+        "min": 357.536,
+        "n": 9,
+        "p95": 2112.652,
+        "stddev": 589.4685055953079
+      },
+      "total_bytes": {
+        "ci95_hi": 1437645.511806856,
+        "ci95_lo": 586486.2659709218,
+        "max": 2205387.0,
+        "mean": 1012065.8888888889,
+        "median": 892330.0,
+        "min": 4122.0,
+        "n": 9,
+        "p95": 2205387.0,
+        "stddev": 651397.3820172964
+      }
+    },
+    {
+      "attempted": 10,
+      "bytes_before_first_action": {
+        "ci95_hi": 998422.7731399036,
+        "ci95_lo": 166297.2268600965,
+        "max": 1403634.0,
+        "mean": 582360.0,
+        "median": 91166.0,
+        "min": 4122.0,
+        "n": 10,
+        "p95": 1403634.0,
+        "stddev": 671278.5779224598
+      },
+      "failure_rate": 0.0,
+      "failures": 0,
+      "n_ok": 10,
+      "source_independence_ms": {
+        "ci95_hi": 1397.5882394516962,
+        "ci95_lo": 761.152360548304,
+        "max": 1988.49,
+        "mean": 1079.3703,
+        "median": 1174.275,
+        "min": 365.138,
+        "n": 10,
+        "p95": 1988.49,
+        "stddev": 513.4150413229145
+      },
+      "strategy": "C",
+      "time_to_action_ready_ms": {
+        "ci95_hi": 1367.9662701391035,
+        "ci95_lo": 729.6155298608963,
+        "max": 1953.118,
+        "mean": 1048.7909,
+        "median": 1152.951,
+        "min": 346.47,
+        "n": 10,
+        "p95": 1953.118,
+        "stddev": 514.9597666667659
+      },
+      "total_bytes": {
+        "ci95_hi": 998422.7731399036,
+        "ci95_lo": 166297.2268600965,
+        "max": 1403634.0,
+        "mean": 582360.0,
+        "median": 91166.0,
+        "min": 4122.0,
+        "n": 10,
+        "p95": 1403634.0,
+        "stddev": 671278.5779224598
+      }
+    },
+    {
+      "attempted": 11,
+      "bytes_before_first_action": {
+        "ci95_hi": 595788.2121983565,
+        "ci95_lo": -30220.93947108381,
+        "max": 1403634.0,
+        "mean": 282783.63636363635,
+        "median": 9244.0,
+        "min": 4122.0,
+        "n": 11,
+        "p95": 1403634.0,
+        "stddev": 529652.4161776069
+      },
+      "failure_rate": 0.0,
+      "failures": 0,
+      "n_ok": 11,
+      "source_independence_ms": {
+        "ci95_hi": 1405.7581027753952,
+        "ci95_lo": 651.6788063155138,
+        "max": 2430.162,
+        "mean": 1028.7184545454545,
+        "median": 1078.581,
+        "min": 383.363,
+        "n": 11,
+        "p95": 2430.162,
+        "stddev": 638.0097164623982
+      },
+      "strategy": "D",
+      "time_to_action_ready_ms": {
+        "ci95_hi": 1378.1747888627683,
+        "ci95_lo": 630.3603020463229,
+        "max": 2389.467,
+        "mean": 1004.2675454545456,
+        "median": 1067.373,
+        "min": 379.229,
+        "n": 11,
+        "p95": 2389.467,
+        "stddev": 632.7092003985522
+      },
+      "total_bytes": {
+        "ci95_hi": 595788.2121983565,
+        "ci95_lo": -30220.93947108381,
+        "max": 1403634.0,
+        "mean": 282783.63636363635,
+        "median": 9244.0,
+        "min": 4122.0,
+        "n": 11,
+        "p95": 1403634.0,
+        "stddev": 529652.4161776069
+      }
+    }
+  ],
+  "pre_action_bytes_D_over_A": {
+    "a_median": 892330.0,
+    "d_median": 91166.0,
+    "meets_under_50pct_target": true,
+    "ratio": 0.10216623894747459
+  },
+  "total_trials": 31,
+  "unparseable_lines": 0
+}

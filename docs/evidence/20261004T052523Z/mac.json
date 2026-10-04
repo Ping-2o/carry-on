@@ -1,0 +1,9 @@
+{
+  "os": "macOS 27.0",
+  "kernel": "Darwin 27.0.0",
+  "arch": "arm64",
+  "cpu": "Apple M1",
+  "ncpu": 8,
+  "mem_bytes": 8589934592,
+  "lan_ip": "192.168.3.201"
+}

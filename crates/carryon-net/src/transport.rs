@@ -16,6 +16,30 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::Arc;
 
+/// Bench-only simulated link latency. When `CARRYON_NET_DELAY_MS` is set to a
+/// positive integer, each sent frame is delayed by that many milliseconds. This is
+/// off by default (no env var = no delay) and exists so the preparation-strategy
+/// benchmark can sweep a latency axis without root `tc`/netem. It inflates real
+/// wall-clock only; the byte counters still measure real wire bytes. NOT a protocol
+/// feature — never relied on for correctness.
+fn inject_link_delay() {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    // Parse once (sentinel u64::MAX = "not yet read"), then reuse — the env var does
+    // not change within a process run.
+    static DELAY_MS: AtomicU64 = AtomicU64::new(u64::MAX);
+    let mut ms = DELAY_MS.load(Ordering::Relaxed);
+    if ms == u64::MAX {
+        ms = std::env::var("CARRYON_NET_DELAY_MS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(0);
+        DELAY_MS.store(ms, Ordering::Relaxed);
+    }
+    if ms > 0 {
+        std::thread::sleep(std::time::Duration::from_millis(ms));
+    }
+}
+
 /// A TLS stream in either role. `StreamOwned` is generic over the connection.
 enum Tls {
     Client(rustls::StreamOwned<rustls::ClientConnection, TcpStream>),
@@ -129,6 +153,7 @@ impl Session {
 
     /// Send one message, stamping the next sequence number.
     pub fn send(&mut self, message: Message) -> Result<()> {
+        inject_link_delay();
         let env = Envelope::new(self.send_seq, message);
         let n = write_frame(&mut self.tls, &env)?;
         self.bytes_sent += n;

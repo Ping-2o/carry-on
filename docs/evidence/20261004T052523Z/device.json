@@ -1,0 +1,9 @@
+{
+  "model": "SM-A045F",
+  "cpu_abi": "arm64-v8a",
+  "android_release": "13",
+  "sdk": "33",
+  "hardware": "mt6765",
+  "cpu_cores": "8",
+  "wlan0_ip": "192.168.3.3"
+}

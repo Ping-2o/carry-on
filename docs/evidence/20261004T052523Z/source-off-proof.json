@@ -1,0 +1,13 @@
+{
+  "stamp": "20261004T052742Z",
+  "scenario": "edit on mac -> carry to android -> move authority -> mac source off (killed or exited) -> continue on android; restarted source cannot mutate",
+  "source_session_id": "29627120-9b05-434e-9061-09427a3b8521",
+  "mac_source_pid": 13598,
+  "mac_source_off": "already-exited",
+  "dest_became_owner": true,
+  "dest_independent_edit_succeeded": true,
+  "dest_evidence_verify_ok": true,
+  "restarted_source_read_only": true,
+  "all_passed": true,
+  "disclosure": "PHYSICAL cross-device evidence (PLAT-001). Two machines, two NICs, real TLS 1.3. No APK/signing; no §30 platform acceptance (spec §2/§30)."
+}

@@ -1,0 +1,10 @@
+dest: connecting to 192.168.3.201:48972...
+dest: imported {"completed":true,"mirror_cut":0}
+dest: session.restore = {"oracle":{"agreed":true,"checked":true,"detail":"session restored at generation 1"},"output":{"document_hash":"406337312f50c6df3a2dbf9cfe4a58bc3b89fffd0041dafb4c8c23827ef75e99","generation":1,"navigation":{"active_tab":"draft.md","cursor":42,"scroll_x":0,"scroll_y":128,"selection_anchor":20,"selection_head":25},"unsaved_hash":"92bcf282bb0addea8c758d21c4521afe1656f9d815a884c528ece81e2e9c04b1"},"output_hash":"d1dd3c772e7fc5ab997cf23b9826a950ddb05f4f05b6b81c0bde961f234db888"}
+dest: receipt={"proposal_id":"e8665248-a886-4182-a528-ce3f5ee58557","new_epoch":1,"dest_receipt":"accept:0:35585ef11eecb99eaf2e827321bbf942e31ef452e3506708ceefa8431a3d95a3","source_receipt":"relinquish:e8665248-a886-4182-a528-ce3f5ee58557:35585ef11eecb99eaf2e827321bbf942e31ef452e3506708ceefa8431a3d95a3"}
+dest: source disconnected; continuing edit independently...
+dest: independent edit = {"oracle":{"agreed":true,"checked":true,"detail":"edit applied, now generation 2"},"output":{"generation":2,"unsaved_hash":"71f4b207cd15e5004952deee604b63104f7e7c28ce76017044727544efba1119"},"output_hash":"781d45aa3b714936cc43aeb62904d0f037d29b077942d287f76b5d4c84f21d16"}
+dest: evidence verify = {"message":"section hashes match","ok":true}
+dest: metrics TTA=1081.4ms source_independence=349.6ms bytes_to_ready=2556 total_sent=1650 total_recv=3322
+dest: OK — L3 STRUCTURED CONTINUATION complete (not process migration)
+dest: mirror(owner)=66a92afc-0fdd-5bfe-b4f3-57811740b627 evidence=/data/local/tmp/carryon/data-uc-dst/l3-evidence.json

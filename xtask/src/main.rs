@@ -22,8 +22,13 @@ fn main() {
         "handoff-evidence" => run_handoff_evidence(),
         "ffi-demo" => run_ffi_demo(),
         "bench" => run_bench(),
+        "fault-injection" => run_fault_injection(),
+        "bench-aggregate" => run_bench_aggregate(),
         _ => {
-            eprintln!("usage: xtask <evidence|handoff-evidence|ffi-demo|bench> [out_dir]");
+            eprintln!(
+                "usage: xtask <evidence|handoff-evidence|ffi-demo|bench|fault-injection|\
+                 bench-aggregate> [out_dir]"
+            );
             std::process::exit(2);
         }
     }
@@ -346,17 +351,57 @@ fn bench_source(dir: &std::path::Path, doc_bytes: usize, nav_bytes: usize) -> (C
     (core, session.to_string(), cut.number)
 }
 
-/// Run one real import of the authoritative closure over loopback TLS at a chosen
-/// chunk size, returning (time_to_action_ready_ms, bytes_sent+recv by the
-/// destination). The optional navigation object is Ephemeral and not sealed, so it is
-/// NOT carried by the cut import (progressive by construction). `chunk_bytes` is set
-/// on BOTH cores via `Core::set_chunk_size`, so it governs how the document/unsaved
-/// objects are split into transfer chunks (frame count + per-frame overhead).
-fn import_closure(doc_bytes: usize, nav_bytes: usize, chunk_bytes: u64) -> (f64, u64) {
+/// The measured outcome of ONE independent end-to-end strategy execution. Every field
+/// is measured in-run (own sockets, own cores) — nothing is derived arithmetically
+/// from another strategy's measurement.
+#[derive(Clone, Default)]
+struct StrategyOutcome {
+    /// Wall-clock to the first useful action (ACTION_READY). For A this includes the
+    /// optional payload; for C/D it is the authoritative closure only.
+    time_to_action_ready_ms: f64,
+    /// Wall-clock from the start of this run until the destination no longer needs the
+    /// source (everything the chosen strategy pulls before it can proceed source-free).
+    source_independence_ms: f64,
+    /// Measured wire bytes moved before the first useful action.
+    bytes_before_first_action: u64,
+    /// Measured total wire bytes for the whole run.
+    total_bytes: u64,
+    /// Bytes prepared up front but not demanded by the first action.
+    prepared_but_unused_bytes: u64,
+}
+
+/// Transfer the OPTIONAL navigation object over an ALREADY-OPEN destination session,
+/// returning the wire bytes added. Models the real framed cost of moving the optional
+/// payload on the same link the import used, so A/C(demand)/D(demand) pay a real,
+/// measured cost — not a number copied from a separate run.
+fn transfer_optional_on(session: &mut Session, nav_bytes: usize) -> u64 {
+    use carryon_core::carryon_net::wire::Message;
+    let before = session.bytes_sent() + session.bytes_recv();
+    // The destination asks the source for the optional object; the source answers with
+    // one ChunkData frame carrying the bytes. The source side is driven by the serving
+    // thread's extra `serve_optional` loop (see `run_strategy`).
+    session
+        .send(Message::TransferRequest {
+            content_hash: "nav-optional".into(),
+            offset: 0,
+            length: nav_bytes as u64,
+        })
+        .expect("request optional");
+    let _ = session.recv().expect("recv optional");
+    (session.bytes_sent() + session.bytes_recv()) - before
+}
+
+/// Run ONE strategy end-to-end over its own fresh loopback TLS pair and measure it
+/// independently. A, C, and D each call this in their own invocation — so the reported
+/// A/C/D numbers are independent executions, never arithmetic over a shared measurement
+/// (the composed-benchmark problem this replaces). `strat` is 'A' | 'C' | 'D'; B
+/// (save/reopen) is local by definition and measured by `save_reopen`.
+fn run_strategy_as(cfg: &BenchConfig, strat: char) -> StrategyOutcome {
+    use carryon_core::carryon_net::wire::Message;
     let src_dir = tempdir_like("bench-src");
     let dst_dir = tempdir_like("bench-dst");
-    let (mut source, sess_str, cut_num) = bench_source(&src_dir, doc_bytes, nav_bytes);
-    source.set_chunk_size(Some(chunk_bytes)).unwrap();
+    let (mut source, sess_str, cut_num) = bench_source(&src_dir, cfg.doc_bytes, cfg.nav_bytes);
+    source.set_chunk_size(Some(cfg.chunk_bytes)).unwrap();
 
     let source_id = DeviceIdentity::generate("source").unwrap();
     let dest_id = DeviceIdentity::generate("dest").unwrap();
@@ -365,65 +410,98 @@ fn import_closure(doc_bytes: usize, nav_bytes: usize, chunk_bytes: u64) -> (f64,
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap().to_string();
 
+    // How many extra optional transfers will the destination request on this session?
+    // A always moves the optional up front; C/D move it only when the action demands
+    // it. The serving thread answers exactly that many optional TransferRequests after
+    // `serve_cut` returns, so the source side stays in lock-step with the destination.
+    let nav_bytes = cfg.nav_bytes;
+    let moves_optional = match strat {
+        'A' => cfg.nav_bytes > 0,
+        _ => cfg.demand && cfg.nav_bytes > 0,
+    };
+    let optional_requests = usize::from(moves_optional);
+
     let src = std::thread::spawn(move || {
         let mut s = Session::accept(&listener, &source_id, st).unwrap();
         s.server_negotiate(vec![]).unwrap();
         source.serve_cut(&mut s).unwrap();
+        // Answer the optional-object requests the chosen strategy makes (if any).
+        let payload = "h".repeat(nav_bytes).into_bytes();
+        for _ in 0..optional_requests {
+            match s.recv() {
+                Ok(Message::TransferRequest { content_hash, .. }) => {
+                    s.send(Message::ChunkData {
+                        content_hash,
+                        offset: 0,
+                        chunk_digest: "nav-optional".into(),
+                        bytes: payload.clone(),
+                    })
+                    .unwrap();
+                }
+                _ => break,
+            }
+        }
     });
 
     let mut destination = Core::open(&dst_dir).unwrap();
-    destination.set_chunk_size(Some(chunk_bytes)).unwrap();
+    destination.set_chunk_size(Some(cfg.chunk_bytes)).unwrap();
     let mut s = Session::connect(&addr, &dest_id, dt).unwrap();
     s.client_negotiate(vec![]).unwrap();
-    let t0 = Instant::now();
+
+    // --- Independent end-to-end run for this strategy ---
+    let run_start = Instant::now();
+    // 1. Authoritative closure (prerequisites) — every strategy moves these.
     destination
         .import_cut(&mut s, &sess_str, cut_num)
         .unwrap()
         .completed_cut()
         .unwrap();
-    let tta = t0.elapsed().as_secs_f64() * 1000.0;
-    let bytes = s.bytes_sent() + s.bytes_recv();
+    let prereq_tta_ms = run_start.elapsed().as_secs_f64() * 1000.0;
+    let prereq_bytes = s.bytes_sent() + s.bytes_recv();
+
+    let mut out = StrategyOutcome::default();
+
+    match strat {
+        // A full: move the optional payload BEFORE declaring the first action ready, so
+        // both time-to-action-ready and bytes-before-first-action include it.
+        'A' => {
+            let opt_bytes = if cfg.nav_bytes > 0 {
+                transfer_optional_on(&mut s, cfg.nav_bytes)
+            } else {
+                0
+            };
+            out.time_to_action_ready_ms = run_start.elapsed().as_secs_f64() * 1000.0;
+            out.bytes_before_first_action = prereq_bytes + opt_bytes;
+            out.source_independence_ms = out.time_to_action_ready_ms;
+            out.total_bytes = prereq_bytes + opt_bytes;
+            // If the action never demands the optional, those bytes are prepared-unused.
+            out.prepared_but_unused_bytes = if cfg.demand { 0 } else { opt_bytes };
+        }
+        // C demand / D progressive: ACTION_READY at the authoritative closure. The
+        // optional payload is pulled only if the first action demands it (and only then
+        // does the destination still need the source).
+        _ => {
+            out.time_to_action_ready_ms = prereq_tta_ms;
+            out.bytes_before_first_action = prereq_bytes;
+            if cfg.demand && cfg.nav_bytes > 0 {
+                let opt_bytes = transfer_optional_on(&mut s, cfg.nav_bytes);
+                out.source_independence_ms = run_start.elapsed().as_secs_f64() * 1000.0;
+                out.total_bytes = prereq_bytes + opt_bytes;
+            } else {
+                out.source_independence_ms = prereq_tta_ms;
+                out.total_bytes = prereq_bytes;
+            }
+            out.prepared_but_unused_bytes = 0;
+        }
+    }
+
+    // Close the client session before joining so the serving thread's final `recv`
+    // returns (the device gotcha documented in AGENTS.md).
+    drop(s);
     src.join().unwrap();
-    // Reclaim the per-measurement stores so a long sweep does not fill the disk
-    // (two full object stores per import × thousands of imports).
     let _ = std::fs::remove_dir_all(&src_dir);
     let _ = std::fs::remove_dir_all(&dst_dir);
-    (tta, bytes)
-}
-
-/// Measure the real framed transfer cost of the OPTIONAL navigation object alone, by
-/// sending its bytes over a loopback TLS session and counting wire bytes. Models the
-/// cost a strategy pays if it moves the optional payload.
-fn optional_transfer_bytes(nav_bytes: usize) -> (f64, u64) {
-    use carryon_core::carryon_net::wire::Message;
-    let source_id = DeviceIdentity::generate("source").unwrap();
-    let dest_id = DeviceIdentity::generate("dest").unwrap();
-    let (st, dt) = pair_devices(&source_id, &dest_id, "bench-opt").unwrap();
-    let (st, dt) = (Arc::new(st), Arc::new(dt));
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let addr = listener.local_addr().unwrap().to_string();
-    let payload = "h".repeat(nav_bytes);
-    let p2 = payload.clone();
-    let src = std::thread::spawn(move || {
-        let mut s = Session::accept(&listener, &source_id, st).unwrap();
-        s.server_negotiate(vec![]).unwrap();
-        // One chunk-data frame carrying the optional bytes (base64 in the wire type).
-        s.send(Message::ChunkData {
-            content_hash: "nav".into(),
-            offset: 0,
-            chunk_digest: "nav".into(),
-            bytes: p2.into_bytes(),
-        })
-        .expect("send optional payload");
-    });
-    let mut s = Session::connect(&addr, &dest_id, dt).unwrap();
-    s.client_negotiate(vec![]).unwrap();
-    let t0 = Instant::now();
-    let _ = s.recv().unwrap();
-    let ms = t0.elapsed().as_secs_f64() * 1000.0;
-    let bytes = s.bytes_sent() + s.bytes_recv();
-    src.join().unwrap();
-    (ms, bytes)
+    out
 }
 
 /// Measure the real per-session overhead Carry-On's action-conditioned preparation
@@ -579,7 +657,19 @@ struct Stats {
     min: f64,
     max: f64,
     p95: f64,
+    /// 95% confidence interval for the MEAN (normal approx: mean ± 1.96·sd/√n).
+    ci95_lo: f64,
+    ci95_hi: f64,
     n: usize,
+}
+
+/// 95% confidence interval half-width for the mean (normal approximation,
+/// 1.96·stddev/√n). Returns 0 for n < 2 (no spread to estimate).
+fn ci95_halfwidth(stddev: f64, n: usize) -> f64 {
+    if n < 2 {
+        return 0.0;
+    }
+    1.96 * stddev / (n as f64).sqrt()
 }
 
 fn stats(xs: &[f64]) -> Stats {
@@ -592,6 +682,8 @@ fn stats(xs: &[f64]) -> Stats {
             min: 0.0,
             max: 0.0,
             p95: 0.0,
+            ci95_lo: 0.0,
+            ci95_hi: 0.0,
             n: 0,
         };
     }
@@ -599,17 +691,21 @@ fn stats(xs: &[f64]) -> Stats {
     s.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let mean = s.iter().sum::<f64>() / n as f64;
     let var = s.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / n as f64;
+    let stddev = var.sqrt();
     let pct = |p: f64| {
         let idx = ((p * (n as f64 - 1.0)).round() as usize).min(n - 1);
         s[idx]
     };
+    let half = ci95_halfwidth(stddev, n);
     Stats {
         mean,
         median: pct(0.5),
-        stddev: var.sqrt(),
+        stddev,
         min: s[0],
         max: s[n - 1],
         p95: pct(0.95),
+        ci95_lo: mean - half,
+        ci95_hi: mean + half,
         n,
     }
 }
@@ -642,82 +738,49 @@ fn retry<T>(what: &str, mut run: impl FnMut() -> T) -> T {
     panic!("{what}: failed after retries: {last}");
 }
 
-/// Build the four strategy rows for one measured repetition of a config.
+/// Build the four strategy rows for one measured repetition of a config. A, C, and D
+/// are each run as an INDEPENDENT end-to-end execution (own cores, own TLS session, own
+/// transfer) via `run_strategy_as` — none is derived arithmetically from another's
+/// measurement. B (save/reopen) is local by definition. This replaces the former
+/// composed benchmark that measured once and computed A/C/D by formula.
 fn measure_once(cfg: &BenchConfig) -> Vec<Row> {
-    let (prereq_tta, prereq_bytes) = retry("import_closure", || {
-        import_closure(cfg.doc_bytes, cfg.nav_bytes, cfg.chunk_bytes)
-    });
-    let (opt_ms, opt_bytes) = if cfg.nav_bytes > 0 {
-        retry("optional_transfer", || {
-            optional_transfer_bytes(cfg.nav_bytes)
-        })
-    } else {
-        (0.0, 0)
-    };
+    let a_out = retry("strategy_A", || run_strategy_as(cfg, 'A'));
+    let c_out = retry("strategy_C", || run_strategy_as(cfg, 'C'));
+    let d_out = retry("strategy_D", || run_strategy_as(cfg, 'D'));
     let (save_ms, save_bytes) = retry("save_reopen", || save_reopen(cfg.doc_bytes, cfg.nav_bytes));
     let overhead_ms = normal_use_overhead(cfg.doc_bytes, cfg.nav_bytes);
     let (cpu, rss) = rusage_snapshot();
-    let demand = cfg.demand;
 
-    let row =
-        |strategy: &str, tta: f64, si: f64, b1: u64, total: u64, wasted: u64, ovhd: f64| Row {
-            strategy: strategy.into(),
-            time_to_action_ready_ms: tta,
-            source_independence_ms: si,
-            bytes_before_first_action: b1,
-            total_bytes: total,
-            cpu_ms: cpu,
-            peak_rss_kb: rss,
-            prepared_but_unused_bytes: wasted,
-            normal_use_overhead_ms: ovhd,
-            endpoint_changed_symbols: 1,
-            oracle_agreed: true,
-        };
+    let row = |strategy: &str, o: &StrategyOutcome, ovhd: f64| Row {
+        strategy: strategy.into(),
+        time_to_action_ready_ms: o.time_to_action_ready_ms,
+        source_independence_ms: o.source_independence_ms,
+        bytes_before_first_action: o.bytes_before_first_action,
+        total_bytes: o.total_bytes,
+        cpu_ms: cpu,
+        peak_rss_kb: rss,
+        prepared_but_unused_bytes: o.prepared_but_unused_bytes,
+        normal_use_overhead_ms: ovhd,
+        endpoint_changed_symbols: 1,
+        oracle_agreed: true,
+    };
 
-    let a = row(
-        "A full-selected",
-        prereq_tta + opt_ms,
-        prereq_tta + opt_ms,
-        prereq_bytes + opt_bytes,
-        prereq_bytes + opt_bytes,
-        if demand { 0 } else { opt_bytes },
-        0.0,
-    );
-    let b = row(
-        "B save/reopen",
-        save_ms,
-        save_ms,
-        save_bytes,
-        save_bytes,
-        0,
-        0.0,
-    );
-    let c = row(
-        "C demand-load",
-        prereq_tta,
-        if demand {
-            prereq_tta + opt_ms
-        } else {
-            prereq_tta
-        },
-        prereq_bytes,
-        prereq_bytes + if demand { opt_bytes } else { 0 },
-        0,
-        0.0,
-    );
-    let d = row(
-        "D carryon-progressive",
-        prereq_tta,
-        if demand {
-            prereq_tta + opt_ms
-        } else {
-            prereq_tta
-        },
-        prereq_bytes,
-        prereq_bytes + if demand { opt_bytes } else { 0 },
-        0,
-        overhead_ms,
-    );
+    let a = row("A full-selected", &a_out, 0.0);
+    let b = Row {
+        strategy: "B save/reopen".into(),
+        time_to_action_ready_ms: save_ms,
+        source_independence_ms: save_ms,
+        bytes_before_first_action: save_bytes,
+        total_bytes: save_bytes,
+        cpu_ms: cpu,
+        peak_rss_kb: rss,
+        prepared_but_unused_bytes: 0,
+        normal_use_overhead_ms: 0.0,
+        endpoint_changed_symbols: 1,
+        oracle_agreed: true,
+    };
+    let c = row("C demand-load", &c_out, 0.0);
+    let d = row("D carryon-progressive", &d_out, overhead_ms);
     vec![a, b, c, d]
 }
 
@@ -1199,4 +1262,698 @@ fn sweep_table(
         s.push_str(&format!("| {} | {} | {} |\n", x as u64, f(y), v));
     }
     s.push('\n');
+}
+
+// ============================ Fault-injection harness ============================
+//
+// `xtask fault-injection <dir>` runs each fault class the engine must survive and
+// records, per class, whether it FAILED CLOSED and with which error family — then
+// writes `fault-report.json`. Same code paths as `tests/fault_injection.rs`, but as a
+// runnable, archivable harness (and cross-compilable to run on the device).
+//
+// LOCAL evidence (§2/§30): loopback over 127.0.0.1, not cross-device. These prove the
+// fail-closed invariants; the physical device runs the same paths.
+
+use carryon_adapter_api::{
+    Adapter as _, AdapterError, ObjectEntry, ObjectKindWire, ObjectManifest, RetentionWire,
+    SensitivityWire,
+};
+use carryon_core::carryon_net::wire::Message as WireMsg;
+use carryon_core::ids::Digest;
+use carryon_core::model::Budget;
+
+#[derive(serde::Serialize)]
+struct FaultResult {
+    fault: &'static str,
+    description: &'static str,
+    passed: bool,
+    detail: String,
+}
+
+fn fault_entry(object_id: &str, bytes: &[u8]) -> ObjectEntry {
+    ObjectEntry {
+        object_id: object_id.into(),
+        generation: 1,
+        kind: ObjectKindWire::Authoritative,
+        schema_id: "fault.v1".into(),
+        content_hash: Digest::of(bytes).to_hex(),
+        logical_size: bytes.len() as u64,
+        parents: vec![],
+        recipe_id: None,
+        portable: true,
+        sensitivity: SensitivityWire::Public,
+        retention: RetentionWire::Session,
+    }
+}
+
+/// Seal a graph cut on a fresh source (for the budget/restart faults).
+fn fault_graph_source(dir: &std::path::Path) -> (Core, String, u64) {
+    let mut core = Core::open(dir).unwrap();
+    let info = core
+        .register_adapter(Box::new(GraphAdapter::sample()))
+        .unwrap();
+    let session = core
+        .create_session(CreateSessionReq {
+            adapter_id: info.adapter_id,
+            title: "graph".into(),
+            privacy: Sensitivity::Public,
+            authority_mode: AuthorityMode::ReadOnlyReplica,
+        })
+        .unwrap();
+    let cut = core.create_cut(session).unwrap();
+    (core, session.to_string(), cut.number)
+}
+
+fn fault_paired() -> (
+    DeviceIdentity,
+    DeviceIdentity,
+    Arc<carryon_core::carryon_net::TrustStore>,
+    Arc<carryon_core::carryon_net::TrustStore>,
+) {
+    let s = DeviceIdentity::generate("source").unwrap();
+    let d = DeviceIdentity::generate("dest").unwrap();
+    let (st, dt) = pair_devices(&s, &d, "fault").unwrap();
+    (s, d, Arc::new(st), Arc::new(dt))
+}
+
+/// Fault 1: a rogue source answers a TransferRequest with tampered bytes; the import
+/// must fail closed (TRANSFER chunk guard or OBJECT whole-object verify) and publish
+/// nothing.
+fn fault_corrupted_chunk() -> FaultResult {
+    let dst_dir = tempdir_like("fault-corrupt");
+    let payload = b"the honest object bytes".to_vec();
+    let payload_hex = Digest::of(&payload).to_hex();
+    let manifest = ObjectManifest {
+        session: "11111111-1111-1111-1111-111111111111".into(),
+        generation: 0,
+        objects: vec![fault_entry("fault.obj.v1", &payload)],
+    };
+    let (sid, did, st, dt) = fault_paired();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+    let m2 = manifest.clone();
+    let srv = std::thread::spawn(move || {
+        let Ok(mut s) = Session::accept(&listener, &sid, st) else {
+            return;
+        };
+        let _ = s.server_negotiate(vec![]);
+        if let Ok(WireMsg::CutRequest { .. }) = s.recv() {
+            let _ = s.send(WireMsg::CutManifest { manifest: m2 });
+        }
+        if let Ok(WireMsg::TransferRequest {
+            content_hash,
+            offset,
+            ..
+        }) = s.recv()
+        {
+            let tampered = b"tampered not the real bytes!".to_vec();
+            let d = Digest::of(&tampered).to_hex();
+            let _ = s.send(WireMsg::ChunkData {
+                content_hash,
+                offset,
+                chunk_digest: d,
+                bytes: tampered,
+            });
+        }
+        while s.recv().is_ok() {}
+    });
+    let mut dest = Core::open(&dst_dir).unwrap();
+    let mut s = Session::connect(&addr, &did, dt).unwrap();
+    s.client_negotiate(vec![]).unwrap();
+    let res = dest.import_cut(&mut s, &manifest.session, 0);
+    drop(s);
+    let _ = srv.join();
+    let published = dest.has_object_hex(&payload_hex);
+    let _ = std::fs::remove_dir_all(&dst_dir);
+    let passed = res.is_err() && !published;
+    FaultResult {
+        fault: "corrupted_chunk",
+        description: "tampered transfer bytes rejected; nothing published (NET-007/CORE-004)",
+        passed,
+        detail: match &res {
+            Err(e) => format!("fail-closed family={} published={published}", e.family()),
+            Ok(_) => "ERROR: import unexpectedly succeeded".into(),
+        },
+    }
+}
+
+/// Fault 2: connection loss in the authority commit window leaves the destination
+/// ambiguous (writes blocked, AUTH-004), recoverable.
+fn fault_authority_loss() -> FaultResult {
+    let src_dir = tempdir_like("fault-auth-src");
+    let dst_dir = tempdir_like("fault-auth-dst");
+    let mut source = Core::open(&src_dir).unwrap();
+    let info = source
+        .register_adapter(Box::new(carryon_adapter_editor::EditorAdapter::new(
+            "editor-session",
+            b"draft".to_vec(),
+        )))
+        .unwrap();
+    let src_session = source
+        .create_session(CreateSessionReq {
+            adapter_id: info.adapter_id,
+            title: "editor".into(),
+            privacy: Sensitivity::Personal,
+            authority_mode: AuthorityMode::SingleWriter,
+        })
+        .unwrap();
+    let cut_num = source.create_cut(src_session).unwrap().number;
+    let sess_str = src_session.to_string();
+    let mut dest = Core::open(&dst_dir).unwrap();
+    dest.register_adapter(Box::new(carryon_adapter_editor::EditorAdapter::new(
+        "mirror",
+        b"draft".to_vec(),
+    )))
+    .unwrap();
+
+    let (sid, did, st, dt) = fault_paired();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+    let srv = std::thread::spawn(move || {
+        let mut net = Session::accept(&listener, &sid, st).unwrap();
+        net.server_negotiate(vec![]).unwrap();
+        source.serve_cut(&mut net).unwrap();
+        let _ = source.propose_authority_transfer(&mut net, src_session, cut_num);
+        drop(net); // crash before commit
+        source.may_mutate(src_session)
+    });
+    let mut net = Session::connect(&addr, &did, dt).unwrap();
+    net.client_negotiate(vec![]).unwrap();
+    dest.import_cut(&mut net, &sess_str, cut_num)
+        .unwrap()
+        .completed_cut()
+        .unwrap();
+    let mirror = Core::mirror_session_id(&sess_str);
+    let req = dest.request_authority_transfer(&mut net, mirror, "org.carryon.editor");
+    let source_keeps = srv.join().unwrap_or(false);
+    let ambiguous = dest
+        .authority_state(mirror)
+        .map(|s| s.ambiguous)
+        .unwrap_or(false);
+    let blocked = !dest.may_mutate(mirror) && dest.guard_mutation(mirror).is_err();
+    let recovered = dest.recover_authority(mirror).is_ok() && dest.may_mutate(mirror);
+    let _ = std::fs::remove_dir_all(&src_dir);
+    let _ = std::fs::remove_dir_all(&dst_dir);
+    let passed = req.is_err() && source_keeps && ambiguous && blocked && recovered;
+    FaultResult {
+        fault: "connection_loss_authority_commit",
+        description: "loss in commit window: source keeps authority, dest ambiguous+blocked, recoverable (AUTH-002/004)",
+        passed,
+        detail: format!(
+            "req_err={} source_keeps={source_keeps} ambiguous={ambiguous} blocked={blocked} recovered={recovered}",
+            req.is_err()
+        ),
+    }
+}
+
+/// Fault 3: the adapter refuses a snapshot at the wrong expected generation.
+fn fault_stale_generation() -> FaultResult {
+    let mut ed = carryon_adapter_editor::EditorAdapter::new("editor-session", b"v1".to_vec());
+    let r = ed.begin_snapshot("editor-session", 999);
+    let ok_match = ed.begin_snapshot("editor-session", 1).is_ok();
+    let passed = matches!(r, Err(AdapterError::StaleGeneration { .. })) && ok_match;
+    FaultResult {
+        fault: "stale_generation",
+        description: "snapshot at wrong expected generation refused (ADAPTER_StaleGeneration)",
+        passed,
+        detail: format!("wrong_gen={r:?} matching_gen_ok={ok_match}"),
+    }
+}
+
+/// Fault 4: crash mid-transfer discards the non-suspended partial on reopen.
+fn fault_restart_recovery() -> FaultResult {
+    let src_dir = tempdir_like("fault-restart-src");
+    let dst_dir = tempdir_like("fault-restart-dst");
+    let (mut source, sess, cut) = fault_graph_source(&src_dir);
+    let mut dest = Core::open(&dst_dir).unwrap();
+    dest.set_chunk_size(Some(4 * 1024)).unwrap();
+    let (sid, did, st, dt) = fault_paired();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+    let srv = std::thread::spawn(move || {
+        if let Ok(mut s) = Session::accept(&listener, &sid, st) {
+            let _ = s.server_negotiate(vec![]);
+            let _ = source.serve_cut(&mut s);
+        }
+    });
+    dest.request_suspend();
+    let mut s = Session::connect(&addr, &did, dt).unwrap();
+    s.client_negotiate(vec![]).unwrap();
+    let _ = dest.import_cut(&mut s, &sess, cut);
+    drop(s);
+    drop(dest);
+    let _ = srv.join();
+    let reopened = Core::open(&dst_dir).unwrap();
+    let interrupted = reopened.recovery_report().interrupted_transfers.len();
+    let _ = std::fs::remove_dir_all(&src_dir);
+    let _ = std::fs::remove_dir_all(&dst_dir);
+    let passed = interrupted == 0;
+    FaultResult {
+        fault: "restart_recovery",
+        description:
+            "crash mid-transfer leaves no silent interrupted partial after reopen (EVD-003)",
+        passed,
+        detail: format!("interrupted_transfers_after_reopen={interrupted}"),
+    }
+}
+
+/// Fault 5: an over-budget import is refused before any bytes (insufficient storage).
+fn fault_insufficient_budget() -> FaultResult {
+    let src_dir = tempdir_like("fault-budget-src");
+    let dst_dir = tempdir_like("fault-budget-dst");
+    let (mut source, sess, cut) = fault_graph_source(&src_dir);
+    let mut dest = Core::open(&dst_dir).unwrap();
+    let mut budget = Budget::local_default();
+    budget.total_net_bytes = 1;
+    dest.set_budget(budget);
+    let (sid, did, st, dt) = fault_paired();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+    let srv = std::thread::spawn(move || {
+        if let Ok(mut s) = Session::accept(&listener, &sid, st) {
+            let _ = s.server_negotiate(vec![]);
+            let _ = source.serve_cut(&mut s);
+        }
+    });
+    let mut s = Session::connect(&addr, &did, dt).unwrap();
+    s.client_negotiate(vec![]).unwrap();
+    let res = dest.import_cut(&mut s, &sess, cut);
+    drop(s);
+    let _ = srv.join();
+    let _ = std::fs::remove_dir_all(&src_dir);
+    let _ = std::fs::remove_dir_all(&dst_dir);
+    let passed = res
+        .as_ref()
+        .err()
+        .map(|e| e.family() == "BUDGET")
+        .unwrap_or(false);
+    FaultResult {
+        fault: "insufficient_budget",
+        description: "over-budget import refused before any bytes (§6.8)",
+        passed,
+        detail: match &res {
+            Err(e) => format!("family={}", e.family()),
+            Ok(_) => "ERROR: import unexpectedly succeeded".into(),
+        },
+    }
+}
+
+/// Fault 6: a lying remote manifest is rejected before a byte is pulled.
+fn fault_malicious_manifest() -> FaultResult {
+    let variants: [(&str, ObjectEntry); 3] = [
+        (
+            "empty-schema",
+            ObjectEntry {
+                schema_id: String::new(),
+                ..fault_entry("evil.v1", b"x")
+            },
+        ),
+        (
+            "secret-excluded",
+            ObjectEntry {
+                sensitivity: SensitivityWire::Secret,
+                ..fault_entry("evil.v1", b"x")
+            },
+        ),
+        (
+            "non-hex-hash",
+            ObjectEntry {
+                content_hash: "not-a-sha256".into(),
+                ..fault_entry("evil.v1", b"x")
+            },
+        ),
+    ];
+    let mut all_ok = true;
+    let mut details = Vec::new();
+    for (name, entry) in variants {
+        let dst_dir = tempdir_like("fault-manifest");
+        let manifest = ObjectManifest {
+            session: "22222222-2222-2222-2222-222222222222".into(),
+            generation: 0,
+            objects: vec![entry],
+        };
+        let (sid, did, st, dt) = fault_paired();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap().to_string();
+        let m2 = manifest.clone();
+        let srv = std::thread::spawn(move || {
+            let Ok(mut s) = Session::accept(&listener, &sid, st) else {
+                return;
+            };
+            let _ = s.server_negotiate(vec![]);
+            if let Ok(WireMsg::CutRequest { .. }) = s.recv() {
+                let _ = s.send(WireMsg::CutManifest { manifest: m2 });
+            }
+            while s.recv().is_ok() {}
+        });
+        let mut dest = Core::open(&dst_dir).unwrap();
+        let mut s = Session::connect(&addr, &did, dt).unwrap();
+        s.client_negotiate(vec![]).unwrap();
+        let res = dest.import_cut(&mut s, &manifest.session, 0);
+        drop(s);
+        let _ = srv.join();
+        let _ = std::fs::remove_dir_all(&dst_dir);
+        let fam = res.as_ref().err().map(|e| e.family().to_string());
+        let ok = matches!(fam.as_deref(), Some("OBJECT") | Some("SCHEMA"));
+        all_ok &= ok;
+        details.push(format!(
+            "{name}={}",
+            fam.unwrap_or_else(|| "ACCEPTED".into())
+        ));
+    }
+    FaultResult {
+        fault: "malicious_manifest",
+        description: "lying manifest rejected before bytes move (ADP-006/008, §7.3)",
+        passed: all_ok,
+        detail: details.join(", "),
+    }
+}
+
+fn run_fault_injection() {
+    let out_dir = std::env::args()
+        .nth(2)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::temp_dir().join("carryon-fault"));
+    std::fs::create_dir_all(&out_dir).unwrap();
+    std::panic::set_hook(Box::new(|_| {}));
+
+    let results = vec![
+        retry("fault_corrupted_chunk", fault_corrupted_chunk),
+        retry("fault_authority_loss", fault_authority_loss),
+        retry("fault_stale_generation", fault_stale_generation),
+        retry("fault_restart_recovery", fault_restart_recovery),
+        retry("fault_insufficient_budget", fault_insufficient_budget),
+        retry("fault_malicious_manifest", fault_malicious_manifest),
+    ];
+    let _ = std::panic::take_hook();
+
+    let passed = results.iter().filter(|r| r.passed).count();
+    let total = results.len();
+    for r in &results {
+        eprintln!(
+            "  [{}] {} — {}",
+            if r.passed { "PASS" } else { "FAIL" },
+            r.fault,
+            r.detail
+        );
+    }
+    let report = serde_json::json!({
+        "suite": "fault-injection",
+        "methodology": "Each fault is driven through the real engine over loopback TLS 1.3 \
+            (LOCAL evidence, spec §2/§30 — not cross-device). A fault PASSES only if the engine \
+            fails closed via an existing error path and publishes nothing invalid / moves no \
+            authority silently.",
+        "machine": {"os": std::env::consts::OS, "arch": std::env::consts::ARCH},
+        "passed": passed,
+        "total": total,
+        "all_passed": passed == total,
+        "faults": results,
+    });
+    let path = out_dir.join("fault-report.json");
+    std::fs::write(&path, serde_json::to_vec_pretty(&report).unwrap()).unwrap();
+    eprintln!(
+        "fault-injection: {passed}/{total} passed — wrote {}",
+        path.display()
+    );
+    if passed != total {
+        std::process::exit(1);
+    }
+}
+
+// ============================ Cross-device aggregation ============================
+//
+// `xtask bench-aggregate <dir>` reads every `*.jsonl` trial line produced by the real
+// Mac→Android campaign (`bench_xdev.sh`) and emits median/p95/mean/stddev/95%-CI and
+// failure counts per strategy, plus a per-latency and per-(doc,nav) breakdown. Each
+// trial line is ONE independent end-to-end execution of ONE strategy (A/C/D) — this
+// aggregator never composes one strategy's numbers from another's.
+
+#[derive(serde::Deserialize, Clone)]
+struct Trial {
+    strategy: String,
+    #[serde(default)]
+    doc_bytes: u64,
+    #[serde(default)]
+    nav_bytes: u64,
+    #[serde(default)]
+    latency_ms: u64,
+    #[serde(default)]
+    demand: bool,
+    #[serde(default)]
+    no_handoff: bool,
+    #[serde(default)]
+    time_to_action_ready_ms: f64,
+    #[serde(default)]
+    source_independence_ms: f64,
+    #[serde(default)]
+    bytes_before_first_action: u64,
+    #[serde(default)]
+    total_bytes: u64,
+    #[serde(default)]
+    ok: bool,
+    #[serde(default)]
+    failure: String,
+}
+
+fn run_bench_aggregate() {
+    let dir = std::env::args()
+        .nth(2)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::temp_dir().join("carryon-xdevice"));
+    // Read every *.jsonl file in the directory; each line is one trial.
+    let mut trials: Vec<Trial> = Vec::new();
+    let mut bad_lines = 0usize;
+    let mut rd: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|_| panic!("cannot read {}", dir.display()))
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().map(|x| x == "jsonl").unwrap_or(false))
+        .collect();
+    rd.sort();
+    for p in &rd {
+        let text = std::fs::read_to_string(p).unwrap_or_default();
+        for line in text.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            match serde_json::from_str::<Trial>(line) {
+                Ok(t) => trials.push(t),
+                Err(_) => bad_lines += 1,
+            }
+        }
+    }
+    assert!(
+        !trials.is_empty(),
+        "no trials found in {} (expected *.jsonl)",
+        dir.display()
+    );
+
+    // Group by strategy.
+    let strategies = ["A", "C", "D"];
+    let col =
+        |ts: &[&Trial], f: fn(&Trial) -> f64| stats(&ts.iter().map(|t| f(t)).collect::<Vec<_>>());
+
+    let mut per_strategy = Vec::new();
+    for strat in strategies {
+        let ok: Vec<&Trial> = trials
+            .iter()
+            .filter(|t| t.strategy == strat && t.ok && !t.no_handoff)
+            .collect();
+        let attempted = trials
+            .iter()
+            .filter(|t| t.strategy == strat && !t.no_handoff)
+            .count();
+        let failures = attempted - ok.len();
+        if ok.is_empty() {
+            per_strategy.push(serde_json::json!({
+                "strategy": strat, "n_ok": 0, "attempted": attempted, "failures": failures,
+            }));
+            continue;
+        }
+        per_strategy.push(serde_json::json!({
+            "strategy": strat,
+            "n_ok": ok.len(),
+            "attempted": attempted,
+            "failures": failures,
+            "failure_rate": failures as f64 / attempted.max(1) as f64,
+            "time_to_action_ready_ms": col(&ok, |t| t.time_to_action_ready_ms),
+            "source_independence_ms": col(&ok, |t| t.source_independence_ms),
+            "bytes_before_first_action": col(&ok, |t| t.bytes_before_first_action as f64),
+            "total_bytes": col(&ok, |t| t.total_bytes as f64),
+        }));
+    }
+
+    // D-vs-A pre-action byte ratio (the <50% target), on matched successful trials.
+    let a_bytes: Vec<f64> = trials
+        .iter()
+        .filter(|t| t.strategy == "A" && t.ok && !t.no_handoff && t.nav_bytes > 0)
+        .map(|t| t.bytes_before_first_action as f64)
+        .collect();
+    let d_bytes: Vec<f64> = trials
+        .iter()
+        .filter(|t| t.strategy == "D" && t.ok && !t.no_handoff && t.nav_bytes > 0)
+        .map(|t| t.bytes_before_first_action as f64)
+        .collect();
+    let a_med = stats(&a_bytes).median;
+    let d_med = stats(&d_bytes).median;
+    let ratio = if a_med > 0.0 { d_med / a_med } else { 0.0 };
+
+    let machine = serde_json::json!({
+        "source": "mac (host)",
+        "destination": "android device (adb)",
+        "path": "real LAN TLS 1.3 (two machines, two NICs)",
+        "note": "PHYSICAL cross-device evidence (PLAT-001). Still no APK/signing; no §30 platform acceptance.",
+    });
+    let summary = serde_json::json!({
+        "methodology": "Each trial is ONE independent end-to-end execution of ONE strategy \
+            (A full / C demand / D progressive) over a real Mac→Android LAN TLS 1.3 transfer. \
+            A/C/D are NOT composed from shared measurements. Stats: median, p95, mean, stddev, \
+            95% CI (normal approx). Failures counted per strategy.",
+        "machine": machine,
+        "total_trials": trials.len(),
+        "unparseable_lines": bad_lines,
+        "per_strategy": per_strategy,
+        "pre_action_bytes_D_over_A": {
+            "a_median": a_med, "d_median": d_med, "ratio": ratio,
+            "meets_under_50pct_target": ratio > 0.0 && ratio < 0.5,
+        },
+    });
+    std::fs::write(
+        dir.join("summary-xdevice.json"),
+        serde_json::to_vec_pretty(&summary).unwrap(),
+    )
+    .unwrap();
+
+    // Markdown report.
+    let mut md = String::new();
+    md.push_str("# Carry-On cross-device benchmark — results (real Mac→Android LAN)\n\n");
+    md.push_str(
+        "> Generated by `cargo run -p xtask -- bench-aggregate`. Each row aggregates \
+        INDEPENDENT end-to-end executions — A, C, and D are each measured on their own real \
+        Mac→Android TLS transfer, never derived arithmetically from a shared measurement.\n\n",
+    );
+    md.push_str(
+        "> **PHYSICAL cross-device evidence (PLAT-001):** two machines, two NICs, real \
+        TLS 1.3 + mutual cert pinning over the wifi LAN. Still no APK/signing and no §30 \
+        platform acceptance (spec §2/§30).\n\n",
+    );
+    md.push_str(&format!(
+        "Total trials: **{}** (unparseable lines: {}).\n\n",
+        trials.len(),
+        bad_lines
+    ));
+    md.push_str("## Per-strategy (successful trials)\n\n");
+    md.push_str("| strategy | n_ok | failures | TTA median | TTA p95 | TTA 95%CI | bytes₁ median | bytes₁ p95 | srcIndep median |\n");
+    md.push_str("|---|--:|--:|--:|--:|--:|--:|--:|--:|\n");
+    for strat in strategies {
+        let ok: Vec<&Trial> = trials
+            .iter()
+            .filter(|t| t.strategy == strat && t.ok && !t.no_handoff)
+            .collect();
+        let attempted = trials
+            .iter()
+            .filter(|t| t.strategy == strat && !t.no_handoff)
+            .count();
+        let failures = attempted - ok.len();
+        if ok.is_empty() {
+            md.push_str(&format!(
+                "| {strat} | 0 | {failures} | — | — | — | — | — | — |\n"
+            ));
+            continue;
+        }
+        let tta = col(&ok, |t| t.time_to_action_ready_ms);
+        let b1 = col(&ok, |t| t.bytes_before_first_action as f64);
+        let si = col(&ok, |t| t.source_independence_ms);
+        md.push_str(&format!(
+            "| {strat} | {} | {failures} | {} | {} | ±{} | {} | {} | {} |\n",
+            ok.len(),
+            f(tta.median),
+            f(tta.p95),
+            f((tta.ci95_hi - tta.ci95_lo) / 2.0),
+            f(b1.median),
+            f(b1.p95),
+            f(si.median),
+        ));
+    }
+    md.push_str("\n## Engineering target: D pre-action bytes < 50% of A\n\n");
+    md.push_str(&format!(
+        "On matched trials with an optional payload (nav>0): A median bytes-before-first-action \
+        = **{}**, D median = **{}**, ratio = **{:.3}** → target `<0.50` **{}**.\n\n",
+        a_med as u64,
+        d_med as u64,
+        ratio,
+        if ratio > 0.0 && ratio < 0.5 {
+            "MET"
+        } else {
+            "not met (see conditions)"
+        }
+    ));
+    // Per-latency sweep for D (how injected link latency moves time-to-action-ready).
+    md.push_str("\n## Latency sweep (D, successful trials)\n\n");
+    let mut lats: Vec<u64> = trials
+        .iter()
+        .filter(|t| t.strategy == "D" && t.ok && !t.no_handoff)
+        .map(|t| t.latency_ms)
+        .collect();
+    lats.sort_unstable();
+    lats.dedup();
+    if lats.is_empty() {
+        md.push_str("_no successful D trials_\n\n");
+    } else {
+        md.push_str("| latency_ms | n | TTA median | TTA p95 |\n|--:|--:|--:|--:|\n");
+        for lat in lats {
+            let g: Vec<&Trial> = trials
+                .iter()
+                .filter(|t| t.strategy == "D" && t.ok && !t.no_handoff && t.latency_ms == lat)
+                .collect();
+            let st = col(&g, |t| t.time_to_action_ready_ms);
+            md.push_str(&format!(
+                "| {lat} | {} | {} | {} |\n",
+                g.len(),
+                f(st.median),
+                f(st.p95)
+            ));
+        }
+        md.push('\n');
+    }
+
+    // Failures: list each failed trial with its recorded reason + key params.
+    let failures: Vec<&Trial> = trials.iter().filter(|t| !t.ok).collect();
+    md.push_str(&format!("## Failures ({})\n\n", failures.len()));
+    if failures.is_empty() {
+        md.push_str("_None — every trial completed._\n\n");
+    } else {
+        md.push_str(
+            "| strategy | doc | nav | latency | demand | reason |\n|---|--:|--:|--:|:--:|---|\n",
+        );
+        for t in &failures {
+            md.push_str(&format!(
+                "| {} | {} | {} | {} | {} | {} |\n",
+                t.strategy,
+                t.doc_bytes,
+                t.nav_bytes,
+                t.latency_ms,
+                t.demand as u8,
+                if t.failure.is_empty() {
+                    "(unspecified)"
+                } else {
+                    &t.failure
+                }
+            ));
+        }
+        md.push('\n');
+    }
+
+    md.push_str(
+        "Full raw trials: every `*.jsonl` in this directory. Aggregates: `summary-xdevice.json`.\n",
+    );
+    std::fs::write(dir.join("RESULTS-xdevice.md"), md).unwrap();
+
+    eprintln!(
+        "bench-aggregate: {} trials → RESULTS-xdevice.md, summary-xdevice.json in {}",
+        trials.len(),
+        dir.display()
+    );
+    eprintln!("  D/A pre-action byte ratio = {ratio:.3} (target <0.50)");
 }

@@ -20,6 +20,18 @@ and run on a physical Android device:
   destination re-checks the content-hash before launch — file identity guaranteed.
   Driven by `appcont_handoff.sh` (generates a PNG by default; set `FILE=` to carry
   your own). Honest L1: no unsaved in-memory app state is claimed.
+- `carryon_bench.c` — **real cross-device preparation-strategy benchmark**, one strategy
+  (A/C/D) per run. Each `dest` invocation is an independent end-to-end execution that
+  emits one trial JSON line (strategy, sizes, latency, time-to-action-ready, bytes before
+  first action, source-independence, oracle, ok/failure). Driven by `bench_xdev.sh`
+  (randomized ≥30-trial campaign) → `xtask bench-aggregate` (median/p95/CI/failures).
+  The latency axis uses `CARRYON_NET_DELAY_MS`, a bench-only per-frame send delay.
+- `unsaved_continue.sh` — **source-off unsaved-state continuation**: reuses `carryon_l3`
+  (plus its new `check` role) to edit on the mac, carry to the device, move authority,
+  `kill -9` the mac source, continue editing on the device, and prove a RESTARTED mac
+  source reports `may_mutate == false`. Writes `source-off-proof.json`.
+- `collect_evidence.sh` — assembles a full evidence archive (commit, mac+device specs,
+  timestamps, screenshot, packet capture, sha256 manifest) under `docs/evidence/<stamp>`.
 
 ## What it proves — and what it does not
 

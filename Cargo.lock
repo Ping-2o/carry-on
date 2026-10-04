@@ -148,6 +148,7 @@ name = "carryon-core"
 version = "0.1.0"
 dependencies = [
  "carryon-adapter-api",
+ "carryon-adapter-editor",
  "carryon-adapter-file",
  "carryon-adapter-graph",
  "carryon-math-core",

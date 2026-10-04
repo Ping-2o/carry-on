@@ -1,0 +1,11 @@
+{
+  "stamp": "20261004T052523Z",
+  "trials": 30,
+  "seed": 1337,
+  "port": 48970,
+  "mac_ip": "192.168.3.201",
+  "axes": {"docs": [256,4096,65536,1048576], "navs": [0,1024,65536,600000], "latency_ms": [0,5,20], "strategies": ["A","C","D"]},
+  "path": "real Mac->Android LAN TLS 1.3 (two machines, two NICs)",
+  "latency_mechanism": "CARRYON_NET_DELAY_MS per-frame send delay (bench-only; real wall-clock only)",
+  "disclosure": "PHYSICAL cross-device evidence (PLAT-001). No APK/signing; no §30 platform acceptance (spec §2/§30)."
+}

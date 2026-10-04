@@ -1,0 +1,3 @@
+source: session=01f8d52f-5979-4016-9f72-9c0fcac27e0b cut=0 listening=0.0.0.0:48989 strategy=C
+source: waiting for destination to connect...
+source: cut served; OK
