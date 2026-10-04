@@ -353,9 +353,36 @@ static int do_dest(const char *id_dir, const char *data_dir, const char *peer_ad
     return 0;
 }
 
+/* Reopen a source core over its persisted data dir and report whether it may still
+ * mutate `session_id`. Used by the unsaved-state continuation proof to show that, after
+ * the authority was relinquished, a RESTARTED source can no longer mutate the session
+ * (the relinquishment is durable, AUTH-005). Exits non-zero if the source is still
+ * writable — a would-be two-writer split that must never happen. */
+static int do_check(const char *data_dir, const char *session_id) {
+    CarryonCore *core = carryon_core_open(data_dir);
+    if (!core) {
+        print_last_error("check_open");
+        exit(2);
+    }
+    char *info = NULL;
+    CHECK(carryon_register_adapter(core, EDITOR_ID, "{\"session_v1\":true}", &info),
+          "register");
+    carryon_string_free(info);
+    bool may = true;
+    CHECK(carryon_may_mutate(core, session_id, &may), "may_mutate(check)");
+    printf("check: source may_mutate after restart = %s\n", may ? "true" : "false");
+    carryon_core_free(core);
+    if (may) {
+        fprintf(stderr, "FAIL restarted source is still writable (single-writer violated)\n");
+        return 3;
+    }
+    printf("check: OK — restarted source is read-only (authority durably relinquished)\n");
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc < 3) {
-        fprintf(stderr, "usage: pin|source|dest ... (see source header)\n");
+        fprintf(stderr, "usage: pin|source|dest|check ... (see source header)\n");
         return 1;
     }
     const char *role = argv[1];
@@ -365,6 +392,8 @@ int main(int argc, char **argv) {
         return do_source(argv[2], argv[3], argv[4], argv[5]);
     if (strcmp(role, "dest") == 0 && argc >= 7)
         return do_dest(argv[2], argv[3], argv[4], argv[5], argv[6]);
+    if (strcmp(role, "check") == 0 && argc >= 4)
+        return do_check(argv[2], argv[3]);
     fprintf(stderr, "bad args\n");
     return 1;
 }

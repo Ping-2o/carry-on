@@ -1,0 +1,6 @@
+source: session=29627120-9b05-434e-9061-09427a3b8521 cut=0 listening=0.0.0.0:48972
+source: structured session (document+unsaved+cursor+selection+viewport+tab)
+source: waiting for destination to connect...
+source: session served
+source: relinquished authority; wire bytes sent=3322 recv=1650
+source: OK

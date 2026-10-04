@@ -1,0 +1,2 @@
+check: source may_mutate after restart = false
+check: OK — restarted source is read-only (authority durably relinquished)

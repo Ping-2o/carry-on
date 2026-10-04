@@ -1,0 +1,49 @@
+{
+  "all_passed": true,
+  "faults": [
+    {
+      "description": "tampered transfer bytes rejected; nothing published (NET-007/CORE-004)",
+      "detail": "fail-closed family=OBJECT published=false",
+      "fault": "corrupted_chunk",
+      "passed": true
+    },
+    {
+      "description": "loss in commit window: source keeps authority, dest ambiguous+blocked, recoverable (AUTH-002/004)",
+      "detail": "req_err=true source_keeps=true ambiguous=true blocked=true recovered=true",
+      "fault": "connection_loss_authority_commit",
+      "passed": true
+    },
+    {
+      "description": "snapshot at wrong expected generation refused (ADAPTER_StaleGeneration)",
+      "detail": "wrong_gen=Err(StaleGeneration { expected: 999, actual: 1 }) matching_gen_ok=true",
+      "fault": "stale_generation",
+      "passed": true
+    },
+    {
+      "description": "crash mid-transfer leaves no silent interrupted partial after reopen (EVD-003)",
+      "detail": "interrupted_transfers_after_reopen=0",
+      "fault": "restart_recovery",
+      "passed": true
+    },
+    {
+      "description": "over-budget import refused before any bytes (§6.8)",
+      "detail": "family=BUDGET",
+      "fault": "insufficient_budget",
+      "passed": true
+    },
+    {
+      "description": "lying manifest rejected before bytes move (ADP-006/008, §7.3)",
+      "detail": "empty-schema=SCHEMA, secret-excluded=OBJECT, non-hex-hash=OBJECT",
+      "fault": "malicious_manifest",
+      "passed": true
+    }
+  ],
+  "machine": {
+    "arch": "aarch64",
+    "os": "macos"
+  },
+  "methodology": "Each fault is driven through the real engine over loopback TLS 1.3 (LOCAL evidence, spec §2/§30 — not cross-device). A fault PASSES only if the engine fails closed via an existing error path and publishes nothing invalid / moves no authority silently.",
+  "passed": 6,
+  "suite": "fault-injection",
+  "total": 6
+}

@@ -90,6 +90,7 @@ pub fn build_adapter(adapter_id: &str, params: &Value) -> Result<Box<dyn Adapter
             // Cooperative editor (L3 structured session + L4 authority).
             //   { "sample": true }            -> short back-compat sample
             //   { "session_v1": true }        -> recognizable L3 demo session
+            //   { "bench": { "doc": N, "nav": M } } -> size-controlled bench session
             //   { "session", "text" }         -> back-compat single-document session
             //   { "session", "document", "unsaved", "cursor", "selection":[a,h],
             //     "viewport":[x,y], "active_tab" } -> full structured session
@@ -97,6 +98,13 @@ pub fn build_adapter(adapter_id: &str, params: &Value) -> Result<Box<dyn Adapter
                 Ok(Box::new(EditorAdapter::sample()))
             } else if params.get("session_v1").and_then(|v| v.as_bool()) == Some(true) {
                 Ok(Box::new(EditorAdapter::session_v1()))
+            } else if let Some(bench) = params.get("bench") {
+                // Size-controlled session for the preparation-strategy benchmark: a
+                // `doc`-byte authoritative document + `nav`-byte optional navigation
+                // payload. Not a new capability — only sizing (see `session_bench`).
+                let doc = bench.get("doc").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                let nav = bench.get("nav").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                Ok(Box::new(EditorAdapter::session_bench(doc, nav)))
             } else if params.get("document").is_some() || params.get("unsaved").is_some() {
                 let session = params
                     .get("session")
