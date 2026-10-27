@@ -1,0 +1,21 @@
+[package]
+name = "carryon-authority-model"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Machine-checked protocol model of L4 single-writer authority transfer (spec §21.2/§21.3, AUTH-001..005). MODEL-level evidence, not an implementation proof."
+
+[dependencies]
+# The interleaving model is optional so `cargo kani --no-default-features`
+# can verify the pure protocol functions without compiling stateright under
+# CBMC (the symbolic backend has no need for the state-space explorer).
+stateright = { version = "0.31", optional = true }
+
+[features]
+default = ["interleaving"]
+interleaving = ["dep:stateright"]
+
+[lints.rust]
+# `cfg(kani)` is set by the Kani toolchain (the library is injected the same
+# way), so normal builds must not warn about it.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }

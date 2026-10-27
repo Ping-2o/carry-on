@@ -7,6 +7,7 @@
 resolver = "2"
 members = [
     "prototype/math-core",
+    "prototype/authority-model",
     "crates/carryon-adapter-api",
     "crates/carryon-core",
     "crates/carryon-net",
@@ -28,6 +29,7 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies]
 # Internal crates
 carryon-math-core = { path = "prototype/math-core" }
+carryon-authority-model = { path = "prototype/authority-model" }
 carryon-adapter-api = { path = "crates/carryon-adapter-api" }
 carryon-core = { path = "crates/carryon-core" }
 carryon-net = { path = "crates/carryon-net" }
