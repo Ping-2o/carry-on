@@ -41,9 +41,11 @@ use crate::model::{
 use carryon_adapter_api::*;
 use serde::{Deserialize, Serialize};
 
+pub mod control;
 pub mod driver;
 pub mod model;
 
+pub use control::{ControlChannelConfig, ControlChannelConfigFile, ControlChannelDriver, Secret};
 pub use driver::{DriverError, EditOutcome, PhotocraftDriver, Step, StubDriver};
 
 /// In-memory session state: what the adapter serves bytes for. On a real
@@ -98,9 +100,12 @@ impl PhotocraftAdapter {
         }
     }
 
-    /// Attach a driver (Phase 2). With only [`StubDriver`] existing, every
-    /// driver-mediated operation still fails closed — attaching the stub
-    /// changes nothing observable, which is the point of the seam.
+    /// Attach a driver (Phase 2). The driver is used for three things:
+    /// (a) `begin_snapshot` refreshes state from the live PhotoCraft when
+    /// attached; (b) `session.restore` drives the live app to the carried
+    /// position (fail closed on failure); (c) `document.edit` replays steps.
+    /// [`StubDriver`] still fails closed on all of them, so the fail-closed
+    /// path stays the tested default.
     pub fn with_driver(mut self, driver: Box<dyn PhotocraftDriver>) -> Self {
         self.driver = Some(driver);
         self
@@ -264,6 +269,30 @@ impl Adapter for PhotocraftAdapter {
                 expected,
                 actual: self.generation,
             });
+        }
+        // Attached mode: refresh the in-memory state from the live PhotoCraft
+        // now, so the cut seals what is live at this moment (the adapter's
+        // `generation` is the snapshot counter; PhotoCraft's own revision
+        // travels in the meta object). Detached mode: state stands as built.
+        if let Some(driver) = self.driver.as_deref_mut() {
+            let document = driver
+                .document_bytes()
+                .map_err(|e| AdapterError::Incompatible(format!("document_bytes: {e}")))?;
+            let unsaved = driver
+                .unsaved_bytes()
+                .map_err(|e| AdapterError::Incompatible(format!("unsaved_bytes: {e}")))?;
+            let workspace_bytes = driver
+                .workspace_bytes()
+                .map_err(|e| AdapterError::Incompatible(format!("workspace_bytes: {e}")))?;
+            let workspace = serde_json::from_slice(&workspace_bytes)
+                .map_err(|e| AdapterError::Incompatible(format!("decode workspace: {e}")))?;
+            let meta = driver
+                .meta()
+                .map_err(|e| AdapterError::Incompatible(format!("meta: {e}")))?;
+            self.document = document;
+            self.unsaved = unsaved;
+            self.workspace = workspace;
+            self.meta = meta;
         }
         Ok(SnapshotToken(format!("snap-{}", self.generation)))
     }
@@ -447,11 +476,31 @@ impl Adapter for PhotocraftAdapter {
                 })
             }
             // Read-only: report the restored logical session so a destination
-            // can prove it holds the same document/position. The oracle
-            // re-derives the authoritative-state hash from this adapter's
-            // state; it agrees only if the session is internally consistent
-            // (carried state == state reported).
+            // can prove it holds the same document/position. With a driver
+            // attached this ALSO drives the live PhotoCraft to the carried
+            // position and fails closed if the live restore fails; detached
+            // (in-memory) it only reports state.
             "session.restore" => {
+                let live_restore = match self.driver.as_deref_mut() {
+                    None => None,
+                    Some(driver) => {
+                        match driver.restore(&self.workspace) {
+                            Ok(()) => Some(true),
+                            // Fail closed: a live restore that did not happen
+                            // must not be reported as a restored session.
+                            Err(e) => {
+                                return Err(match e {
+                                    DriverError::Unsupported(m) => AdapterError::ActionUnsupported(
+                                        format!("live restore: {m}"),
+                                    ),
+                                    DriverError::Failed(m) => {
+                                        AdapterError::Internal(format!("live restore: {m}"))
+                                    }
+                                });
+                            }
+                        }
+                    }
+                };
                 let output = serde_json::json!({
                     "document_hash": model::hex_sha256(&self.document),
                     "unsaved_hash": model::hex_sha256(&self.unsaved),
@@ -462,13 +511,17 @@ impl Adapter for PhotocraftAdapter {
                     "viewport": self.workspace.viewport,
                     "active_tool": self.workspace.active_tool,
                     "generation": self.generation,
+                    "live_restore": live_restore,
                 });
                 let output_hash =
                     model::hex_sha256(&serde_json::to_vec(&output).unwrap_or_default());
                 let auth = self.auth_hash();
                 let rederived =
                     model::authoritative_hash(&self.document, &self.unsaved, &self.meta_bytes());
-                let agreed = auth == rederived;
+                // Agreed = the carried state is internally consistent AND the
+                // live restore (if one was attempted) succeeded. Detached
+                // mode: state consistency only.
+                let agreed = auth == rederived && live_restore.unwrap_or(true);
                 Ok(ActionResultWire {
                     output,
                     output_hash: output_hash.clone(),

@@ -27,6 +27,10 @@ pub const SCHEMA_WORKSPACE: &str = "photocraft.workspace.v1";
 
 pub const ADAPTER_ID: &str = "org.carryon.photocraft";
 
+/// The PhotoCraft commit every carry must record for provenance
+/// (`docs/artcraft-bridge/PHOTOCRAFT-PIN.md`).
+pub const PHOTOCRAFT_PIN: &str = "1f7fc0f53696e54da79b95015abb37d7c22cdd1a";
+
 /// Object-size ceiling for the manifest. The Carry-On core caps
 /// `max_object_bytes` at 16 MiB today (registration rejects anything larger —
 /// observed in the Phase-1 test run), so this matches the cap rather than
