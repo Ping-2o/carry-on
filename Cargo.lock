@@ -153,6 +153,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "carryon-adapter-photocraft"
+version = "0.1.0"
+dependencies = [
+ "carryon-adapter-api",
+ "carryon-core",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+]
+
+[[package]]
 name = "carryon-adapter-unsupported"
 version = "0.1.0"
 dependencies = [

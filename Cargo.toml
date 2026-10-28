@@ -15,6 +15,7 @@ members = [
     "crates/carryon-adapter-image",
     "crates/carryon-adapter-file",
     "crates/carryon-adapter-editor",
+    "crates/carryon-adapter-photocraft",
     "crates/carryon-adapter-launcher",
     "crates/carryon-adapter-kiwix",
     "crates/carryon-adapter-unsupported",

@@ -1,0 +1,16 @@
+[package]
+name = "carryon-adapter-photocraft"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Carry-On PhotoCraft adapter (L3/L4): layered-image sessions with unsaved edits and authority transfer. Phase-1 skeleton: object model + fail-closed driver seam; no PhotoCraft dependency yet (docs/artcraft-bridge/ADAPTER-DESIGN.md)."
+
+[dependencies]
+carryon-adapter-api = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+
+[dev-dependencies]
+carryon-core = { workspace = true }
+tempfile = { workspace = true }
