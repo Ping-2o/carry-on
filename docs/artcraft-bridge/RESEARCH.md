@@ -22,65 +22,137 @@ commands dispatched by id from UI, CLI, JSON control channel and MCP
 ### 1.1 What a document is
 
 `photocraft-doc` (L1 in the enforced layering, `docs/architecture.md` §3) holds
-the model: a `Document` with size, colour mode, bit depth, ICC profile, a layer
-tree (`LayerGroup` root), saved alpha channels, paths, guides, slices, metadata,
-and — notably — the selection (`docs/architecture.md` §5 sketch, lines 277–301).
-Layer content is an enum from day one: `Raster(TiledSurface)` | `Group` |
-`Adjustment` | `Fill` | `Text` | `Shape` | `Smart` (§5, lines 292–300) —
-non-destructive by construction. Pixels live in 256×256 copy-on-write,
-`Arc`-shared tiles (`raster::TiledSurface`, §5 line 303); every large payload in
-the document model is `Arc`-shared so snapshots are cheap (§1 principle 5).
+the model. `Document` (`crates/doc/src/lib.rs:867-930`) derives only
+`Clone, Debug, PartialEq` — **no serde derives**; persistence goes through a
+deliberately separate versioned manifest model (`crates/format`, §1.5). Fields:
+`id: DocId`, `name`, `size`, `resolution_dpi`, `mode: ColorMode`,
+`depth: SampleType`, `icc_profile: Option<Arc<Vec<u8>>>`, `layers: Vec<Layer>`
+(bottom-to-top), `channels: Vec<AlphaChannel>`, `guides`, `ruler_origin`,
+**`selection: Option<Surface>`** ("Active selection as a grayscale coverage
+surface", line 885), `metadata`, `global_light`, `paths`/`work_path`/
+`clipping_path`, `quick_mask`, `patterns`, `layer_comps`, `measurement`,
+`notes`, `text_styles`, `slices`, `variables`, `timeline`, `file_encoding`.
 
-TBD-CODE: exact `Document`/`Layer` struct fields, selection location,
-snapshot/revision types (see §1.4 below — filled from `crates/doc` source).
+`LayerContent` (`crates/doc/src/lib.rs:585-594`) is the non-destructive enum:
+`Raster(Surface) | Group(Group) | Adjustment(Adjustment) | Fill(Fill) |
+Text(TextLayer) | Shape(ShapeLayer) | Smart(SmartObject)`. Groups nest via
+`Group.children: Vec<Layer>` (`children[0]` is the bottom layer, `lib.rs:3-4`).
+`Layer` (`lib.rs:618-670`) holds per-layer authoritative data: name, visible,
+locks, blend, opacity, fill_opacity, clipped, `mask: Option<LayerMask>`,
+`vector_mask`, `effects`, `psd_blocks` (lossless PSD round-trip), `blend_if`,
+plus caches. `SmartObject` carries a smart-filter stack where a `SmartFilter`
+(`lib.rs:562-570`) is literally "a command id plus its parameters (data, not
+code)": `pub command: String, pub params: serde_json::Value`.
+
+Pixels: 256×256 copy-on-write `Arc`-shared tiles (`docs/architecture.md` §5
+line 303); every large payload in the document model is `Arc`-shared
+(`docs/architecture.md` §1 principle 5).
 
 ### 1.2 Authoritative vs transient
 
 | State | Class | Evidence |
 |---|---|---|
-| Layer tree (content, masks, vector masks, effects, blend, opacity, locks), channels, paths, guides, metadata, colour mode/depth/profile | **authoritative** | persisted by `.pcraft` save (§9) and PSD round-trip; `docs/architecture.md` §5 |
-| History (undo states) | authoritative-ish, in-memory | each mutation is an `Op` transaction; history stores transactions; snapshots are `Arc`-shared (§6). TBD-CODE: serializability of history states |
-| Selection (raster mask + optional vector outline) | **document state** (travels with the doc, Photoshop-style), but ephemeral in carry terms — TBD-CODE whether `.pcraft` saves it | `docs/architecture.md` §5 line 284 (`selection: Option<Mask>` on Document); control `document.inspect` reports selection bounds |
-| Tool state (active tool, brush, colours, options bar) | **transient session/UI** | `ui.inspect`/`ui.set` surface, not a document object; preferences persist some of it |
-| Viewport (zoom, pan, rotation), panels, dialogs, windows | **transient UI** | `ui.inspect` / `ui.set {zoom, center, rotation…}` (`docs/control-protocol.md` methods, lines 49–50) |
-| Active/target layer, expanded groups | view state; some is saved with the document (PSD open/closed folders — `layer.setExpanded`, control-protocol.md line 130) | mixed |
+| Layer tree (content, masks, vector masks, effects, blend, opacity, locks, smart filters), channels, guides, metadata, paths, slices, comps, colour mode/depth/profile, quick mask | **authoritative** — serialized to `.pcraft` | `DocM` mirrors `Document` field-for-field (`crates/format/src/manifest.rs:36-105`); written `convert.rs:243`, read back `convert.rs:656` |
+| **Selection** | **document state, serialized** — it *is* part of `Document` and *is* saved | `Document.selection` (`doc/src/lib.rs:884-885`); on-disk `DocM.selection: Option<SurfaceM>` (`manifest.rs:52`). Selection changes are history steps but explicitly *not* edits: `DocState::keeps_clean` ("neither marks the file modified", `crates/engine/src/doc_state.rs:125-131`, #6865) |
+| History (undo states) | session-only, **not serializable** | `HistoryState { label, doc: Arc<Document>, layers, visibility, id }` — whole-doc snapshots, no serde derives (`crates/ops/src/lib.rs:43-77`), bounded by count+byte budget |
+| History-panel snapshots | session-only | `Snapshot` on `DocState.snapshots`, "for the session only … not saved with the document" (`crates/engine/src/cmd/history_cmds.rs:7-14`; `doc_state.rs:50-53`) |
+| Active/target/selected layers, layer anchor | **transient session** (`DocState.active_layer`, `selected_layers`, `layer_anchor` — `crates/engine/src/doc_state.rs:4-59`) | not serialized; `document.inspect` reports them (`selectedLayers`, `activeLayer`) |
+| Tool state (brush, colours, symmetry) | **transient session** (`ToolState`, `doc_state.rs:146-184`; `DocState.symmetry` "tool state, not document pixels") | not persisted |
+| Viewport (zoom, pan, rotation, flip, aspect) | **transient UI** — `ViewXform` at `crates/ui-egui/src/canvas/view_xform.rs:4-18`, per-view in `app.ui.views`; nothing in `Document`/`DocState` stores it | readable/settable only over the control channel (`ui.inspect` / `ui.set {zoom, center, rotation}`) |
+| Channel view, isolated layers, collapsed groups, show-only, floating selection, colour samplers | **transient view state** in `DocState` (marked "view state, not history", `doc_state.rs:4-59`; samplers "never saved to .pcraft or PSD") | not persisted |
 
-The transient/authoritative split for the adapter is therefore:
+So the adapter's split is:
 
-- **authoritative**: the `.pcraft` document (or PSD) + unsaved edits + document
-  identity (revision, path, format version).
-- **ephemeral (carry for UX, never for correctness)**: active document + tab
-  index, active/target layer selection, selection mask, viewport
-  (zoom/center/rotation), panel state, tool state. All of it is *readable and
-  settable over the control channel* (`ui.inspect`, `ui.set`), which is exactly
-  what a Carry-On optional object needs.
+- **authoritative**: the `.pcraft` document (or PSD) — layers, pixels, masks,
+  effects, channels, guides, metadata, selection included — plus unsaved edits
+  and document identity (path, revision, saved_revision).
+- **ephemeral (carry for UX, never for correctness)**: active document/tab,
+  active/target layer(s), viewport, panel state, tool state. All readable and
+  settable over the control channel — exactly what a Carry-On optional object
+  needs.
 
 ### 1.3 Are unsaved edits serializable?
 
-Three candidate serializations exist, TBD-CODE for details:
+Three mechanisms exist (`crates/engine`, `crates/format`):
 
-1. **Command journal / recorded actions**: actions record replayable
-   `[commandId, params]` steps (`actions.list`/`actions.get`/`actions.record`,
-   `docs/control-protocol.md` lines 146–154; the shape `file.automate.batch`
-   and droplets take). Recorded steps omit queries and action-editing commands
-   (line 149), and newly recorded steps store layer *names* (+ occurrence), not
-   document-specific ids, explicitly so a recording replays on other documents
-   (lines 627–635). The batch method (`docs/control-protocol.md` line 425)
-   replays `[{command, params}]` lists headlessly.
-2. **Autosave / crash recovery**: the engine autosaves to a `Recovery` folder
-   (`docs/control-protocol.md` lines 264–270; `docs/architecture.md` §9 line
-   417) reusing the `.pcraft` writer from a background snapshot.
-3. **`.pcraft` save** (`app.save` / `doc.save`): writes the full document
-   (layers + pixels) to the automation write root.
+1. **Command journal — replayable, in-memory only.**
+   `Session.journal: Vec<(String, Value)>` ("Log of executed commands (for
+   action recording and debugging)", `crates/engine/src/lib.rs:195-196`);
+   every command with `CommandSpec.journal == true` appends one `(id, params)`
+   entry in `after_command` (`crates/engine/src/jobs.rs:933-956`; one command =
+   one entry, nested wrapper commands truncated away). The `cmd!` macro
+   defaults `journal: true` (`crates/engine/src/cmd.rs:46-50`), so **every
+   edit command — paint strokes, filters, layer ops — is journaled**, not just
+   menu commands. **No code serializes or persists the journal**; it is read
+   only by action recording and tests.
+2. **Recorded actions — the same shape, persisted, opt-in.**
+   `Action` derives Serialize/Deserialize with `steps: Vec<(String, Value)>` —
+   "the `[[id, params], …]` shape `file.automate.batch` and droplets already
+   accept" (`crates/engine/src/cmd/actions_cmds.rs:29-51`). `actions.record`
+   marks the journal position; recording copies
+   `journal.iter().skip(from).filter(replayable)` into the action
+   (`actions_cmds.rs:332-356`), where `replayable()` accepts any journaled
+   command minus `actions.*` self-edits and shell wrappers (:126-144). Recorded
+   params are normalized for portability (sole-selected-layer refs become
+   target-relative, `layer.select` by name; layer *names*, not ids, so
+   recordings replay on other documents — `docs/control-protocol.md`
+   lines 627–635). Playback re-dispatches each step via `Session::execute`
+   (`actions_cmds.rs:393`). Actions persist to `actions.json` in the preset
+   store (`crates/engine/src/preset_store.rs:71-72`) — but headless sessions
+   have no store, so their actions stay in memory (`preset_store.rs:40`).
+3. **Autosave / crash recovery — full snapshot, persisted, automatic.**
+   `crates/format/src/autosave.rs` writes the *current* `Arc<Document>` snapshot
+   (unsaved edits included) as an incremental `.pcraft` directory bundle
+   `<recovery_dir>/<key>.pcraft/` plus a `RecoveryInfo` JSON sidecar
+   `{key, document_name, original_path, saved_at, revision}`
+   (`autosave.rs:27-36`). The UI triggers it every `fileHandling.autosave_minutes`
+   (default 10, `crates/engine/src/prefs.rs:521`), **only for dirty documents**
+   (`crates/ui-egui/src/prefs/prefs_ui/save.rs:283-289`). Recovery entries are
+   discarded only when the document is saved or closed (`autosave.rs:9-10`).
 
-So the honest answer shaping the adapter: **yes, with granularity choices** —
-the unsaved state can be carried either as (a) an autosaved/saved `.pcraft`
-snapshot (coarse but lossless and already implemented), or (b) a replayable
-command journal from a known revision (fine-grained, progressive-transfer
-friendly, but requires pinning the journal semantics). TBD-CODE: which is
-exposed externally, and whether history states themselves serialize.
+The honest answer for the adapter: unsaved edits can be carried as
+(a) an **autosave-style `.pcraft` snapshot of the dirty state** — lossless,
+already implemented, coarse (full snapshot semantics); or (b) a **command
+journal from the last saved revision** — fine-grained, progressive-transfer
+friendly, replayable through `Session::execute`, but PhotoCraft never persists
+the journal, so an adapter must capture it (record from session start, or read
+`Session.journal` in-process) and own its serialization itself.
 
-### 1.4 Engine embedding facts relevant to an adapter
+### 1.4 Revision, dirty flag, identity
+
+- `DocState.revision` — "Increments on every change; UIs re-render when it
+  moves" (`crates/engine/src/doc_state.rs:20-21`); `DocState.saved_revision`.
+- `is_dirty() == revision != saved_revision` (`doc_state.rs:122-124`); cleared
+  by `saved_to` which records the path and sets `saved_revision = revision`
+  (`crates/engine/src/cmd/file_cmds.rs:100-110`).
+- Both surface externally: `session.list` → `dirty`, `revision`
+  (`crates/engine/src/inspect.rs:10-27`); `document.inspect` → `revision`,
+  history entries, `hasSelection`, `selectionBounds` (`inspect.rs:29-68`).
+- **The `.pcraft` manifest has no revision field** — only `format_version`
+  (schema version, `manifest.rs:18-23`). Document revision is session state;
+  the only on-disk revision is the autosave sidecar's `RecoveryInfo.revision`.
+
+### 1.5 The native format (`.pcraft`)
+
+A `.pcraft` file is a zip (store mode) or directory bundle
+(`crates/format/src/lib.rs:5-12`): `manifest.json` (versioned document tree),
+`tiles/<blake3>.zst` (content-addressed 256×256 tiles), `blobs/<blake3>.zst`
+(ICC, EXIF, PSD blocks, smart objects), optional `thumb.png` and
+`composite/preview.png`, `save.lock` for directory bundles. The manifest model
+(`DocM`, `manifest.rs:36-105`) is "a *separate* serde model from
+`photocraft-doc` on purpose: the on-disk schema is versioned and migrated
+independently of in-memory refactors" (`manifest.rs:1-4`); `FORMAT_VERSION = 1`
+with a migration-steps list (currently empty, `migrate.rs:9-13`).
+
+**Saving is incremental**: `PcraftWriter` remembers what it already
+compressed/wrote, so only new tiles are encoded; directory saves re-verify
+existing objects once per writer/folder, replace damaged ones and
+garbage-collect unreferenced ones under an OS file lock (`lib.rs:14-21`;
+`store.rs:430-440`; `SaveStats { tiles_written, tiles_reused, … }`,
+`store.rs:336-350`). The engine caches the writer per document across saves
+(`DocState.pcraft_cache`, `doc_state.rs:24`).
+
+### 1.6 Engine embedding facts relevant to an adapter
 
 - `photocraft-engine` has **no UI/GPU dependency** and is headless-CPU by
   construction; details and citations in §2.5 below.
@@ -268,16 +340,30 @@ To continue editing a PhotoCraft document on another machine:
 
 | Role | Object | Why |
 |---|---|---|
-| **prerequisite** | saved document bytes (`.pcraft` preferred — lossless native; PSD interchange, `docs/architecture.md` §8–9) | source of truth; without it there is nothing to edit |
-| **prerequisite** | unsaved edits — either (a) an autosave/snapshot `.pcraft` of the dirty state, or (b) a command journal from the last saved revision (TBD-CODE which the adapter can actually obtain externally) | losing these is data loss |
-| **prerequisite** | document meta: path/name, format, revision, dirty flag | identity + provenance; decides whether journal replay is valid |
-| **optional (immediate, latency-only)** | active document/tab, target layer(s), selection, viewport (zoom/center/rotation), panel layout, tool | restores the *working position*; readable/settable via `ui.inspect`/`ui.set`/`ui.menu.invoke` (`window.document.<index>`, line 52) |
-| **not carried** | preferences (`preferences.json`, `ui.ron`) | machine-local by design; portable mode exists but preferences are not session state |
+| **prerequisite** | saved document bytes — `.pcraft` preferred (lossless native, versioned manifest, content-addressed incremental bundle, §1.5); PSD as interchange | source of truth; without it there is nothing to edit |
+| **prerequisite** | unsaved edits, one of: (a) a `.pcraft` snapshot of the dirty state (autosave-style; lossless, already implemented by `autosave.rs`), or (b) a command journal `[[id, params], …]` from the last saved revision (replayable via `Session::execute`, §1.3) | losing these is data loss |
+| **prerequisite** | document meta: original path/name, `revision` + `saved_revision` (identity + provenance; decides whether a journal replays against the right base) | `session.list`/`document.inspect` expose both (`inspect.rs:10-68`) |
+| **optional (immediate, latency-only)** | active document/tab index (`ui.menu.invoke {"id":"window.document.<index>"}`), target/selected layers (`layer.select` by name+occurrence), selection (restorable by replay or carried as document state — note selection *is* part of the document bytes, §1.2), viewport `zoom/center/rotation` (`ui.set`), panel/dock layout, tool | restores the *working position*; all readable/settable via `ui.inspect`/`ui.set` (`docs/control-protocol.md` lines 49–52) |
+| **not carried** | preferences (`preferences.json`, `ui.ron`), brush presets/preset store, keyboard shortcuts | machine-local by design (`docs/control-protocol.md` lines 264–288); presets *can* be carried later as optional provenance objects if wanted |
 
-TBD-CODE rows to firm up after source review: (1) is history serializable;
-(2) is selection saved in `.pcraft`; (3) can the journal be captured
-retroactively (from history) or only via explicit `actions.record`;
-(4) revision counter semantics.
+Resolved answers (were TBD-CODE):
+
+1. **Is history serializable?** No — `HistoryState` holds `Arc<Document>`
+   snapshots with no serde derives (`crates/ops/src/lib.rs:43-77`); history is
+   in-memory snapshots, not a journal, and cannot be carried.
+2. **Is selection saved in `.pcraft`?** Yes — `DocM.selection`
+   (`manifest.rs:52`); it is document state and survives save/open.
+3. **Can the journal be captured retroactively?** In-process, yes:
+   `Session.journal` accumulates since session start, so an embedded adapter
+   can read it and slice from any point. Externally, only if a recording was
+   running (`actions.record` + `actions.stop` copies the replayable tail,
+   `actions_cmds.rs:332-356`) — there is no control-channel method to dump the
+   raw journal. This asymmetry pushes the design toward in-process capture
+   (§`ADAPTER-DESIGN.md`).
+4. **Revision semantics**: `DocState.revision` increments on every change;
+   `saved_revision` tracks the last save; `dirty == revision != saved_revision`
+   (`doc_state.rs:20-24, 122-124`). Not in the file (§1.4) — so carried meta
+   must preserve it.
 
 ## 4. Risks (early-alpha reality)
 
