@@ -87,8 +87,8 @@ fn call_str(
     what: &'static str,
     f: impl Fn(*mut c_char, c_uint) -> c_int,
 ) -> Result<String, ZimBackendError> {
-    let mut buf = [0i8; 128];
-    let need = f(buf.as_mut_ptr(), buf.len() as c_uint);
+    let mut buf = [0u8; 128];
+    let need = f(buf.as_mut_ptr() as *mut c_char, buf.len() as c_uint);
     if need < 0 {
         return Err(ZimBackendError::QueryFailed(what));
     }
@@ -98,8 +98,8 @@ fn call_str(
         return Ok(cstr.to_string_lossy().into_owned());
     }
     // Re-call with the needed length.
-    let mut big = vec![0i8; need as usize + 1];
-    let need2 = f(big.as_mut_ptr(), big.len() as c_uint);
+    let mut big = vec![0u8; need as usize + 1];
+    let need2 = f(big.as_mut_ptr() as *mut c_char, big.len() as c_uint);
     if need2 < 0 {
         return Err(ZimBackendError::QueryFailed(what));
     }
@@ -202,13 +202,13 @@ impl ZimItem {
     /// Direct access info (raw bytes inside the zim file; uncompressed
     /// items only). Fail closed: None when unavailable.
     pub fn direct_access(&self) -> Result<Option<(String, u64)>, ZimBackendError> {
-        let mut path_buf = [0i8; 4096];
+        let mut path_buf = [0u8; 4096];
         let mut offset: c_ulonglong = 0;
         // SAFETY: self.raw live; buffers valid.
         let r = unsafe {
             czim_item_direct_access(
                 self.raw,
-                path_buf.as_mut_ptr(),
+                path_buf.as_mut_ptr() as *mut c_char,
                 path_buf.len() as c_uint,
                 &mut offset,
             )
