@@ -1,0 +1,940 @@
+{
+  "all_checks_passed": true,
+  "dest_app": {
+    "open_seconds": 0.01224125,
+    "oracle": {
+      "agreed": true,
+      "checked": true
+    },
+    "restore_output": {
+      "active_tool": "Brush",
+      "dirty": true,
+      "document_hash": "0393352ea36452a0e7cbdd6f1425c1c42fa414e62669dc54828ddf746fceb32f",
+      "generation": 1,
+      "has_selection": true,
+      "live_restore": true,
+      "revision": 5,
+      "selected_layers": [
+        {
+          "name": "Carried Layer",
+          "occurrence": 0
+        }
+      ],
+      "unsaved_hash": "61456fd42281c6bb6bd71a1ebd6a4c36c08bfc4740b9f6a7140c289cfb4a3714",
+      "viewport": {
+        "center": [
+          512.0,
+          384.0
+        ],
+        "rotation": 15.0,
+        "zoom": 0.5
+      }
+    },
+    "restore_seconds": 0.094064541
+  },
+  "dest_driver_transcript": [
+    {
+      "method": "app.open",
+      "ok": true,
+      "params": {
+        "path": "carried.pcraft"
+      },
+      "result": {
+        "name": "carried.pcraft",
+        "path": "carried.pcraft",
+        "warnings": []
+      }
+    },
+    {
+      "method": "ui.screenshot",
+      "ok": true,
+      "params": {
+        "path": "shot-b-before-restore.png"
+      },
+      "result": {
+        "height": 1906,
+        "path": "shot-b-before-restore.png",
+        "width": 1922
+      }
+    },
+    {
+      "method": "ui.screenshot",
+      "ok": true,
+      "params": {
+        "path": "shot-b-after-restore.png"
+      },
+      "result": {
+        "height": 1906,
+        "path": "shot-b-after-restore.png",
+        "width": 1922
+      }
+    },
+    {
+      "method": "ui.inspect",
+      "ok": true,
+      "params": {},
+      "result": {
+        "summary": "8629 bytes, sha256 72d515d108bf89dab3d314d3bbf92f119ccf72ca36d6d52cc1303b283bc2d704"
+      }
+    }
+  ],
+  "experiment": "live-l3-photocraft",
+  "optional_split": {
+    "authoritative_transferred_by_engine": [
+      "photocraft.document.v1",
+      "photocraft.unsaved_edits.v1",
+      "photocraft.meta.v1"
+    ],
+    "ephemeral_workspace": {
+      "in_dest_store": false,
+      "note": "ephemeral objects are published but not sealed (prepare.rs:176); import_cut transfers the authoritative cut only. The workspace (viewport/tool/target layer) was digest-pinned and carried alongside by this one-machine harness; selection needed no separate object because .pcraft serializes it as document state."
+    }
+  },
+  "photocraft_pin": "1f7fc0f53696e54da79b95015abb37d7c22cdd1a",
+  "scope": "LOCAL (loopback, one machine)",
+  "source_app": {
+    "digests": {
+      "photocraft.document.v1": "0393352ea36452a0e7cbdd6f1425c1c42fa414e62669dc54828ddf746fceb32f",
+      "photocraft.meta.v1": "fb17eaf294438c3ee8d55415a0b74fd56da38f3c3049ef007cc5cb3ef3f1274f",
+      "photocraft.unsaved_edits.v1": "61456fd42281c6bb6bd71a1ebd6a4c36c08bfc4740b9f6a7140c289cfb4a3714",
+      "photocraft.workspace.v1": "e903df9f125a7d95a750cce0c9cac6cdb24d7cf52dab750db55269bd4c62b5f8"
+    },
+    "dirty": true,
+    "document_bytes": 10759,
+    "prep_seconds": 1.733375291,
+    "revision": 5,
+    "unsaved_bytes": 30462,
+    "workspace": [
+      123,
+      34,
+      97,
+      99,
+      116,
+      105,
+      118,
+      101,
+      95,
+      100,
+      111,
+      99,
+      117,
+      109,
+      101,
+      110,
+      116,
+      95,
+      105,
+      110,
+      100,
+      101,
+      120,
+      34,
+      58,
+      50,
+      44,
+      34,
+      115,
+      101,
+      108,
+      101,
+      99,
+      116,
+      101,
+      100,
+      95,
+      108,
+      97,
+      121,
+      101,
+      114,
+      115,
+      34,
+      58,
+      91,
+      123,
+      34,
+      110,
+      97,
+      109,
+      101,
+      34,
+      58,
+      34,
+      67,
+      97,
+      114,
+      114,
+      105,
+      101,
+      100,
+      32,
+      76,
+      97,
+      121,
+      101,
+      114,
+      34,
+      44,
+      34,
+      111,
+      99,
+      99,
+      117,
+      114,
+      114,
+      101,
+      110,
+      99,
+      101,
+      34,
+      58,
+      48,
+      125,
+      93,
+      44,
+      34,
+      118,
+      105,
+      101,
+      119,
+      112,
+      111,
+      114,
+      116,
+      34,
+      58,
+      123,
+      34,
+      122,
+      111,
+      111,
+      109,
+      34,
+      58,
+      48,
+      46,
+      53,
+      44,
+      34,
+      99,
+      101,
+      110,
+      116,
+      101,
+      114,
+      34,
+      58,
+      91,
+      53,
+      49,
+      50,
+      46,
+      48,
+      44,
+      51,
+      56,
+      52,
+      46,
+      48,
+      93,
+      44,
+      34,
+      114,
+      111,
+      116,
+      97,
+      116,
+      105,
+      111,
+      110,
+      34,
+      58,
+      49,
+      53,
+      46,
+      48,
+      125,
+      44,
+      34,
+      97,
+      99,
+      116,
+      105,
+      118,
+      101,
+      95,
+      116,
+      111,
+      111,
+      108,
+      34,
+      58,
+      34,
+      66,
+      114,
+      117,
+      115,
+      104,
+      34,
+      44,
+      34,
+      112,
+      97,
+      110,
+      101,
+      108,
+      115,
+      34,
+      58,
+      123,
+      34,
+      98,
+      114,
+      117,
+      115,
+      104,
+      95,
+      115,
+      101,
+      116,
+      116,
+      105,
+      110,
+      103,
+      115,
+      34,
+      58,
+      102,
+      97,
+      108,
+      115,
+      101,
+      44,
+      34,
+      98,
+      114,
+      117,
+      115,
+      104,
+      101,
+      115,
+      34,
+      58,
+      102,
+      97,
+      108,
+      115,
+      101,
+      44,
+      34,
+      99,
+      104,
+      97,
+      114,
+      97,
+      99,
+      116,
+      101,
+      114,
+      34,
+      58,
+      102,
+      97,
+      108,
+      115,
+      101,
+      44,
+      34,
+      99,
+      111,
+      108,
+      111,
+      114,
+      34,
+      58,
+      116,
+      114,
+      117,
+      101,
+      44,
+      34,
+      100,
+      111,
+      99,
+      107,
+      34,
+      58,
+      116,
+      114,
+      117,
+      101,
+      44,
+      34,
+      103,
+      114,
+      97,
+      100,
+      105,
+      101,
+      110,
+      116,
+      95,
+      101,
+      100,
+      105,
+      116,
+      111,
+      114,
+      34,
+      58,
+      102,
+      97,
+      108,
+      115,
+      101,
+      44,
+      34,
+      104,
+      105,
+      115,
+      116,
+      111,
+      114,
+      121,
+      34,
+      58,
+      102,
+      97,
+      108,
+      115,
+      101,
+      44,
+      34,
+      108,
+      97,
+      121,
+      101,
+      114,
+      115,
+      34,
+      58,
+      116,
+      114,
+      117,
+      101,
+      44,
+      34,
+      109,
+      101,
+      110,
+      117,
+      95,
+      98,
+      97,
+      114,
+      34,
+      58,
+      116,
+      114,
+      117,
+      101,
+      44,
+      34,
+      110,
+      97,
+      118,
+      105,
+      103,
+      97,
+      116,
+      111,
+      114,
+      34,
+      58,
+      102,
+      97,
+      108,
+      115,
+      101,
+      44,
+      34,
+      111,
+      112,
+      116,
+      105,
+      111,
+      110,
+      115,
+      95,
+      98,
+      97,
+      114,
+      34,
+      58,
+      116,
+      114,
+      117,
+      101,
+      44,
+      34,
+      112,
+      114,
+      111,
+      112,
+      101,
+      114,
+      116,
+      105,
+      101,
+      115,
+      34,
+      58,
+      116,
+      114,
+      117,
+      101,
+      44,
+      34,
+      114,
+      97,
+      105,
+      108,
+      34,
+      58,
+      116,
+      114,
+      117,
+      101,
+      44,
+      34,
+      115,
+      116,
+      97,
+      116,
+      117,
+      115,
+      95,
+      98,
+      97,
+      114,
+      34,
+      58,
+      116,
+      114,
+      117,
+      101,
+      44,
+      34,
+      116,
+      111,
+      111,
+      108,
+      98,
+      97,
+      114,
+      34,
+      58,
+      116,
+      114,
+      117,
+      101,
+      44,
+      34,
+      116,
+      111,
+      111,
+      108,
+      98,
+      97,
+      114,
+      95,
+      100,
+      111,
+      117,
+      98,
+      108,
+      101,
+      34,
+      58,
+      102,
+      97,
+      108,
+      115,
+      101,
+      125,
+      125
+    ]
+  },
+  "source_driver_transcript": [
+    {
+      "method": "engine.execute",
+      "ok": true,
+      "params": {
+        "command": "file.new",
+        "params": {
+          "background": "white",
+          "depth": 8,
+          "height": 768,
+          "mode": "rgb",
+          "width": 1024
+        }
+      },
+      "result": {
+        "document": 2
+      }
+    },
+    {
+      "method": "ui.screenshot",
+      "ok": true,
+      "params": {
+        "path": "shot-a-prep.png"
+      },
+      "result": {
+        "height": 1906,
+        "path": "shot-a-prep.png",
+        "width": 1922
+      }
+    },
+    {
+      "method": "app.save",
+      "ok": true,
+      "params": {
+        "path": "base.pcraft"
+      },
+      "result": {
+        "path": "base.pcraft",
+        "warnings": []
+      }
+    },
+    {
+      "method": "engine.execute",
+      "ok": true,
+      "params": {
+        "command": "layer.new.layer",
+        "params": {
+          "name": "Carried Layer"
+        }
+      },
+      "result": {
+        "layer": 8
+      }
+    },
+    {
+      "method": "engine.execute",
+      "ok": true,
+      "params": {
+        "command": "layer.select",
+        "params": {
+          "name": "Carried Layer"
+        }
+      },
+      "result": {
+        "selected": [
+          8
+        ]
+      }
+    },
+    {
+      "method": "engine.execute",
+      "ok": true,
+      "params": {
+        "command": "paint.stroke",
+        "params": {
+          "color": "#ff3333",
+          "points": [
+            [
+              512,
+              384,
+              1.0
+            ]
+          ],
+          "size": 120
+        }
+      },
+      "result": {
+        "damage": [
+          449,
+          321,
+          127,
+          127
+        ]
+      }
+    },
+    {
+      "method": "engine.execute",
+      "ok": true,
+      "params": {
+        "command": "select.rect",
+        "params": {
+          "ellipse": false,
+          "height": 200,
+          "mode": "replace",
+          "width": 320,
+          "x": 160,
+          "y": 120
+        }
+      },
+      "result": null
+    },
+    {
+      "method": "ui.set",
+      "ok": true,
+      "params": {
+        "tool": "brush"
+      },
+      "result": null
+    },
+    {
+      "method": "ui.set",
+      "ok": true,
+      "params": {
+        "zoom": 0.5
+      },
+      "result": null
+    },
+    {
+      "method": "ui.set",
+      "ok": true,
+      "params": {
+        "center": [
+          512,
+          384
+        ]
+      },
+      "result": null
+    },
+    {
+      "method": "ui.set",
+      "ok": true,
+      "params": {
+        "rotation": 15
+      },
+      "result": null
+    },
+    {
+      "method": "engine.execute",
+      "ok": true,
+      "params": {
+        "command": "session.inspect",
+        "params": {}
+      },
+      "result": {
+        "active": 2,
+        "background": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "documents": [
+          {
+            "dirty": true,
+            "height": 768,
+            "index": 0,
+            "name": "Untitled",
+            "path": null,
+            "revision": 1,
+            "width": 1024
+          },
+          {
+            "dirty": true,
+            "height": 768,
+            "index": 1,
+            "name": "base.pcraft",
+            "path": null,
+            "revision": 1,
+            "width": 1024
+          },
+          {
+            "dirty": true,
+            "height": 768,
+            "index": 2,
+            "name": "base.pcraft",
+            "path": "base.pcraft",
+            "revision": 5,
+            "width": 1024
+          }
+        ],
+        "foreground": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "historyOptions": {
+          "allowNonLinearHistory": false,
+          "makeLayerVisibilityChangesUndoable": true
+        }
+      }
+    },
+    {
+      "method": "ui.inspect",
+      "ok": true,
+      "params": {},
+      "result": {
+        "summary": "8849 bytes, sha256 05319e8e60f4f222e3f579c41bd09dffed9bd88ecb4515d3309d88f3fd13858d"
+      }
+    },
+    {
+      "method": "engine.execute",
+      "ok": true,
+      "params": {
+        "command": "image.duplicate",
+        "params": {}
+      },
+      "result": {
+        "document": 3,
+        "name": "base.pcraft copy"
+      }
+    },
+    {
+      "method": "ui.inspect",
+      "ok": true,
+      "params": {},
+      "result": {
+        "summary": "9049 bytes, sha256 5febe94d6eca5fe8f49031e1d131528e6459633285cb014ed7aed4c7e932f2e6"
+      }
+    },
+    {
+      "method": "app.save",
+      "ok": true,
+      "params": {
+        "path": "carry/scratch-unsaved.pcraft"
+      },
+      "result": {
+        "path": "carry/scratch-unsaved.pcraft",
+        "warnings": []
+      }
+    },
+    {
+      "method": "engine.execute",
+      "ok": true,
+      "params": {
+        "command": "file.close",
+        "params": {}
+      },
+      "result": null
+    },
+    {
+      "method": "ui.inspect",
+      "ok": true,
+      "params": {},
+      "result": {
+        "summary": "8884 bytes, sha256 8c9e78798f5fe826289145c6d14d930bd8d957687ed5813d8bdd1dbdb96d2eef"
+      }
+    },
+    {
+      "method": "engine.execute",
+      "ok": true,
+      "params": {
+        "command": "session.inspect",
+        "params": {}
+      },
+      "result": {
+        "active": 2,
+        "background": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "documents": [
+          {
+            "dirty": true,
+            "height": 768,
+            "index": 0,
+            "name": "Untitled",
+            "path": null,
+            "revision": 1,
+            "width": 1024
+          },
+          {
+            "dirty": true,
+            "height": 768,
+            "index": 1,
+            "name": "base.pcraft",
+            "path": null,
+            "revision": 1,
+            "width": 1024
+          },
+          {
+            "dirty": true,
+            "height": 768,
+            "index": 2,
+            "name": "base.pcraft",
+            "path": "base.pcraft",
+            "revision": 5,
+            "width": 1024
+          }
+        ],
+        "foreground": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "historyOptions": {
+          "allowNonLinearHistory": false,
+          "makeLayerVisibilityChangesUndoable": true
+        }
+      }
+    },
+    {
+      "method": "ui.inspect",
+      "ok": true,
+      "params": {},
+      "result": {
+        "summary": "8889 bytes, sha256 d3e260147ef7ca78cf23e1a756400d3d2acb151c8d27c53a226fbd92cd8192ba"
+      }
+    }
+  ],
+  "token_policy": "tokens read from 0600 files, never logged (EVD-006)",
+  "transfer": {
+    "bytes_received": 57659,
+    "bytes_sent": 57659,
+    "seconds": 0.199428542,
+    "transport": "loopback TLS 1.3"
+  },
+  "verification": {
+    "checks": {
+      "carried_layer_present": true,
+      "rotation": true,
+      "selected_layers_restored": true,
+      "selection_present": true,
+      "tool": true,
+      "zoom": true
+    },
+    "dest": {
+      "center": [
+        512.0,
+        384.0
+      ],
+      "hasSelection": true,
+      "layerCount": 2,
+      "rotation": 15.0,
+      "selectedLayers": [
+        "11"
+      ],
+      "selectionBounds": [
+        160,
+        120,
+        320,
+        200
+      ],
+      "tool": "Brush",
+      "zoom": 0.5
+    },
+    "source_workspace": {
+      "center": [
+        512.0,
+        384.0
+      ],
+      "rotation": 15.0,
+      "selected_layers": [
+        "Carried Layer"
+      ],
+      "tool": "Brush",
+      "zoom": 0.5
+    }
+  }
+}

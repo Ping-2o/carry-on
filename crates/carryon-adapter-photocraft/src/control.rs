@@ -286,21 +286,84 @@ impl ControlChannelDriver {
         )
     }
 
-    fn inspect(&mut self) -> Result<serde_json::Value, DriverError> {
-        self.call("ui.inspect", &serde_json::json!({}))
+    /// One `engine.execute` (public: for harness setup commands).
+    pub fn execute_command(
+        &mut self,
+        command: &str,
+        params: &serde_json::Value,
+    ) -> Result<serde_json::Value, DriverError> {
+        self.execute(command, params)
     }
 
-    /// Write a scratch snapshot of the current (dirty) state under the write
-    /// root, read it back, delete it. Returns the raw `.pcraft` bytes.
-    /// Desktop `app.save` has no format parameter — the path's `.pcraft`
-    /// extension selects the native format (`docs/control-protocol.md`).
+    /// Write a scratch snapshot of the **current (dirty) state** of the active
+    /// document WITHOUT touching it: duplicate the document, save the
+    /// duplicate to a scratch `.pcraft`, read it back, delete the file, close
+    /// the duplicate. The original's dirty flag, path and session position are
+    /// untouched — a layered `app.save` marks the saved document clean and
+    /// rebinds its path (`docs/control-protocol.md`), so saving the original
+    /// would destroy the very "unsaved" state this carries. `image.duplicate`
+    /// is the no-risk copy PhotoCraft's own agent docs recommend for
+    /// experiments (`docs/mcp.md`). Desktop `app.save` has no format
+    /// parameter; the path's `.pcraft` extension selects the native format.
     fn snapshot_scratch(&mut self, tag: &str) -> Result<Vec<u8>, DriverError> {
+        let inspect = self.inspect()?;
+        let docs_before = inspect
+            .pointer("/session/documents")
+            .and_then(|v| v.as_array())
+            .map(|a| a.len())
+            .unwrap_or(0);
+        let orig_active = inspect
+            .pointer("/session/active")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        self.execute("image.duplicate", &serde_json::json!({}))?;
+        // Fail closed unless the duplicate really is the active document:
+        // app.save acts on the ACTIVE doc, and saving the original would
+        // clean it (see above).
+        let inspect = self.inspect()?;
+        let docs_after = inspect
+            .pointer("/session/documents")
+            .and_then(|v| v.as_array())
+            .map(|a| a.len())
+            .unwrap_or(0);
+        let active_now = inspect
+            .pointer("/session/active")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        if docs_after != docs_before + 1 {
+            return Err(DriverError::Failed(format!(
+                "image.duplicate did not add a document ({docs_before} -> {docs_after})"
+            )));
+        }
+        if active_now == orig_active || active_now as usize >= docs_after {
+            return Err(DriverError::Failed(
+                "image.duplicate did not activate the duplicate; refusing to app.save the original"
+                    .into(),
+            ));
+        }
+        let _ = std::fs::create_dir_all(self.cfg.write_root.join("carry"));
         let rel = format!("carry/scratch-{tag}.pcraft");
         self.call("app.save", &serde_json::json!({ "path": rel }))?;
         let full = self.cfg.write_root.join(&rel);
         let bytes = std::fs::read(&full)
             .map_err(|e| DriverError::Failed(format!("read scratch snapshot {full:?}: {e}")))?;
         let _ = std::fs::remove_file(&full);
+        // The duplicate is clean now, so closing it prompts nothing. Closing
+        // returns the original to the active position.
+        self.execute("file.close", &serde_json::json!({}))?;
+        // Verify the original is active again; if not, reactivate it (fail
+        // closed if that fails).
+        let inspect = self.inspect()?;
+        let active_end = inspect
+            .pointer("/session/active")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        if active_end != orig_active {
+            self.call(
+                "ui.menu.invoke",
+                &serde_json::json!({ "id": format!("window.document.{orig_active}") }),
+            )?;
+        }
         Ok(bytes)
     }
 
@@ -387,6 +450,35 @@ impl ControlChannelDriver {
             )?;
         }
         Ok(())
+    }
+
+    /// Open a document from the app's automation read root (`app.open`).
+    /// Used by a destination host to open the carried document it has
+    /// materialized under the app's read root.
+    pub fn open_document(&mut self, rel_path: &str) -> Result<serde_json::Value, DriverError> {
+        self.call("app.open", &serde_json::json!({ "path": rel_path }))
+    }
+
+    /// Save the active document to a path under the automation write root
+    /// (`app.save {path}` — the *current*, possibly dirty, state).
+    pub fn save_document(&mut self, rel_path: &str) -> Result<serde_json::Value, DriverError> {
+        self.call("app.save", &serde_json::json!({ "path": rel_path }))
+    }
+
+    /// One `ui.set` (control method).
+    pub fn set_ui(&mut self, fields: &serde_json::Value) -> Result<serde_json::Value, DriverError> {
+        self.call("ui.set", fields)
+    }
+
+    /// Capture the app window to a PNG under the app's automation write root
+    /// (`ui.screenshot {path}`).
+    pub fn screenshot(&mut self, rel_path: &str) -> Result<serde_json::Value, DriverError> {
+        self.call("ui.screenshot", &serde_json::json!({ "path": rel_path }))
+    }
+
+    /// One `ui.inspect` (public: used by the trait impl and by harnesses).
+    pub fn inspect(&mut self) -> Result<serde_json::Value, DriverError> {
+        self.call("ui.inspect", &serde_json::json!({}))
     }
 }
 

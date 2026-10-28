@@ -13,4 +13,5 @@ sha2 = { workspace = true }
 
 [dev-dependencies]
 carryon-core = { workspace = true }
+carryon-net = { workspace = true }
 tempfile = { workspace = true }
