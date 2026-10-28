@@ -309,3 +309,51 @@ Options — **orchestrator decision; the core cap is NOT changed here**:
 Recommendation: **B** (per-tile splitting), with A as the interim step if
 Phase 3 needs real photo carries before B lands. Not implemented; the
 skeleton still declares `MAX_OBJECT_BYTES = 16 MiB` (the observed cap).
+
+### 7.5 Phase 3 results (status notes; the orchestrator owns FRONTIER/TARGETS)
+
+- **Photo journal replay (OBSERVED, LOCAL)** — `evidence/photo-replay.json`:
+  the Phase-2 gap closed. Real photo (2400×1500), 6-step journal
+  (2 strokes, layer props, selection, filter, deselect): journal **397 B vs
+  snapshot 7,022,517 B**; replay on a clean session reproduced the composite
+  pixels exactly (sha256 `ca463278f346…` both sides), steps_ran 6/6.
+- **L4 between two LIVE apps + source-off (OBSERVED, LOCAL)** —
+  `evidence/l4-live/transcript.json` + screenshots: full §21.2 authority
+  transfer between two live PhotoCraft apps over loopback TLS (receipts match,
+  epoch 0→1, dest owner=local, not ambiguous); restore verified in app B's
+  GUI; app A **SIGKILLed** and source core dropped; destination continued
+  editing through `document.edit` into live app B and still owned authority;
+  restarted source core reopened from disk → `may_mutate=false`,
+  `guard_mutation` refused **AUTH_ReadOnly (AUTH-005)**; relaunched source
+  app alive but read-only-paired. 21/21 checks. (`shot-a-restarted.png`
+  not captured — screenshot request failed; noted.)
+- **Physical cross-device carry (OBSERVED, PHYSICAL)** —
+  `evidence/phys-carry/bundle.json` (+ `scripts/phys_handoff.sh`): mac →
+  **Samsung Galaxy A04 (SM-A045F, Android 13, arm64-v8a, MT6765V/CB,
+  3.8 GB RAM)** over real LAN TLS 1.3 (pin-based pairing, port 48964,
+  source LAN IP 192.168.3.26): the live flagship document + unsaved state
+  (57,663 B) carried; the device reconstructed all objects from **its own
+  store by digest** (re-hash all match); the **on-device PhotoCraft engine**
+  (the Phase-1 aarch64 `photocraft-cli`) rendered the carried dirty state —
+  composite-pixel sha256 **identical mac↔device**
+  (`ef8c0c13df0d359dd0c3412a2db38ea7f4d78294d1b8a7c1dd53d838c5d977fd`).
+  Honest scoping: destination verification is the headless engine path, not
+  a GUI restore (the GUI cannot run on Android — MOBILE-FEASIBILITY §4);
+  two machines, two NICs; no APK/signing (PLAT-006 out of scope). This is
+  the flagship analogue of `l3_handoff.sh`'s editor carry.
+- **Real-edit-stream measurement (OBSERVED, LOCAL)** —
+  `evidence/edit-stream.json`: 240-step varied mix on the real photo
+  (scripted, NOT a captured human session — labeled): journal grows
+  linearly ~117 B/journal-step (4.7 KB @ 58 steps → 28 KB @ 360 steps) while
+  the snapshot sits at 8.35–12.2 MB; ratio 0.0006×–0.0023× — **no crossover
+  in range**. Extrapolated linear crossover ≈ 100k journal steps against
+  this photo's snapshot — far beyond any realistic handoff window; for small
+  documents the snapshot is smaller and the crossover arrives sooner
+  (crossover condition: journal_bytes(edits) == snapshot_bytes(document)).
+
+### 7.6 Pending orchestrator decision — 16 MiB object cap (option B approved, queued)
+
+The owner approved option B (per-tile splitting) as its own commit series
+after Phase 3. Until that lands, the core cap is unchanged and the adapter
+declares the observed 16 MiB. See [`TILE-SPLITTING.md`](TILE-SPLITTING.md)
+when it lands (design-first per the decision).

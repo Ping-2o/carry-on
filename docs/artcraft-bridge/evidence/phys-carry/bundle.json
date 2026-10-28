@@ -1,0 +1,75 @@
+{
+  "experiment": "physical cross-device PhotoCraft carry (mac -> Galaxy A04)",
+  "scope": "PHYSICAL (two machines, two NICs; LAN TLS 1.3)",
+  "photocraft_pin": "1f7fc0f53696e54da79b95015abb37d7c22cdd1a",
+  "transport": {
+    "port": 48964,
+    "source_lan_ip": "192.168.3.26",
+    "tls": "rustls TLS 1.3, pin-based"
+  },
+  "device": {
+    "model": "SM-A045F",
+    "android": "13",
+    "abi": "arm64-v8a",
+    "hardware": "Hardware\t: MT6765V/CB",
+    "meminfo": "MemTotal:        3882400 kB"
+  },
+  "source": {
+    "bytes_sent": 57663,
+    "composite_png_sha256_of_dirty_state": "ef8c0c13df0d359dd0c3412a2db38ea7f4d78294d1b8a7c1dd53d838c5d977fd",
+    "document_bytes": 10761,
+    "document_sha256": "f18587919e7daa192d29a8b6e8745ac5d78c334e6699c6e003b7763b2843ff4a",
+    "experiment": "physical-carry source side",
+    "photocraft_pin": "1f7fc0f53696e54da79b95015abb37d7c22cdd1a",
+    "source_meta": {
+      "adapter_version": "0.1.0",
+      "dirty": true,
+      "document_name": "base.pcraft",
+      "original_path": "base.pcraft",
+      "photocraft_pin": "1f7fc0f53696e54da79b95015abb37d7c22cdd1a",
+      "revision": 5,
+      "saved_revision": 0,
+      "schema_id": "carryon.photocraft.session",
+      "schema_version": 1,
+      "unsaved_mode": "snapshot"
+    },
+    "transfer_seconds": 1.454017292,
+    "unsaved_bytes": 30463,
+    "unsaved_sha256": "a0643b0ef2b89cb1bb95e3257269133d9092dfc94db66e104cd2851061476975"
+  },
+  "destination": {
+    "bytes_received": 57663,
+    "carried_objects": {
+      "photocraft.document.v1": {
+        "bytes": 10761,
+        "expected": "f18587919e7daa192d29a8b6e8745ac5d78c334e6699c6e003b7763b2843ff4a",
+        "match": true,
+        "sha256": "f18587919e7daa192d29a8b6e8745ac5d78c334e6699c6e003b7763b2843ff4a"
+      },
+      "photocraft.meta.v1": {
+        "bytes": 278,
+        "expected": "fb17eaf294438c3ee8d55415a0b74fd56da38f3c3049ef007cc5cb3ef3f1274f",
+        "match": true,
+        "sha256": "fb17eaf294438c3ee8d55415a0b74fd56da38f3c3049ef007cc5cb3ef3f1274f"
+      },
+      "photocraft.unsaved_edits.v1": {
+        "bytes": 30463,
+        "expected": "a0643b0ef2b89cb1bb95e3257269133d9092dfc94db66e104cd2851061476975",
+        "match": true,
+        "sha256": "a0643b0ef2b89cb1bb95e3257269133d9092dfc94db66e104cd2851061476975"
+      }
+    },
+    "carried_pcraft_bytes": 30463,
+    "device_store_rehash_all_match": true,
+    "experiment": "physical-carry destination side (Galaxy A04)",
+    "import_seconds": 1.026349001,
+    "mirror_cut": 0,
+    "photocraft_pin": "1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+  },
+  "oracle": {
+    "composite_pixel_sha256_source": "ef8c0c13df0d359dd0c3412a2db38ea7f4d78294d1b8a7c1dd53d838c5d977fd",
+    "composite_pixel_sha256_device": "ef8c0c13df0d359dd0c3412a2db38ea7f4d78294d1b8a7c1dd53d838c5d977fd",
+    "computed_on_device_by": "photocraft-cli convert (aarch64-linux-android, Phase-1 build)",
+    "result": "match"
+  }
+}

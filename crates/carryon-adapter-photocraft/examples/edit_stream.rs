@@ -41,9 +41,14 @@ fn main() {
     .unwrap();
     let rel = photo.file_name().unwrap().to_string_lossy().into_owned();
     d.open_under_root(&rel).unwrap();
-    d.session_mut().execute("image.duplicate", json!({})).unwrap();
     d.session_mut()
-        .execute("layer.newAdjustmentLayer.brightnessContrast", json!({"brightness": 10}))
+        .execute("image.duplicate", json!({}))
+        .unwrap();
+    d.session_mut()
+        .execute(
+            "layer.newAdjustmentLayer.brightnessContrast",
+            json!({"brightness": 10}),
+        )
         .unwrap();
     d.session_mut()
         .execute("layer.new.layer", json!({"name": "Work"}))
@@ -80,11 +85,12 @@ fn main() {
             }
             // layer property edits
             3 => {
-                d.session_mut().execute(
-                    "layer.setProps",
-                    json!({"name": "Work", "opacity": 0.4 + 0.5 * frac}),
-                )
-                .unwrap();
+                d.session_mut()
+                    .execute(
+                        "layer.setProps",
+                        json!({"name": "Work", "opacity": 0.4 + 0.5 * frac}),
+                    )
+                    .unwrap();
             }
             // selections + a filter
             4 => {
@@ -93,17 +99,24 @@ fn main() {
                     json!({"x": cx as u64 % 1800, "y": cy as u64 % 1100, "width": 300, "height": 220}),
                 )
                 .unwrap();
-                d.session_mut().execute("filter.blur.gaussianBlur", json!({"radius": 1 + (step % 3)}))
+                d.session_mut()
+                    .execute(
+                        "filter.blur.gaussianBlur",
+                        json!({"radius": 1 + (step % 3)}),
+                    )
                     .unwrap();
-                d.session_mut().execute("select.deselect", json!({})).unwrap();
+                d.session_mut()
+                    .execute("select.deselect", json!({}))
+                    .unwrap();
             }
             // adjustments + undo/redo churn (realistic hesitation)
             _ => {
-                d.session_mut().execute(
-                    "layer.newAdjustmentLayer.hueSaturation",
-                    json!({"hue": (step % 30) as i64 - 15, "saturation": 8}),
-                )
-                .unwrap();
+                d.session_mut()
+                    .execute(
+                        "layer.newAdjustmentLayer.hueSaturation",
+                        json!({"hue": (step % 30) as i64 - 15, "saturation": 8}),
+                    )
+                    .unwrap();
                 d.session_mut().execute("edit.undo", json!({})).unwrap();
             }
         }

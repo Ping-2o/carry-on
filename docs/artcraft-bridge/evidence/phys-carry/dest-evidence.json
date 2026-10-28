@@ -1,0 +1,29 @@
+{
+  "bytes_received": 57663,
+  "carried_objects": {
+    "photocraft.document.v1": {
+      "bytes": 10761,
+      "expected": "f18587919e7daa192d29a8b6e8745ac5d78c334e6699c6e003b7763b2843ff4a",
+      "match": true,
+      "sha256": "f18587919e7daa192d29a8b6e8745ac5d78c334e6699c6e003b7763b2843ff4a"
+    },
+    "photocraft.meta.v1": {
+      "bytes": 278,
+      "expected": "fb17eaf294438c3ee8d55415a0b74fd56da38f3c3049ef007cc5cb3ef3f1274f",
+      "match": true,
+      "sha256": "fb17eaf294438c3ee8d55415a0b74fd56da38f3c3049ef007cc5cb3ef3f1274f"
+    },
+    "photocraft.unsaved_edits.v1": {
+      "bytes": 30463,
+      "expected": "a0643b0ef2b89cb1bb95e3257269133d9092dfc94db66e104cd2851061476975",
+      "match": true,
+      "sha256": "a0643b0ef2b89cb1bb95e3257269133d9092dfc94db66e104cd2851061476975"
+    }
+  },
+  "carried_pcraft_bytes": 30463,
+  "device_store_rehash_all_match": true,
+  "experiment": "physical-carry destination side (Galaxy A04)",
+  "import_seconds": 1.026349001,
+  "mirror_cut": 0,
+  "photocraft_pin": "1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+}

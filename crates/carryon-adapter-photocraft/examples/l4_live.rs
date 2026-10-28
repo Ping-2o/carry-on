@@ -82,18 +82,20 @@ impl App {
             .expect("launch photocraft");
         // Wait for the token file + control listener.
         for _ in 0..120 {
-            if token.exists() {
-                if std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
-                    return App {
-                        child,
-                        root,
-                        token,
-                        port,
-                    };
-                }
+            if token.exists() && std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
+                return App {
+                    child,
+                    root,
+                    token,
+                    port,
+                };
             }
             std::thread::sleep(Duration::from_millis(500));
         }
+        // Fail closed without leaking the child (clippy zombie_processes).
+        let mut child = child;
+        let _ = child.kill();
+        let _ = child.wait();
         panic!("app {name} did not come up on port {port}");
     }
 
@@ -116,7 +118,10 @@ impl App {
     }
 
     fn quit(&mut self) {
-        let _ = self.child.kill(); // the app's own app.quit is tried first by the caller
+        // The app's own app.quit is tried first by the caller; kill + wait is
+        // the backstop (and reaps the child on every path).
+        let _ = self.child.kill();
+        let _ = self.child.wait();
     }
 }
 
