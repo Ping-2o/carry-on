@@ -140,8 +140,42 @@ below in §F when it finishes.
 - kiwix-apple `f410135964333775373ce851a43eeb05c966dace`
 - kiwix-build (tool only) `e7343a1640de5379c212eac2aec6ba32c9fd2d31`
 
-## F. kiwix-build iOS result — appended after the run completes
+## F. kiwix-build iOS result — IMPLEMENTED (canonical path, after a path fix)
 
-(Placeholder kept honest: at writing time the run is in progress. Final
-status + log tail recorded in the Phase-1 final report and, if successful,
-here.)
+`python -m kiwixbuild --config ios_arm64 --working-dir ... --hide-progress libzim`
+(kiwix-build @ `e7343a1`, venv with `distro` installed; PEP-668 blocks the
+system python) — first runs failed on autoconf's space-in-path check (§D).
+Fixed by keeping the working dir inside an APFS sparse-bundle image stored on
+the SSD and mounted at the space-free `/Volumes/kbwork`. Retry succeeded:
+
+```
+configure icu4c : OK (14.0s)
+compile icu4c : ....OK (130.1s)
+install icu4c : OK (1.4s)
+build zim-testing-suite (ios_arm64):
+build libzim (ios_arm64):
+  configure libzim : OK (11.0s)
+  compile libzim : OK (10.6s)
+  test libzim : OK (0.3s)
+  install libzim : OK (0.3s)
+```
+
+Cross-built dependency set at `/Volumes/kbwork/out/SOURCE/`: icu4c-73.2,
+xapian-core-1.4.26, lzma-5.2.6, zstd-1.5.7, zlib-1.3.1,
+zim-testing-suite-0.10.0 — i.e. the **full-text-search (xapian + icu)**
+build that the manual §C build (xapian off) skips. Source pin verified:
+kiwix-build cloned libzim at `ad888b4cdc5c76d788e9e70b630842dc1b31871f` —
+the exact commit we pinned in §E.
+
+```
+/Volumes/kbwork/out/BUILD_ios_arm64/INSTALL/lib/libzim.a:
+  file format mach-o arm64   (x N objects)
+```
+
+Verdict: the canonical kiwix-build iOS toolchain runs on this macOS host,
+needs only a space-free working dir (sparse image on the SSD), and produces
+an `ios_arm64` static libzim with xapian. This is the same machinery that
+produces the `CoreKiwix.xcframework` kiwix-apple consumes; Phase 2 can
+extend the same command to `libkiwix` (kiwix-build supports it for iOS
+configs directly).
+

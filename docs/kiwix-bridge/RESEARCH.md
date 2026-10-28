@@ -201,11 +201,15 @@ the adapter's Phase 2 work.
   dependency set.
 - libzim cross-build `aarch64-apple-ios` staticlib: **IMPLEMENTED**
   (mach-o arm64 static lib in log; no Xcode app needed this phase).
-- libkiwix for iOS via kiwix-build on this Mac: blocked by kiwix-build's
-  autoconf deps rejecting build paths containing spaces (our SSD volume is
-  "ADATA ELITE SE880"); retrying via a space-free symlink — result in
-  BUILD-EVIDENCE.md. Direct meson cross of libkiwix for iOS fails at
-  `icu-i18n` (same class as Android).
+- libkiwix for iOS via kiwix-build on this Mac: after two space-in-path
+  failures (autoconf rejects our SSD volume name; a symlink does not help
+  because the physical path is resolved), an APFS sparse image stored on the
+  SSD and mounted space-free made the **canonical kiwix-build iOS toolchain
+  work end to end**: icu4c + xapian + lzma + zstd cross-compiled, libzim
+  built/tested/installed for `ios_arm64` at our pinned commit —
+  IMPLEMENTED, full log tail in BUILD-EVIDENCE §F. Direct meson cross of
+  libkiwix for iOS still fails at `icu-i18n` (same class as Android; the
+  kiwix-build route is the answer for Phase 2).
 
 ## 5. Risks / open questions
 

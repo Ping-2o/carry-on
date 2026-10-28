@@ -1,0 +1,23 @@
+# aarch64-linux-android cross-file for libzim (NDK r27c) —
+# proven in docs/kiwix-bridge/BUILD-EVIDENCE.md §B.
+# Usage:
+#   PKG_CONFIG_PATH= meson setup build-android \
+#     --cross-file android-arm64-cross.txt \
+#     -Dwith_xapian=false -Ddefault_library=static -Dbuildtype=release \
+#     --wrap-mode=forcefallback
+#   meson configure build-android -Dzstd:bin_programs=false -Dzstd:bin_tests=false
+#   ninja -C build-android
+[binaries]
+c       = '/Volumes/ADATA ELITE SE880/compilation/android-ndk-r27c/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang'
+cpp     = '/Volumes/ADATA ELITE SE880/compilation/android-ndk-r27c/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang++'
+ar      = '/Volumes/ADATA ELITE SE880/compilation/android-ndk-r27c/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ar'
+strip   = '/Volumes/ADATA ELITE SE880/compilation/android-ndk-r27c/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-strip'
+
+[properties]
+sysroot = '/Volumes/ADATA ELITE SE880/compilation/android-ndk-r27c/toolchains/llvm/prebuilt/darwin-x86_64/sysroot'
+
+[host_machine]
+system = 'android'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
