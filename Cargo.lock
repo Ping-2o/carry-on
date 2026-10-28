@@ -133,6 +133,7 @@ version = "0.1.0"
 dependencies = [
  "carryon-adapter-api",
  "cc",
+ "rusqlite",
  "serde",
  "serde_json",
  "sha2",

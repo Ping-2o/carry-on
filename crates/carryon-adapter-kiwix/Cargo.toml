@@ -16,6 +16,7 @@ cc = "1"
 
 [dev-dependencies]
 sha2 = { workspace = true }
+rusqlite = { workspace = true }
 
 [features]
 # Real libzim backend via the C++ shim (see shim/, build.rs). Without it the
