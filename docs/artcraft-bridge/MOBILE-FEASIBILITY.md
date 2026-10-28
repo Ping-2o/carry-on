@@ -68,9 +68,53 @@ Log tail (`logs/ios-engine.log`):
 
 Artifact member check: `Mach-O 64-bit object arm64`.
 
-## 3. CLI (`photocraft-cli` binary) for both targets
+## 3. CLI (`photocraft-cli` binary) for both targets — **OBSERVED: BUILDS**
 
-Section filled after the runs finish — see §3.1/§3.2 below.
+The full headless CLI (engine + automation/MCP + tokio + clap + all codec
+features) links as a complete binary for both mobile targets.
+
+**3.1 Android** (script `build-android-cli.sh`, same NDK env as §1; log
+[`logs/android-cli.log`](logs/android-cli.log)):
+
+```text
+    Finished `dev` profile [optimized + debuginfo] target(s) in 57m 09s
+=== EXIT: 0
+```
+
+Artifact: `target/aarch64-linux-android/debug/photocraft-cli` (78 MiB) —
+`file`:
+
+```text
+ELF 64-bit LSB pie executable, ARM aarch64, dynamically linked,
+interpreter /system/bin/linker64, with debug_info, not stripped
+```
+
+That is a real Android executable (PIE, bionic loader) — untested on a
+device, but built and linked for it. A `--target aarch64-linux-android`
+build of `serve`/`mcp` is the whole Carry-On-relevant surface, no GUI needed.
+
+**3.2 iOS** (script `build-ios-cli.sh`; log
+[`logs/ios-cli.log`](logs/ios-cli.log)):
+
+```text
+    Finished `dev` profile [optimized + debuginfo] target(s) in 56m 54s
+=== EXIT: 0
+```
+
+Artifact: `target-ios/aarch64-apple-ios/debug/photocraft-cli` (267 MiB) —
+`Mach-O 64-bit executable arm64`. This is the full CLI binary, one step past
+the "staticlib is enough" bar of this phase (a lib rlib was already proven in
+§2). Note: an iOS executable still cannot ship without an Xcode app shell
+(embedded frameworks, signing, Info.plist) — that shell is exactly the missing
+piece §4 describes.
+
+Both CLI builds ran concurrently on the host (sharing cores), 57m each, ~260
+crates compiled per target including tokio/rmcp/clap and the full codec set.
+No target-specific patches were needed: **stock PhotoCraft at pin `1f7fc0f`
+cross-compiles for Android (NDK r27c, API 24) and iOS with nothing but the
+documented CC/AR/RUSTFLAGS environment** — and no C/C++ dependency required
+porting (the pure-Rust rule pays off: zstd/zlib via `zlib-rs`, blake3 `pure`,
+flate2 `runtime_detection` per the workspace `Cargo.toml`).
 
 ## 4. The GUI's mobile story — verdict
 
@@ -128,10 +172,11 @@ Evidence, layer by layer:
 What this means for Carry-On specifically (the reason this verdict matters):
 
 - A Carry-On destination on Android/iOS can embed the **headless engine**
-  (`photocraft_engine::Session`, RESEARCH §2.5) — the logs above show the
-  entire engine + dependency tree compiles for both mobile targets with
-  stock toolchains. An L3/L4 "carry the document + unsaved edits + continue
-  headless or render previews" story on mobile needs no PhotoCraft GUI.
+  (`photocraft_engine::Session`, RESEARCH §2.5) — or even run the full
+  `photocraft-cli serve`/`mcp` binary, which the logs above show **links
+  completely** for both mobile targets with stock toolchains. An L3/L4
+  "carry the document + unsaved edits + continue headless or render previews"
+  story on mobile needs no PhotoCraft GUI.
 - The **GUI-on-mobile** story would additionally need: a new app shell
   (GameActivity/Xcode project), platform services (fonts, persistence,
   input), GPU/mobile performance work, and §30 acceptance on real devices —

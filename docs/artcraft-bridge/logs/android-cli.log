@@ -1,0 +1,221 @@
+=== rustc: rustc 1.99.0 (b940084d7 2026-09-28)
+=== command: cargo build -p photocraft-cli --target aarch64-linux-android
+warning: patch `egui_demo_lib v0.37.0 (https://github.com/storytold/egui.git?rev=6d518fc799681571963842f95b55a6b68431b15a#6d518fc7)` was not used in the crate graph
+warning: patch `egui_inspection v0.37.0 (https://github.com/storytold/egui.git?rev=6d518fc799681571963842f95b55a6b68431b15a#6d518fc7)` was not used in the crate graph
+warning: patch `egui_system_font_provider v0.37.0 (https://github.com/storytold/egui.git?rev=6d518fc799681571963842f95b55a6b68431b15a#6d518fc7)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+ Downloading crates ...
+  Downloaded futures-macro v0.3.34
+  Downloaded ident_case v1.0.1
+  Downloaded fs-set-times v0.20.3
+  Downloaded futures-task v0.3.34
+  Downloaded futures-sink v0.3.34
+  Downloaded dyn-clone v1.0.20
+  Downloaded maybe-owned v0.3.4
+  Downloaded darling_macro v0.24.1
+  Downloaded io-lifetimes v3.0.1
+  Downloaded ambient-authority v0.0.2
+  Downloaded futures-io v0.3.34
+  Downloaded futures-core v0.3.34
+  Downloaded ref-cast-impl v1.0.27
+  Downloaded ref-cast v1.0.27
+  Downloaded tokio-macros v2.7.2
+  Downloaded serde_spanned v1.1.1
+  Downloaded futures-executor v0.3.34
+  Downloaded rand_core v0.10.1
+  Downloaded pastey v0.2.3
+  Downloaded rmcp-macros v3.7.0
+  Downloaded rustix-linux-procfs v0.1.1
+  Downloaded io-lifetimes v2.0.4
+  Downloaded slab v0.4.12
+  Downloaded toml_writer v1.1.2+spec-1.1.0
+  Downloaded schemars_derive v1.2.3
+  Downloaded serde_derive_internals v0.30.0
+  Downloaded cap-std v4.0.3
+  Downloaded toml_parser v1.1.3+spec-1.1.0
+  Downloaded toml_datetime v1.1.1+spec-1.1.0
+  Downloaded futures-channel v0.3.34
+  Downloaded io-extras v0.19.0
+  Downloaded ipnet v2.12.2
+  Downloaded darling v0.24.1
+  Downloaded futures v0.3.34
+  Downloaded toml v1.1.6+spec-1.1.0
+  Downloaded socket2 v0.6.5
+  Downloaded bytes v1.12.1
+  Downloaded winresource v0.1.34
+  Downloaded base64 v0.23.1
+  Downloaded cap-primitives v4.0.3
+  Downloaded darling_core v0.24.1
+  Downloaded schemars v1.2.3
+  Downloaded mio v1.2.3
+  Downloaded futures-util v0.3.34
+  Downloaded tokio-util v0.7.19
+  Downloaded rmcp v3.6.0
+  Downloaded tokio v1.54.1
+    Blocking waiting for file lock on package cache
+   Compiling serde_core v1.0.229
+   Compiling syn v3.0.6
+   Compiling syn v2.0.119
+   Compiling serde v1.0.229
+   Compiling memchr v2.8.3
+   Compiling serde_json v1.0.154
+   Compiling rustix v1.1.5
+   Compiling linux-raw-sys v0.12.1
+   Compiling futures-core v0.3.34
+   Compiling futures-sink v0.3.34
+   Compiling ident_case v1.0.1
+   Compiling io-lifetimes v2.0.4
+   Compiling strsim v0.11.1
+   Compiling io-lifetimes v3.0.1
+   Compiling futures-channel v0.3.34
+   Compiling zmij v1.0.23
+   Compiling futures-task v0.3.34
+   Compiling winnow v1.0.4
+   Compiling getrandom v0.4.3
+   Compiling slab v0.4.12
+   Compiling io-extras v0.19.0
+   Compiling ref-cast v1.0.27
+   Compiling utf8parse v0.2.2
+   Compiling futures-io v0.3.34
+   Compiling anstyle-parse v1.0.0
+   Compiling toml_parser v1.1.3+spec-1.1.0
+   Compiling socket2 v0.6.5
+   Compiling mio v1.2.3
+   Compiling anstyle v1.0.14
+   Compiling cap-primitives v4.0.3
+   Compiling anstyle-query v1.1.5
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling serde_spanned v1.1.1
+   Compiling itoa v1.0.18
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling bytes v1.12.1
+   Compiling colorchoice v1.0.5
+   Compiling toml v1.1.6+spec-1.1.0
+   Compiling anstream v1.0.0
+   Compiling rustix-linux-procfs v0.1.1
+   Compiling fs-set-times v0.20.3
+   Compiling roxmltree v0.21.1
+   Compiling clap_lex v1.1.1
+   Compiling equivalent v1.0.2
+   Compiling heck v0.5.0
+   Compiling ambient-authority v0.0.2
+   Compiling rmcp v3.6.0
+   Compiling synstructure v0.14.0
+   Compiling darling_core v0.24.1
+   Compiling serde_derive_internals v0.30.0
+   Compiling cap-std v4.0.3
+   Compiling maybe-owned v0.3.4
+   Compiling ipnet v2.12.2
+   Compiling dyn-clone v1.0.20
+   Compiling clap_builder v4.6.7
+   Compiling tempfile v3.27.0
+   Compiling indexmap v2.14.2
+   Compiling uuid v1.26.1
+   Compiling winresource v0.1.34
+   Compiling pastey v0.2.3
+   Compiling photocraft-cli v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/apps/photocraft-cli)
+   Compiling base64 v0.23.1
+   Compiling tracing-attributes v0.1.31
+   Compiling zerocopy-derive v0.8.59
+   Compiling bytemuck_derive v1.12.1
+   Compiling serde_derive v1.0.229
+   Compiling zerofrom-derive v0.1.8
+   Compiling yoke-derive v0.8.3
+   Compiling zerovec-derive v0.11.6
+   Compiling tracing v0.1.44
+   Compiling bytemuck v1.25.2
+   Compiling displaydoc v0.2.7
+   Compiling jxl-bitstream v1.1.0
+   Compiling jxl-oxide-common v1.0.0
+   Compiling jxl-grid v0.6.2
+   Compiling jxl-coding v1.0.1
+   Compiling jxl-threadpool v1.0.0
+   Compiling thiserror-impl v2.0.21
+   Compiling jxl-modular v0.11.3
+   Compiling jxl-image v0.13.0
+   Compiling font-types v0.12.5
+   Compiling num-complex v0.4.6
+   Compiling read-fonts v0.41.0
+   Compiling zerocopy v0.8.59
+   Compiling jxl-vardct v0.11.1
+   Compiling fax_derive v0.2.0
+   Compiling jxl-frame v0.13.3
+   Compiling zerofrom v0.1.8
+   Compiling yoke v0.8.3
+   Compiling zerovec v0.11.8
+   Compiling tinystr v0.8.4
+   Compiling potential_utf v0.1.6
+   Compiling zerotrie v0.2.5
+   Compiling icu_locale_core v2.3.0
+   Compiling icu_collections v2.3.0
+   Compiling icu_provider v2.3.1
+   Compiling half v2.7.1
+   Compiling icu_locale_fallback v2.3.0
+   Compiling icu_properties v2.3.0
+   Compiling photocraft-geom v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/geom)
+   Compiling photocraft-color v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/color)
+   Compiling photocraft-raster v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/raster)
+   Compiling fax v0.2.6
+   Compiling pulp v0.22.3
+   Compiling photocraft-doc v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/doc)
+   Compiling jxl-color v0.11.0
+   Compiling qoi v0.4.1
+   Compiling tiny-skia-path v0.11.4
+   Compiling image v0.25.10
+   Compiling jxl-render v0.12.4
+   Compiling tiff v0.11.3
+   Compiling thiserror v2.0.21
+   Compiling craft-jpeg v0.1.0 (https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cf)
+   Compiling parley_data v0.11.1
+   Compiling harfrust v0.12.0
+   Compiling fontique v0.11.1
+   Compiling exr v1.74.2
+   Compiling skrifa v0.44.0
+   Compiling icu_segmenter v2.3.0
+   Compiling icu_normalizer v2.3.0
+   Compiling jxl-jbr v0.2.1
+   Compiling rustybuzz v0.20.1
+   Compiling futures-macro v0.3.34
+   Compiling usvg v0.45.1
+   Compiling jxl-oxide v0.12.6
+   Compiling parley v0.11.1
+   Compiling photocraft-codecs v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/codecs)
+   Compiling photocraft-vector v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/vector)
+   Compiling futures-util v0.3.34
+   Compiling photocraft-psd v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/psd)
+   Compiling tiny-skia v0.11.4
+   Compiling chrono v0.4.45
+   Compiling rustfft v6.4.1
+   Compiling rgb v0.8.53
+   Compiling darling_macro v0.24.1
+   Compiling tokio-macros v2.7.2
+   Compiling ref-cast-impl v1.0.27
+   Compiling photocraft-algo v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/algo)
+   Compiling photocraft-format v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/format)
+   Compiling darling v0.24.1
+   Compiling resvg v0.45.1
+   Compiling photocraft-text v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/text)
+   Compiling futures-executor v0.3.34
+   Compiling photocraft-compose v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/compose)
+   Compiling photocraft-raw v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/raw)
+   Compiling photocraft-paint v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/paint)
+   Compiling tokio v1.54.1
+   Compiling schemars_derive v1.2.3
+   Compiling photocraft-io v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/io)
+   Compiling tokio-util v0.7.19
+   Compiling futures v0.3.34
+   Compiling rmcp-macros v3.7.0
+   Compiling schemars v1.2.3
+   Compiling photocraft-ops v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/ops)
+   Compiling photocraft-plugins v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/plugins)
+   Compiling clap_derive v4.6.7
+   Compiling photocraft-engine v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/engine)
+   Compiling clap v4.6.7
+   Compiling photocraft-automation v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/automation)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 57m 09s
+=== EXIT: 0
