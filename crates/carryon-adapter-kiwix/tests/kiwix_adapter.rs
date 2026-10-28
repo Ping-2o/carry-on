@@ -51,8 +51,12 @@ fn manifest_has_the_seven_typed_objects_with_right_kinds() {
         entry(&m, "kiwix.session.v1").kind,
         ObjectKindWire::Authoritative
     );
-    // The immediate-tier object is Derived (its source of truth is the ZIM)…
-    assert_eq!(entry(&m, "kiwix.article.v1").kind, ObjectKindWire::Derived);
+    // The immediate-tier object is Authoritative (sealed): first paint must
+    // ride the cut without the bulk.
+    assert_eq!(
+        entry(&m, "kiwix.article.v1").kind,
+        ObjectKindWire::Authoritative
+    );
     // …and records the lineage: parents = the ZIM bulk object.
     assert_eq!(
         entry(&m, "kiwix.article.v1").parents,
@@ -61,11 +65,9 @@ fn manifest_has_the_seven_typed_objects_with_right_kinds() {
             generation: m.generation,
         }]
     );
-    // The 80 GB object exists and is Authoritative-as-object…
-    assert_eq!(
-        entry(&m, "kiwix.zimfile.v1").kind,
-        ObjectKindWire::Authoritative
-    );
+    // Progressive: the bulk object is Cache — published with its digest but
+    // NOT sealed, so it never rides the wire cut manifest.
+    assert_eq!(entry(&m, "kiwix.zimfile.v1").kind, ObjectKindWire::Cache);
     for id in [
         "kiwix.bookmarks.v1",
         "kiwix.history.v1",
@@ -74,6 +76,18 @@ fn manifest_has_the_seven_typed_objects_with_right_kinds() {
     ] {
         assert_eq!(entry(&m, id).kind, ObjectKindWire::Authoritative, "{id}");
     }
+}
+
+#[test]
+fn full_upfront_strategy_seals_the_bulk_into_the_cut() {
+    // Strategy A: the bulk kind flips to Authoritative — the engine's
+    // mechanical "everything up front" (it seals and transfers completely).
+    let mut a = KiwixAdapter::sample().with_strategy(Strategy::FullUpFront);
+    let (_, m) = manifest_of(&mut a);
+    assert_eq!(
+        entry(&m, "kiwix.zimfile.v1").kind,
+        ObjectKindWire::Authoritative
+    );
 }
 
 #[test]

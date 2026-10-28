@@ -18,6 +18,7 @@ use serde_json::Value;
 /// | `org.carryon.graph`      | `{ "sample": true }` \| `{ "nodes":[…], "edges":[…] }`   |
 /// | `org.carryon.image`      | `{ "sample": true }` \| `{ "width":W,"height":H,"cells":[…] }` |
 /// | `org.carryon.editor`     | `{ "sample": true }` \| `{ "session":"…","text":"…" }` (L4) |
+/// | `org.carryon.kiwix`      | `{ "zim_path":"…", "article_path":"…", "scroll_y":N, "strategy":"D"\|"A" }` (feature `kiwix`) |
 /// | `org.carryon.unsupported`| `{}`                                                     |
 pub fn build_adapter(adapter_id: &str, params: &Value) -> Result<Box<dyn Adapter>, CoreError> {
     use carryon_core::error::{AdapterCode, SchemaCode};
@@ -157,6 +158,52 @@ pub fn build_adapter(adapter_id: &str, params: &Value) -> Result<Box<dyn Adapter
             }
         }
         "org.carryon.unsupported" => Ok(Box::new(carryon_adapter_unsupported::UnsupportedAdapter)),
+        #[cfg(feature = "kiwix")]
+        "org.carryon.kiwix" => {
+            // Kiwix reading session over a real ZIM (mobile-mass flagship).
+            //   { "zim_path": "/abs/foo.zim", "article_path": "…", "scroll_y": N,
+            //     "strategy": "D"|"A" }
+            // Both machines must hold the same ZIM file (the adapter opens it
+            // locally; the cut carries only the session identity + position +
+            // current article — see crates/carryon-adapter-kiwix).
+            use carryon_adapter_kiwix::{KiwixAdapter, Strategy};
+            let path = params
+                .get("zim_path")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| bad("kiwix adapter needs 'zim_path'"))?;
+            let article = params
+                .get("article_path")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| bad("kiwix adapter needs 'article_path'"))?;
+            let scroll = params
+                .get("scroll_y")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let strategy = match params.get("strategy").and_then(|v| v.as_str()) {
+                None | Some("D") | Some("progressive") => Strategy::Progressive,
+                Some("A") | Some("full") => Strategy::FullUpFront,
+                Some(other) => {
+                    return Err(bad(&format!(
+                        "kiwix strategy '{other}' (use \"D\" or \"A\")"
+                    )))
+                }
+            };
+            let session = params
+                .get("session")
+                .and_then(|v| v.as_str())
+                .unwrap_or("kiwix-session");
+            let a = KiwixAdapter::from_zim(session, path, article, scroll)
+                .map_err(|e| bad(&format!("kiwix adapter: {e}")))?
+                .with_strategy(strategy);
+            Ok(Box::new(a))
+        }
+        #[cfg(not(feature = "kiwix"))]
+        "org.carryon.kiwix" => Err(CoreError::adapter(
+            AdapterCode::Missing,
+            "adapter id 'org.carryon.kiwix' exists but was NOT compiled in \
+             (rebuild carryon-ffi with --features kiwix)"
+                .to_string(),
+        )),
         other => Err(CoreError::adapter(
             AdapterCode::Missing,
             format!("unknown adapter id '{other}' (not a compiled-in adapter)"),

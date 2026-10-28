@@ -13,12 +13,21 @@
 //! | object                  | kind          | dependency role        | why |
 //! |-------------------------|---------------|------------------------|-----|
 //! | `kiwix.session.v1`      | Authoritative | prerequisite           | {zim identity, current article, scroll, tab} — "the same session" |
-//! | `kiwix.article.v1`      | Derived       | prerequisite (immediate tier) | first paint without the 80 GB; parents = zimfile |
-//! | `kiwix.zimfile.v1`      | Authoritative | optional — bulk, on demand | the L1 content object; served chunked, never shipped wholesale |
+//! | `kiwix.article.v1`      | Authoritative | prerequisite (immediate tier) | first paint without the 80 GB; parents = zimfile |
+//! | `kiwix.zimfile.v1`      | Cache (D) / Authoritative (A) | optional — bulk, on demand | the L1 content object; served chunked, never shipped wholesale in progressive mode |
 //! | `kiwix.bookmarks.v1`    | Authoritative | optional               | user data, non-blocking |
 //! | `kiwix.history.v1`      | Authoritative | optional               | user data, non-blocking |
 //! | `kiwix.settings.v1`     | Authoritative | optional               | zoom/theme subset |
 //! | `kiwix.meta.v1`         | Authoritative | prerequisite + provenance | schema/version identity |
+//!
+//! Engine-mechanical note (Phase-3 correction, verified against
+//! `crates/carryon-core/src/prepare.rs` + `transfer.rs`): only **sealed
+//! Authoritative** objects ride the wire cut manifest — the kind, not the
+//! dependency plan, is what defers the bulk. In progressive (D) mode the
+//! bulk is declared `Cache` (published locally with its streaming sha256,
+//! never sealed); in full-up-front (A) mode it is declared `Authoritative`
+//! so it seals and transfers completely — exactly the bench's A-vs-D
+//! distinction, over the same machinery.
 //!
 //! **L4 authority** (§21.2) binds to the hash over the mutable authoritative
 //! state (session ∪ bookmarks ∪ history ∪ settings) — the reading position,
@@ -137,6 +146,20 @@ pub struct Session {
     pub settings: ReadingSettings,
 }
 
+/// Transfer strategy for the bulk object (the bench's A-vs-D distinction,
+/// expressed through the engine's actual sealing rule — see the module docs).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Strategy {
+    /// Progressive: the bulk object is `Cache` — published locally with its
+    /// streaming sha256, never sealed, so it stays OUT of the wire cut
+    /// manifest and transfers on demand. This is the flagship mode.
+    #[default]
+    Progressive,
+    /// Full up front: the bulk object is `Authoritative`, sealing into the
+    /// cut and forcing a complete transfer before the first action.
+    FullUpFront,
+}
+
 /// A Kiwix reading session over one structured session + optional ZIM bulk.
 ///
 /// The optional `zim_bytes` is the Phase-1 **stand-in** for the libzim backend:
@@ -162,6 +185,8 @@ pub struct KiwixAdapter {
     #[cfg(feature = "zim-backend")]
     zim_source: Option<ZimSource>,
     generation: u64,
+    /// Transfer strategy for the bulk object (sealing behavior).
+    strategy: Strategy,
     /// Set between `prepare_authority_transfer` and its commit/abort.
     pending: Option<PendingTransfer>,
 }
@@ -217,8 +242,15 @@ impl KiwixAdapter {
             #[cfg(feature = "zim-backend")]
             zim_source: None,
             generation: 1,
+            strategy: Strategy::default(),
             pending: None,
         }
+    }
+
+    /// Set the bulk-transfer strategy (Progressive by default).
+    pub fn with_strategy(mut self, strategy: Strategy) -> Self {
+        self.strategy = strategy;
+        self
     }
 
     /// The real backend (feature `zim-backend`): open a real `.zim` file with
@@ -475,14 +507,19 @@ impl KiwixAdapter {
     }
 
     fn all_entries(&self) -> Vec<ObjectEntry> {
+        // Engine rule (prepare.rs): only sealed Authoritative objects ride the
+        // wire cut manifest. The bulk kind IS the strategy:
+        //   Progressive  => Cache (published, digest-declared, never sealed)
+        //   FullUpFront  => Authoritative (seals; transfers completely)
+        let bulk_kind = match self.strategy {
+            Strategy::Progressive => ObjectKindWire::Cache,
+            Strategy::FullUpFront => ObjectKindWire::Authoritative,
+        };
         vec![
             self.entry(SCHEMA_SESSION, ObjectKindWire::Authoritative),
-            // Derived (from the ZIM), but the immediate-tier object: first
-            // paint without the 80 GB.
-            self.entry(SCHEMA_ARTICLE, ObjectKindWire::Derived),
-            // The L1 content object: Authoritative as an object, OPTIONAL as a
-            // dependency (§6.6) — the whole point of this flagship.
-            self.entry(SCHEMA_ZIMFILE, ObjectKindWire::Authoritative),
+            // The immediate-tier object: first paint without the 80 GB.
+            self.entry(SCHEMA_ARTICLE, ObjectKindWire::Authoritative),
+            self.entry(SCHEMA_ZIMFILE, bulk_kind),
             self.entry(SCHEMA_BOOKMARKS, ObjectKindWire::Authoritative),
             self.entry(SCHEMA_HISTORY, ObjectKindWire::Authoritative),
             self.entry(SCHEMA_SETTINGS, ObjectKindWire::Authoritative),
@@ -490,6 +527,14 @@ impl KiwixAdapter {
         ]
     }
 
+    /// Declared streaming sha256 of the bulk object (real backend only).
+    pub fn zim_bulk_digest(&self) -> Option<String> {
+        #[cfg(feature = "zim-backend")]
+        if let Some(src) = &self.zim_source {
+            return Some(src.bulk_digest.clone());
+        }
+        self.zim_bytes.as_ref().map(|b| hex_sha256(b))
+    }
     /// Declared (digest, size) of the bulk object, never whole-reading it.
     fn bulk_declared(&self) -> (String, u64) {
         #[cfg(feature = "zim-backend")]

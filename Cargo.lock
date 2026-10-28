@@ -132,6 +132,7 @@ name = "carryon-adapter-kiwix"
 version = "0.1.0"
 dependencies = [
  "carryon-adapter-api",
+ "carryon-net",
  "cc",
  "rusqlite",
  "serde",
@@ -198,6 +199,7 @@ dependencies = [
  "carryon-adapter-file",
  "carryon-adapter-graph",
  "carryon-adapter-image",
+ "carryon-adapter-kiwix",
  "carryon-adapter-launcher",
  "carryon-adapter-unsupported",
  "carryon-core",

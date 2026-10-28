@@ -19,6 +19,7 @@ carryon-adapter-graph = { path = "../carryon-adapter-graph" }
 carryon-adapter-image = { path = "../carryon-adapter-image" }
 carryon-adapter-editor = { path = "../carryon-adapter-editor" }
 carryon-adapter-unsupported = { path = "../carryon-adapter-unsupported" }
+carryon-adapter-kiwix = { path = "../carryon-adapter-kiwix", optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
@@ -27,6 +28,10 @@ uuid = { workspace = true }
 # Enables a test-only entry point that deliberately panics, to prove the catch_unwind
 # boundary returns an error code instead of aborting the process (§8.1).
 test-panic = []
+# Compiles in the Kiwix adapter (`org.carryon.kiwix`) over the libzim C backend.
+# Off by default: it adds the libzim link surface, which the other adapters do
+# not have. Enabled explicitly for the kiwix device shells.
+kiwix = ["dep:carryon-adapter-kiwix"]
 
 [dev-dependencies]
 tempfile = { workspace = true }
