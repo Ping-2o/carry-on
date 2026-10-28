@@ -1,0 +1,26 @@
+=== kiwix_measure (LOCAL, real object bytes through read_object) ===
+zim = /private/var/folders/bf/h1qkc_4s2xqfxh4q2xk4wtg40000gn/T/opencode/kiwix/capture/wikipedia_ru_mathematics_mini_2026-10.zim
+article = index
+
+strategy A (everything up front):
+   kiwix.session.v1                  400
+   kiwix.article.v1                30723
+   kiwix.zimfile.v1             27010448
+   kiwix.bookmarks.v1                  2
+   kiwix.history.v1                    2
+   kiwix.settings.v1                  34
+   kiwix.meta.v1                      82
+   bytes_before_first_action = 27041691
+
+strategy D (prerequisites only):
+   kiwix.session.v1                  400  sha256=211709577368fd7b476792ec421a64a9bae9c3b0776837ccb1533ef4f3c31329
+   kiwix.article.v1                30723  sha256=795cdfcd45285b3432ab3668d2d76a77a52a182eb600a257e707a79d6404bede
+   kiwix.meta.v1                      82  sha256=2c677805a9ea5b00a4f0ecc56274c1af41fe980b298b501d5794b2c9657ceb28
+   bytes_before_first_action = 31205
+   deferred (optional, on demand): kiwix.zimfile.v1 (27010448 B), kiwix.bookmarks.v1 (2 B), kiwix.history.v1 (2 B), kiwix.settings.v1 (34 B)
+
+D/A ratio            = 0.001154 (0.1154%)
+D < 50% of A         = true
+first paint from article object alone (no ZIM) = true
+A/D asymmetry factor = 866.6x
+MEASURE_OK

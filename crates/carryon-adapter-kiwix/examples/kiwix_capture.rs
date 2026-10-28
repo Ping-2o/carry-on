@@ -27,9 +27,7 @@
 //! `opaque_platform_state` but do NOT interpret it: the portable truth is
 //! {article path, scrollY}, which the app persists separately.
 
-use carryon_adapter_kiwix::{
-    HistoryEntry, ReadingPosition, ReadingSettings, Session, ZimIdentity,
-};
+use carryon_adapter_kiwix::{HistoryEntry, ReadingPosition, ReadingSettings, Session, ZimIdentity};
 
 // ---------------- session preferences (DataStore protobuf OR legacy prefs XML)
 
@@ -314,7 +312,9 @@ fn main() {
         None => {
             eprintln!("usage: kiwix_capture <session_prefs> <KiwixRoom.db> [zim_path_override]");
             eprintln!("  <session_prefs>: kiwix-mobile.xml (SharedPreferences, v3.14.1 release)");
-            eprintln!("                    or kiwix_datastore_preferences.preferences_pb (repo HEAD)");
+            eprintln!(
+                "                    or kiwix_datastore_preferences.preferences_pb (repo HEAD)"
+            );
             std::process::exit(2);
         }
     };
@@ -385,7 +385,10 @@ fn main() {
             std::process::exit(1);
         }
     };
-    eprintln!("CAPTURED zim identity from real file: uuid={} size={}", info.uuid, info.filesize);
+    eprintln!(
+        "CAPTURED zim identity from real file: uuid={} size={}",
+        info.uuid, info.filesize
+    );
 
     // 3. Room DB: the tab state for THIS zim (zimId == uuid, ZimFileReader.kt:136)
     //    and the most recent history row (the app's own "current article").
@@ -439,9 +442,9 @@ fn main() {
         .unwrap_or(&hist_url)
         .to_string();
     let decoded_path = percent_decode(&raw_path);
-    report
-        .fallbacks
-        .push(format!("article path from the app's own HistoryRoomEntity: {decoded_path}"));
+    report.fallbacks.push(format!(
+        "article path from the app's own HistoryRoomEntity: {decoded_path}"
+    ));
 
     // The article bytes: read from the real ZIM (prerequisite/immediate tier).
     // Try the decoded path, then the raw one (fail closed if neither resolves).
@@ -452,12 +455,10 @@ fn main() {
             std::process::exit(1);
         }
     };
-    let article_bytes = item
-        .read_range(0, item.size())
-        .unwrap_or_else(|e| {
-            eprintln!("FAIL read article: {e}");
-            std::process::exit(1);
-        });
+    let article_bytes = item.read_range(0, item.size()).unwrap_or_else(|e| {
+        eprintln!("FAIL read article: {e}");
+        std::process::exit(1);
+    });
 
     // The saveState bundle: opaque Parcel blob — carried, not interpreted.
     report.dropped.push(format!(
@@ -484,17 +485,16 @@ fn main() {
             article_title: hist_title,
             scroll_y: scroll_y.max(0) as u64,
             tab_index: report.current_tab.unwrap_or(tab_index_room).max(0) as u32,
-            opaque_platform_state: bundle
-                .map(|b| {
-                    // hex (self-describing length; base64 also fine — the
-                    // field is opaque either way)
-                    use std::fmt::Write as _;
-                    let mut s = String::with_capacity(b.len() * 2);
-                    for byte in &b {
-                        let _ = write!(s, "{byte:02x}");
-                    }
-                    s
-                }),
+            opaque_platform_state: bundle.map(|b| {
+                // hex (self-describing length; base64 also fine — the
+                // field is opaque either way)
+                use std::fmt::Write as _;
+                let mut s = String::with_capacity(b.len() * 2);
+                for byte in &b {
+                    let _ = write!(s, "{byte:02x}");
+                }
+                s
+            }),
         },
         bookmarks: Vec::new(), // Bookmarks live in libkiwix XML on Android; see report.
         history: vec![HistoryEntry {
@@ -508,9 +508,9 @@ fn main() {
             theme: report.theme.clone().unwrap_or_else(|| "system".into()),
         },
     };
-    report
-        .dropped
-        .push("bookmarks: stored by the app in libkiwix XML (not Room) — not captured in Phase 2".into());
+    report.dropped.push(
+        "bookmarks: stored by the app in libkiwix XML (not Room) — not captured in Phase 2".into(),
+    );
 
     // Honest capture report.
     eprintln!("--- capture report ---");
@@ -519,7 +519,10 @@ fn main() {
     eprintln!("scrollY        = {:?}", report.scroll_y);
     eprintln!("article (history table) = {:?}", report.history_article);
     eprintln!("article bytes  = {}", article_bytes.len());
-    eprintln!("settings       = zoom={:?} theme={:?}", report.text_zoom, report.theme);
+    eprintln!(
+        "settings       = zoom={:?} theme={:?}",
+        report.text_zoom, report.theme
+    );
     for d in &report.dropped {
         eprintln!("DROPPED: {d}");
     }

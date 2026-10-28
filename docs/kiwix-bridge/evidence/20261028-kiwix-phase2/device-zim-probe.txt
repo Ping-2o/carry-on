@@ -1,0 +1,11 @@
+uuid=e648a210-47dd-5898-33e1-88f16a0ec2c8
+title=Математика по Википедии
+filesize=27010448
+entry_count=31559
+main_path=index
+header_magic=ZIM\x04
+article_path=index
+article_title=Main Page
+article_size=30723
+article_sha256=795cdfcd45285b3432ab3668d2d76a77a52a182eb600a257e707a79d6404bede
+PROBE_OK
