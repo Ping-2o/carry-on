@@ -114,6 +114,24 @@ fn main() {
             article_hash_a = digest;
         }
     }
+    // The ZIM bulk travels in strategy A even when it is NOT a manifest
+    // object (real libraries exceed the core's 16 MiB entry cap — it is an L1
+    // object; see all_entries). Move it through the same chunk path.
+    let bulk_size = adapter.zim_bulk_size();
+    let bulk_in_manifest = manifest
+        .objects
+        .iter()
+        .any(|o| o.object_id == "kiwix.zimfile.v1");
+    if !bulk_in_manifest && bulk_size > 0 {
+        let (moved, digest) =
+            move_object(&adapter, &token, "kiwix.zimfile.v1", bulk_size)
+                .expect("strategy A bulk move");
+        a_bytes += moved;
+        a_detail.push(format!(
+            "{:<24} {:>12}  sha256={digest}",
+            "kiwix.zimfile.v1", moved
+        ));
+    }
 
     // ---- Strategy D: move prerequisites only -----------------------------
     let mut d_bytes = 0u64;
@@ -137,12 +155,16 @@ fn main() {
                 .expect("article bytes");
         }
     }
-    let deferred: Vec<String> = manifest
+    let mut deferred: Vec<String> = manifest
         .objects
         .iter()
         .filter(|o| optional.contains(&o.object_id) && o.logical_size > 0)
         .map(|o| format!("{} ({} B)", o.object_id, o.logical_size))
         .collect();
+    // The bulk is deferred in D even when it is not a manifest object.
+    if !bulk_in_manifest && bulk_size > 0 {
+        deferred.insert(0, format!("kiwix.zimfile.v1 ({bulk_size} B, L1 object)"));
+    }
 
     // ---- Destination-side reconstruction from D bytes ALONE ----------------
     // No ZIM: the article object alone must reproduce the manifest digest.

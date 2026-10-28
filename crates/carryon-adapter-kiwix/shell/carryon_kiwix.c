@@ -295,7 +295,7 @@ static int do_dest(const char *id_dir, const char *data_dir, const char *peer_ad
     CHECK(carryon_mirror_session_id(remote_session, &mirror), "mirror_session_id");
     char cut_ref[512];
     snprintf(cut_ref, sizeof(cut_ref),
-             "{\"session\":\"%s\",\"cut_number\":%llu}", mirror,
+             "{\"session\":\"%s\",\"number\":%llu}", mirror,
              (unsigned long long)cut_num);
     char *result = NULL;
     CHECK(carryon_execute_action_as(
@@ -335,13 +335,23 @@ static int do_dest(const char *id_dir, const char *data_dir, const char *peer_ad
     printf("dest: NAVIGATE %s\n", result);
     carryon_string_free(result);
 
-    char *result2 = NULL;
-    CHECK(carryon_execute_action_as(
-              core, cut_ref,
-              "{\"class\":\"reader.restore\",\"params\":{}}", KIWIX_ID, &result2),
-          "reader.restore(after navigate)");
-    printf("dest: RESTORE-AFTER-NAVIGATE %s\n", result2);
-    carryon_string_free(result2);
+    /* Bonus fail-closed proof: acting at the OLD cut after the position moved
+     * must be refused — the cut sealed generation 1, navigate produced 2.
+     * The engine's stale-cut discipline is part of the story, so record the
+     * refusal as an informational line, not an error. */
+    int rc2 = carryon_execute_action_as(
+        core, cut_ref,
+        "{\"class\":\"reader.restore\",\"params\":{}}", KIWIX_ID, &result);
+    if (rc2 == CARRYON_OK) {
+        printf("dest: RESTORE-AT-OLD-CUT unexpectedly ok: %s\n", result);
+        carryon_string_free(result);
+    } else {
+        uint8_t eb[1024];
+        size_t el = sizeof(eb);
+        carryon_last_error(eb, &el);
+        printf("dest: RESTORE-AT-OLD-CUT refused (expected — stale cut): rc=%d %.*s\n",
+               rc2, (int)el, eb);
+    }
 
     print_wire("dest(final)", sess);
     printf("dest: OK — authoritative owner; position moved on-device\n");

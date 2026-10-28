@@ -68,8 +68,11 @@ const SCHEMA_SETTINGS: &str = "kiwix.settings.v1";
 const SCHEMA_META: &str = "kiwix.meta.v1";
 const ADAPTER_ID: &str = "org.carryon.kiwix";
 
-/// Identity of the open ZIM. Bytes of the file itself are the optional-bulk
-/// `kiwix.zimfile.v1` object; this is only the pointer.
+/// Identity of the open ZIM. The ZIM file itself is an L1 content object that
+/// lives OUTSIDE the engine's cut machinery (the core caps cut objects at
+/// `CORE_MAX_OBJECT_BYTES` = 16 MiB — `carryon-core/src/host.rs`; an 80 GB
+/// library can never be a cut object). The session carries its
+/// digest-addressed reference instead: uuid + size + whole-file sha256.
 /// RESEARCH §2.2: `zim::Archive` exposes uuid/size/filename for this binding.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ZimIdentity {
@@ -79,6 +82,10 @@ pub struct ZimIdentity {
     pub filename: String,
     /// Logical archive size — `Archive::getFilesize()`.
     pub size: u64,
+    /// Whole-file sha256 of the ZIM (streaming-computed at capture time).
+    /// Addresses the bulk for on-demand chunk transfer; empty = unknown
+    /// (adapter cannot then serve it — fail closed).
+    pub bulk_sha256: String,
 }
 
 /// The current reading position — the heart of the session. Field names mirror
@@ -311,6 +318,7 @@ impl KiwixAdapter {
                 uuid: info.uuid.clone(),
                 filename: zim_path.to_string(),
                 size: info.filesize,
+                bulk_sha256: bulk_digest.clone(),
             },
             position: ReadingPosition {
                 article_path: resolved_path,
@@ -373,6 +381,7 @@ impl KiwixAdapter {
                 uuid: "6fed4307-f6ff-4bb9-8bc3-8bf4ac9d5df2".into(),
                 filename: "wikipedia_en_all_maxi.zim".into(),
                 size: 98_765_432_109, // ~92 GB stand-in for the byte math
+                bulk_sha256: "ab".repeat(32), // plausible stand-in digest
             },
             position: ReadingPosition {
                 article_path: "A/Continuation_passing_style".into(),
@@ -446,13 +455,40 @@ impl KiwixAdapter {
         }
     }
 
+    /// Bytes of the PORTABLE authoritative state for hashing: the ZIM
+    /// identity by {uuid, size, bulk_sha256} — the local `filename` and any
+    /// platform blob are machine-local storage details and are EXCLUDED, so
+    /// two machines holding the same ZIM at different local paths derive the
+    /// same hash (§21.2 requires the destination to re-derive and agree).
+    fn portable_state_bytes(&self) -> Vec<u8> {
+        serde_json::to_vec(&serde_json::json!({
+            "zim": {
+                "uuid": self.state.zim.uuid,
+                "size": self.state.zim.size,
+                "bulk_sha256": self.state.zim.bulk_sha256,
+            },
+            "position": {
+                "article_path": self.state.position.article_path,
+                "article_title": self.state.position.article_title,
+                "scroll_y": self.state.position.scroll_y,
+                "tab_index": self.state.position.tab_index,
+                "opaque_platform_state": self.state.position.opaque_platform_state,
+            },
+            "bookmarks": self.state.bookmarks,
+            "history": self.state.history,
+            "settings": self.state.settings,
+        }))
+        .expect("serialize portable state")
+    }
+
     /// Hash over the mutable authoritative state (session ∪ bookmarks ∪
-    /// history ∪ settings), length-prefixed and ordered. The ZIM and the
-    /// article are excluded (immutable / derived).
+    /// history ∪ settings), length-prefixed and ordered, over PORTABLE fields
+    /// only (see portable_state_bytes). The ZIM and the article are excluded
+    /// (immutable / derived).
     fn auth_hash(&self) -> String {
         let mut h = Sha256::new();
         for bytes in [
-            self.session_bytes(),
+            self.portable_state_bytes(),
             self.bookmarks_bytes(),
             self.history_bytes(),
             self.settings_bytes(),
@@ -508,23 +544,47 @@ impl KiwixAdapter {
 
     fn all_entries(&self) -> Vec<ObjectEntry> {
         // Engine rule (prepare.rs): only sealed Authoritative objects ride the
-        // wire cut manifest. The bulk kind IS the strategy:
-        //   Progressive  => Cache (published, digest-declared, never sealed)
-        //   FullUpFront  => Authoritative (seals; transfers completely)
+        // wire cut manifest, and every manifest entry is capped at
+        // CORE_MAX_OBJECT_BYTES = 16 MiB. The ZIM bulk therefore has TWO
+        // regimes:
+        //   - bulk <= cap (small ZIM, attached test bytes): declared as a
+        //     `Cache` object (Progressive) or `Authoritative` (FullUpFront)
+        //     so the bench's A/D distinction works through the engine;
+        //   - bulk >  cap (real 27 MB … 80 GB libraries): NOT a cut object at
+        //     all — the L1 content moves outside the cut machinery, carried
+        //     digest-addressed by the session object (uuid+size+sha256) and
+        //     served on demand by the materializer at the transport level
+        //     (see examples/kiwix_materialize.rs). Fail-closed alternative
+        //     (declaring it anyway) would be rejected by validate_entry.
+        const CORE_MAX_OBJECT_BYTES: u64 = 16 * 1024 * 1024;
+        let (bulk_digest, bulk_size) = self.bulk_declared();
         let bulk_kind = match self.strategy {
             Strategy::Progressive => ObjectKindWire::Cache,
             Strategy::FullUpFront => ObjectKindWire::Authoritative,
         };
-        vec![
+        let mut objects = vec![
             self.entry(SCHEMA_SESSION, ObjectKindWire::Authoritative),
             // The immediate-tier object: first paint without the 80 GB.
             self.entry(SCHEMA_ARTICLE, ObjectKindWire::Authoritative),
-            self.entry(SCHEMA_ZIMFILE, bulk_kind),
             self.entry(SCHEMA_BOOKMARKS, ObjectKindWire::Authoritative),
             self.entry(SCHEMA_HISTORY, ObjectKindWire::Authoritative),
             self.entry(SCHEMA_SETTINGS, ObjectKindWire::Authoritative),
             self.entry(SCHEMA_META, ObjectKindWire::Authoritative),
-        ]
+        ];
+        // The bulk is declared as a cut object only when it is genuinely
+        // servable (digest known, non-empty) AND fits the core's entry cap.
+        if !bulk_digest.is_empty() && bulk_size > 0 && bulk_size <= CORE_MAX_OBJECT_BYTES {
+            objects.insert(2, self.entry(SCHEMA_ZIMFILE, bulk_kind));
+        }
+        objects
+    }
+
+    /// True when the bulk object is declared in the manifest (see
+    /// [`Self::all_entries`]). Plans reference it only then.
+    fn bulk_is_declared(&self) -> bool {
+        const CORE_MAX_OBJECT_BYTES: u64 = 16 * 1024 * 1024;
+        let (digest, size) = self.bulk_declared();
+        !digest.is_empty() && size > 0 && size <= CORE_MAX_OBJECT_BYTES
     }
 
     /// Declared streaming sha256 of the bulk object (real backend only).
@@ -591,10 +651,12 @@ impl Adapter for KiwixAdapter {
             supports_snapshot: true,
             supports_mutations: true,
             supports_authority_transfer: true,
-            // The ZIM bulk object can be far larger than the reference
-            // editor's 16 MiB cap; the core's budget admission (TARGETS #5) is
-            // what bounds what actually moves.
-            max_object_bytes: 1 << 40,
+            // The engine caps cut objects at CORE_MAX_OBJECT_BYTES = 16 MiB
+            // (carryon-core/src/host.rs); declaring more fails registration.
+            // The 80 GB ZIM bulk is deliberately NOT a cut object — it travels
+            // as an L1 content object outside the cut, digest-addressed by
+            // the session object (see all_entries).
+            max_object_bytes: 16 * 1024 * 1024,
         }
     }
 
@@ -692,39 +754,62 @@ impl Adapter for KiwixAdapter {
             // without the ZIM. Bookmarks/history/settings/ZIM bulk are all
             // optional (§6.6): they improve latency or completeness, not
             // correctness of the restore.
-            "reader.restore" => Ok(DependencyPlanWire {
-                prerequisites: vec![
-                    self.version(SCHEMA_SESSION),
-                    self.version(SCHEMA_ARTICLE),
-                    self.version(SCHEMA_META),
-                ],
-                provenance: vec![self.version(SCHEMA_META)],
-                optional: vec![
+            "reader.restore" => {
+                // Prerequisites are fixed; the bulk joins the optional tier
+                // only when it is declared in the manifest (see
+                // bulk_is_declared — above the core's entry cap it travels
+                // as an L1 object outside the cut instead).
+                let mut optional = vec![
                     self.version(SCHEMA_SETTINGS),
                     self.version(SCHEMA_BOOKMARKS),
                     self.version(SCHEMA_HISTORY),
-                    self.version(SCHEMA_ZIMFILE),
-                ],
-            }),
+                ];
+                if self.bulk_is_declared() {
+                    optional.push(self.version(SCHEMA_ZIMFILE));
+                }
+                Ok(DependencyPlanWire {
+                    prerequisites: vec![
+                        self.version(SCHEMA_SESSION),
+                        self.version(SCHEMA_ARTICLE),
+                        self.version(SCHEMA_META),
+                    ],
+                    provenance: vec![self.version(SCHEMA_META)],
+                    optional,
+                })
+            }
             // Mutating (L4): move the reading position. Needs the session +
             // meta only; everything else is optional.
-            "reader.navigate" => Ok(DependencyPlanWire {
-                prerequisites: vec![self.version(SCHEMA_SESSION), self.version(SCHEMA_META)],
-                provenance: vec![self.version(SCHEMA_META)],
-                optional: vec![
+            "reader.navigate" => {
+                let mut optional = vec![
                     self.version(SCHEMA_ARTICLE),
                     self.version(SCHEMA_HISTORY),
-                    self.version(SCHEMA_ZIMFILE),
-                ],
-            }),
+                ];
+                if self.bulk_is_declared() {
+                    optional.push(self.version(SCHEMA_ZIMFILE));
+                }
+                Ok(DependencyPlanWire {
+                    prerequisites: vec![
+                        self.version(SCHEMA_SESSION),
+                        self.version(SCHEMA_META),
+                    ],
+                    provenance: vec![self.version(SCHEMA_META)],
+                    optional,
+                })
+            }
             // Optional bulk: materialize ZIM byte ranges locally so libzim
             // can open the file natively (RESEARCH §2.2). The core's budget
             // admission refuses over-budget imports before bytes move.
-            "library.materialize" => Ok(DependencyPlanWire {
-                prerequisites: vec![self.version(SCHEMA_META)],
-                provenance: vec![self.version(SCHEMA_META)],
-                optional: vec![self.version(SCHEMA_ZIMFILE)],
-            }),
+            "library.materialize" => {
+                let mut optional = Vec::new();
+                if self.bulk_is_declared() {
+                    optional.push(self.version(SCHEMA_ZIMFILE));
+                }
+                Ok(DependencyPlanWire {
+                    prerequisites: vec![self.version(SCHEMA_META)],
+                    provenance: vec![self.version(SCHEMA_META)],
+                    optional,
+                })
+            }
             other => Err(AdapterError::ActionUnsupported(other.into())),
         }
     }

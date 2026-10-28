@@ -82,6 +82,52 @@ fn chunked_article_reads_reassemble_to_full_item() {
 }
 
 #[test]
+fn authority_transfers_across_machines_when_the_local_zim_path_differs() {
+    // §21.2: the destination re-derives the proposal hash from ITS OWN state.
+    // Two machines hold the SAME ZIM at DIFFERENT local paths — the portable
+    // state (uuid+size+sha256, position) must agree even though the session
+    // object's `filename` differs. Fail closed on mismatch would otherwise
+    // make every real cross-machine transfer impossible.
+    let Some(path_a) = test_zim() else { return };
+    let path_b = std::env::var("CARRYON_KIWIX_TEST_ZIM_ALT").ok();
+    let Some(path_b) = path_b else {
+        eprintln!(
+            "SKIP: set CARRYON_KIWIX_TEST_ZIM_ALT to a second copy/path of the same \
+             ZIM to exercise the cross-path authority case"
+        );
+        return;
+    };
+    assert!(
+        std::path::Path::new(&path_b).exists(),
+        "CARRYON_KIWIX_TEST_ZIM_ALT={path_b} does not exist — refusing to fake a pass"
+    );
+
+    let cut = CutRef {
+        session: "s".into(),
+        cut_number: 1,
+    };
+    let mut source = KiwixAdapter::from_zim("x", &path_a, "index", 500)
+        .expect("from_zim at path A");
+    let mut dest = KiwixAdapter::from_zim("x", &path_b, "index", 500)
+        .expect("from_zim at path B");
+    // The local paths differ but the identity must not.
+    assert_ne!(source.state().zim.filename, dest.state().zim.filename);
+    assert_eq!(source.state().zim.uuid, dest.state().zim.uuid);
+    assert_eq!(source.state().zim.bulk_sha256, dest.state().zim.bulk_sha256);
+
+    let proposal = source
+        .prepare_authority_transfer(&cut)
+        .expect("prepare at path A");
+    let receipt = dest
+        .accept_authority_transfer(&cut, &proposal)
+        .expect("accept at path B — portable hash must agree across paths");
+    let relinquish = source
+        .commit_authority_transfer("p", &receipt)
+        .expect("commit");
+    assert!(relinquish.starts_with("relinquish:"));
+}
+
+#[test]
 fn unknown_entry_fails_closed() {
     let Some(path) = test_zim() else { return };
     let arch = zim_backend::ZimArchive::open(&path).expect("open");

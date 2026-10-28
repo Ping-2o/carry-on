@@ -43,14 +43,16 @@ fn entry<'a>(m: &'a ObjectManifest, id: &str) -> &'a ObjectEntry {
 }
 
 #[test]
-fn manifest_has_the_seven_typed_objects_with_right_kinds() {
+fn manifest_kinds_respect_the_core_entry_cap() {
+    // No bulk attached: the bulk object is NOT declared at all (nothing to
+    // serve — an empty-digest entry would fail the core's validate_entry).
     let mut adapter = KiwixAdapter::sample();
     let (_, m) = manifest_of(&mut adapter);
-
-    assert_eq!(
-        entry(&m, "kiwix.session.v1").kind,
-        ObjectKindWire::Authoritative
-    );
+    assert!(m
+        .objects
+        .iter()
+        .all(|o| o.object_id != "kiwix.zimfile.v1"));
+    assert_eq!(entry(&m, "kiwix.session.v1").kind, ObjectKindWire::Authoritative);
     // The immediate-tier object is Authoritative (sealed): first paint must
     // ride the cut without the bulk.
     assert_eq!(
@@ -65,9 +67,6 @@ fn manifest_has_the_seven_typed_objects_with_right_kinds() {
             generation: m.generation,
         }]
     );
-    // Progressive: the bulk object is Cache — published with its digest but
-    // NOT sealed, so it never rides the wire cut manifest.
-    assert_eq!(entry(&m, "kiwix.zimfile.v1").kind, ObjectKindWire::Cache);
     for id in [
         "kiwix.bookmarks.v1",
         "kiwix.history.v1",
@@ -76,13 +75,27 @@ fn manifest_has_the_seven_typed_objects_with_right_kinds() {
     ] {
         assert_eq!(entry(&m, id).kind, ObjectKindWire::Authoritative, "{id}");
     }
+
+    // Bulk attached (under the core's 16 MiB entry cap): declared as Cache
+    // in Progressive mode.
+    let mut with_bulk = KiwixAdapter::sample().with_zim_bytes(vec![7u8; 4096]);
+    let (_, m) = manifest_of(&mut with_bulk);
+    assert_eq!(entry(&m, "kiwix.zimfile.v1").kind, ObjectKindWire::Cache);
+
+    // Bulk above the cap: NOT declared (L1 object outside the cut instead).
+    let big = vec![9u8; (16 * 1024 * 1024 + 1) as usize];
+    let mut over = KiwixAdapter::sample().with_zim_bytes(big);
+    let (_, m) = manifest_of(&mut over);
+    assert!(m.objects.iter().all(|o| o.object_id != "kiwix.zimfile.v1"));
 }
 
 #[test]
-fn full_upfront_strategy_seals_the_bulk_into_the_cut() {
-    // Strategy A: the bulk kind flips to Authoritative — the engine's
-    // mechanical "everything up front" (it seals and transfers completely).
-    let mut a = KiwixAdapter::sample().with_strategy(Strategy::FullUpFront);
+fn full_upfront_strategy_seals_the_declared_bulk_into_the_cut() {
+    // Strategy A: the declared bulk kind flips to Authoritative — the
+    // engine's mechanical "everything up front" (it seals and transfers).
+    let mut a = KiwixAdapter::sample()
+        .with_zim_bytes(vec![7u8; 4096])
+        .with_strategy(Strategy::FullUpFront);
     let (_, m) = manifest_of(&mut a);
     assert_eq!(
         entry(&m, "kiwix.zimfile.v1").kind,
@@ -92,7 +105,8 @@ fn full_upfront_strategy_seals_the_bulk_into_the_cut() {
 
 #[test]
 fn restore_plan_puts_bulk_and_userdata_in_optional() {
-    let adapter = KiwixAdapter::sample();
+    // Bulk attached (under the core entry cap) so the plan tiering is visible.
+    let adapter = KiwixAdapter::sample().with_zim_bytes(vec![7u8; 4096]);
     let cut = CutRef {
         session: "s".into(),
         cut_number: 1,
@@ -154,12 +168,15 @@ fn zim_bulk_serves_chunked_when_attached_and_fails_closed_when_not() {
     let reassembled = read_all(&adapter, &token, "kiwix.zimfile.v1");
     assert_eq!(reassembled, bulk);
 
-    // Not attached: fail CLOSED with an UNSUPPORTED reason — never fabricated
-    // bytes, never a silent empty success.
+    // Not attached: the bulk is not declared at all, and reads fail CLOSED
+    // with an UNSUPPORTED reason — never fabricated bytes, never a silent
+    // empty success.
     let mut bare = KiwixAdapter::sample();
     let (token, m) = manifest_of(&mut bare);
-    let declared = entry(&m, "kiwix.zimfile.v1");
-    assert_eq!(declared.logical_size, 0, "no bulk: no declared bytes");
+    assert!(m
+        .objects
+        .iter()
+        .all(|o| o.object_id != "kiwix.zimfile.v1"));
     let err = bare
         .read_object(&token, "kiwix.zimfile.v1", 0, CHUNK)
         .expect_err("must fail closed without libzim backend");

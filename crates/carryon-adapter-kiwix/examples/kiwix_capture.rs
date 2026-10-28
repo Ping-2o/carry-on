@@ -259,9 +259,31 @@ fn decode_xml_escapes(s: &str) -> String {
         .replace("&amp;", "&")
 }
 
+/// Whole-file sha256 computed in 4 MiB chunks (the L1 bulk reference).
+fn streaming_sha256(path: &str) -> String {
+    use sha2::{Digest, Sha256};
+    use std::io::Read as _;
+    let mut f = std::fs::File::open(path).unwrap_or_else(|e| {
+        eprintln!("FAIL open zim (digest): {e}");
+        std::process::exit(1);
+    });
+    let mut h = Sha256::new();
+    let mut buf = vec![0u8; 4 << 20];
+    loop {
+        let n = f.read(&mut buf).unwrap_or_else(|e| {
+            eprintln!("FAIL digest read: {e}");
+            std::process::exit(1);
+        });
+        if n == 0 {
+            break;
+        }
+        h.update(&buf[..n]);
+    }
+    h.finalize().iter().map(|b| format!("{b:02x}")).collect()
+}
+
 /// Minimal UTF-8 percent-decoder for the app's stored article URLs.
-fn percent_decode(s: &str) -> String {
-    let b = s.as_bytes();
+fn percent_decode(s: &str) -> String {    let b = s.as_bytes();
     let mut out = Vec::with_capacity(b.len());
     let mut i = 0;
     while i < b.len() {
@@ -479,6 +501,9 @@ fn main() {
             uuid: info.uuid.clone(),
             filename: zim_path.clone(),
             size: info.filesize,
+            // Whole-file streaming sha256 (the L1 bulk reference — the bulk
+            // exceeds the core's cut-object cap, so it travels by digest).
+            bulk_sha256: streaming_sha256(&zim_path),
         },
         position: ReadingPosition {
             article_path: decoded_path,
