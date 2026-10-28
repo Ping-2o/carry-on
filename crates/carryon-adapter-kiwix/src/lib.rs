@@ -44,6 +44,12 @@ use carryon_adapter_api::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
+#[cfg(feature = "zim-backend")]
+pub mod zim_backend;
+
+#[cfg(feature = "zim-backend")]
+use zim_backend::{ZimArchive, ZimInfo};
+
 const SCHEMA_SESSION: &str = "kiwix.session.v1";
 const SCHEMA_ARTICLE: &str = "kiwix.article.v1";
 const SCHEMA_ZIMFILE: &str = "kiwix.zimfile.v1";
@@ -134,23 +140,50 @@ pub struct Session {
 /// A Kiwix reading session over one structured session + optional ZIM bulk.
 ///
 /// The optional `zim_bytes` is the Phase-1 **stand-in** for the libzim backend:
-/// a chunk-addressable byte blob that proves the progressive bulk path. In
-/// Phase 2 it becomes a real opened `zim::Archive` (BUILD-EVIDENCE §B/§C have
-/// the cross-compiles).
+/// a chunk-addressable byte blob that proves the progressive bulk path. With
+/// the `zim-backend` feature, [`KiwixAdapter::from_zim`] is the real backend:
+/// it opens a real `.zim` with libzim (C++ shim → C ABI), extracts the
+/// current article via `Item::getData`, and serves `kiwix.zimfile.v1` chunks
+/// at raw file offsets from the archive file itself.
 pub struct KiwixAdapter {
     session: String,
     meta: Meta,
     state: Session,
-    /// Current article HTML (Derived object). In Phase 2 this is extracted
-    /// from the ZIM via `Archive::getEntryByPath().getItem(true).getData()`
-    /// (RESEARCH §2.1). Phase 1: attached in-memory for the skeleton's tests.
+    /// Current article HTML (Derived object). With the zim-backend feature
+    /// this is extracted from the real ZIM via
+    /// `Archive::getEntryByPath().getItem(true).getData()` (RESEARCH §2.1).
     article: Vec<u8>,
-    /// Optional bulk bytes (`kiwix.zimfile.v1`). `None` ⇒ every ZIM-dependent
-    /// call fails closed (UNSUPPORTED until the libzim backend lands).
+    /// Optional bulk bytes (`kiwix.zimfile.v1`) — the in-memory stand-in
+    /// (used by the pure-Rust tests). `None` when a real ZIM source is set.
     zim_bytes: Option<Vec<u8>>,
+    /// The real backend: an opened libzim archive plus a handle on the file
+    /// for raw-offset chunk serving of the bulk object. `None` on the
+    /// pure-Rust path.
+    #[cfg(feature = "zim-backend")]
+    zim_source: Option<ZimSource>,
     generation: u64,
     /// Set between `prepare_authority_transfer` and its commit/abort.
     pending: Option<PendingTransfer>,
+}
+
+/// Real-backend source: opened archive (article extraction) + open file
+/// (raw file-offset chunk serving of the bulk object). Exists only with the
+/// `zim-backend` feature.
+#[cfg(feature = "zim-backend")]
+pub struct ZimSource {
+    /// Path of the `.zim` (or first `.zimaa` part).
+    pub path: String,
+    /// Opened libzim archive (article reads, entry lookup).
+    pub archive: ZimArchive,
+    /// The same file opened raw: chunk serving at file offsets needs no
+    /// libzim at all (the ZIM is a plain file; the ZIM format's pointer
+    /// tables make ranges addressable — RESEARCH §3).
+    pub file: std::fs::File,
+    pub info: ZimInfo,
+    /// Whole-object sha256 of the ZIM file, computed once (streaming, 4 MiB
+    /// chunks) at from_zim time. Declared in the manifest; never recomputed
+    /// per-read.
+    pub bulk_digest: String,
 }
 
 struct PendingTransfer {
@@ -169,7 +202,7 @@ struct Proposal {
 }
 
 impl KiwixAdapter {
-    /// A session with explicit parts and no ZIM bulk attached.
+    /// A session with explicit parts and no ZIM bulk attached (pure-Rust path).
     pub fn new(session: impl Into<String>, state: Session) -> Self {
         KiwixAdapter {
             meta: Meta {
@@ -181,8 +214,108 @@ impl KiwixAdapter {
             state,
             article: Vec::new(),
             zim_bytes: None,
+            #[cfg(feature = "zim-backend")]
+            zim_source: None,
             generation: 1,
             pending: None,
+        }
+    }
+
+    /// The real backend (feature `zim-backend`): open a real `.zim` file with
+    /// libzim, extract the current article by path, and attach the file for
+    /// raw-offset chunk serving of the bulk object.
+    ///
+    /// IMPLEMENTED on the macOS host (tests in `tests/zim_backend.rs` run
+    /// against real ZIMs). Fail closed: any failure refuses the session
+    /// instead of fabricating state.
+    #[cfg(feature = "zim-backend")]
+    pub fn from_zim(
+        session: impl Into<String>,
+        zim_path: &str,
+        article_path: &str,
+        scroll_y: u64,
+    ) -> Result<Self, AdapterError> {
+        let archive = ZimArchive::open(zim_path)
+            .map_err(|e| AdapterError::Incompatible(format!("zim open: {e}")))?;
+        let info = archive
+            .info()
+            .map_err(|e| AdapterError::Incompatible(format!("zim info: {e}")))?;
+        let item = archive
+            .item(article_path)
+            .map_err(|e| AdapterError::Incompatible(format!("zim entry: {e}")))?;
+        let resolved_path = item
+            .path()
+            .map_err(|e| AdapterError::Incompatible(format!("zim item path: {e}")))?;
+        let title = item
+            .title()
+            .map_err(|e| AdapterError::Incompatible(format!("zim item title: {e}")))?;
+        let size = item.size();
+        let article = item
+            .read_range(0, size)
+            .map_err(|e| AdapterError::Incompatible(format!("zim article read: {e}")))?;
+        let file = std::fs::File::open(zim_path)
+            .map_err(|e| AdapterError::Incompatible(format!("zim file open: {e}")))?;
+        // Whole-object sha256, computed streaming in 4 MiB chunks — never a
+        // full read into memory (the object can be 80+ GB).
+        let bulk_digest = {
+            use std::io::Read as _;
+            let mut f = std::fs::File::open(zim_path)
+                .map_err(|e| AdapterError::Incompatible(format!("zim file open (digest): {e}")))?;
+            let mut h = Sha256::new();
+            let mut buf = vec![0u8; 4 << 20];
+            loop {
+                let n = f
+                    .read(&mut buf)
+                    .map_err(|e| AdapterError::Internal(format!("zim digest read: {e}")))?;
+                if n == 0 {
+                    break;
+                }
+                h.update(&buf[..n]);
+            }
+            hex(&h.finalize())
+        };
+        let state = Session {
+            zim: ZimIdentity {
+                uuid: info.uuid.clone(),
+                filename: zim_path.to_string(),
+                size: info.filesize,
+            },
+            position: ReadingPosition {
+                article_path: resolved_path,
+                article_title: title,
+                scroll_y,
+                tab_index: 0,
+                opaque_platform_state: None,
+            },
+            bookmarks: Vec::new(),
+            history: Vec::new(),
+            settings: ReadingSettings {
+                text_zoom: 100,
+                theme: "system".into(),
+            },
+        };
+        let mut a = KiwixAdapter::new(session, state);
+        a.article = article;
+        a.zim_source = Some(ZimSource {
+            path: zim_path.to_string(),
+            archive,
+            file,
+            info,
+            bulk_digest,
+        });
+        Ok(a)
+    }
+
+    /// The main-page article of the opened ZIM (real backend): resolves the
+    /// main entry and returns its resolved path, for callers that want "what
+    /// the app shows on open".
+    #[cfg(feature = "zim-backend")]
+    pub fn zim_main_path(&self) -> Result<Option<String>, AdapterError> {
+        match &self.zim_source {
+            Some(src) => Ok(src.info.main_path.clone()),
+            None => Err(AdapterError::Incompatible(
+                "UNSUPPORTED: no real zim source attached".into(),
+            )),
         }
     }
 
@@ -267,14 +400,12 @@ impl KiwixAdapter {
         match object_id {
             SCHEMA_SESSION => Ok(self.session_bytes()),
             SCHEMA_ARTICLE => Ok(self.article.clone()),
-            SCHEMA_ZIMFILE => match &self.zim_bytes {
-                Some(b) => Ok(b.clone()),
-                // Fail closed: no libzim backend in Phase 1 — never fabricate
-                // bulk bytes.
-                None => Err(AdapterError::Incompatible(format!(
-                    "UNSUPPORTED (Phase 1): {SCHEMA_ZIMFILE} requires the libzim backend or attached bulk bytes"
-                ))),
-            },
+            // The bulk object is served ONLY through chunked `read_object`
+            // (raw file offsets); a whole-object read of an 80 GB file must
+            // never happen. Fail closed here.
+            SCHEMA_ZIMFILE => Err(AdapterError::Incompatible(format!(
+                "{SCHEMA_ZIMFILE} is bulk: use chunked read_object, not whole-object reads"
+            ))),
             SCHEMA_BOOKMARKS => Ok(self.bookmarks_bytes()),
             SCHEMA_HISTORY => Ok(self.history_bytes()),
             SCHEMA_SETTINGS => Ok(self.settings_bytes()),
@@ -310,13 +441,19 @@ impl KiwixAdapter {
         } else {
             vec![]
         };
-        // Digest + size: fail closed into an empty entry is NOT acceptable —
-        // the core re-verifies hashes, and for the unsupported ZIM bulk there
-        // is nothing to serve; we still declare the object (it is optional),
-        // with an empty digest only when bytes are unavailable.
-        let (hash, size) = match self.object_bytes(object_id) {
-            Ok(b) => (hex_sha256(&b), b.len() as u64),
-            Err(_) => (String::new(), 0),
+        // Digest + size, without ever whole-reading the bulk object:
+        // - real source: cached streaming sha256 (computed once in
+        //   from_zim) + the file size.
+        // - attached bytes (pure-Rust path): digest of the bytes.
+        // - neither: no declared bytes (the object stays optional and any
+        //   read fails closed).
+        let (hash, size) = if object_id == SCHEMA_ZIMFILE {
+            self.bulk_declared()
+        } else {
+            match self.object_bytes(object_id) {
+                Ok(b) => (hex_sha256(&b), b.len() as u64),
+                Err(_) => (String::new(), 0),
+            }
         };
         ObjectEntry {
             object_id: object_id.to_string(),
@@ -351,6 +488,27 @@ impl KiwixAdapter {
             self.entry(SCHEMA_SETTINGS, ObjectKindWire::Authoritative),
             self.entry(SCHEMA_META, ObjectKindWire::Authoritative),
         ]
+    }
+
+    /// Declared (digest, size) of the bulk object, never whole-reading it.
+    fn bulk_declared(&self) -> (String, u64) {
+        #[cfg(feature = "zim-backend")]
+        if let Some(src) = &self.zim_source {
+            return (src.bulk_digest.clone(), src.info.filesize);
+        }
+        if let Some(b) = &self.zim_bytes {
+            return (hex_sha256(b), b.len() as u64);
+        }
+        (String::new(), 0)
+    }
+
+    /// Bulk object size in bytes (0 when nothing is attached/sourced).
+    pub fn zim_bulk_size(&self) -> u64 {
+        #[cfg(feature = "zim-backend")]
+        if let Some(src) = &self.zim_source {
+            return src.info.filesize;
+        }
+        self.zim_bytes.as_ref().map(|b| b.len() as u64).unwrap_or(0)
     }
 
     fn version(&self, object_id: &str) -> ObjectVersionWire {
@@ -433,6 +591,32 @@ impl Adapter for KiwixAdapter {
         offset: u64,
         length: u64,
     ) -> Result<Vec<u8>, AdapterError> {
+        // The bulk object serves at RAW FILE OFFSETS (the whole point of
+        // progressive ZIM transfer): plain pread, no libzim needed — the
+        // ZIM is a regular file and its format makes ranges addressable.
+        if object_id == SCHEMA_ZIMFILE {
+            #[cfg(feature = "zim-backend")]
+            if let Some(src) = &self.zim_source {
+                use std::os::unix::fs::FileExt as _;
+                let size = src.info.filesize;
+                let start = offset.min(size);
+                let avail = size - start;
+                let n = length.min(avail);
+                let mut buf = vec![0u8; n as usize];
+                src.file
+                    .read_at(&mut buf, start)
+                    .map_err(|e| AdapterError::Internal(format!("zim pread: {e}")))?;
+                return Ok(buf);
+            }
+            if let Some(b) = &self.zim_bytes {
+                let start = (offset as usize).min(b.len());
+                let end = start.saturating_add(length as usize).min(b.len());
+                return Ok(b[start..end].to_vec());
+            }
+            return Err(AdapterError::Incompatible(format!(
+                "UNSUPPORTED: {SCHEMA_ZIMFILE} requires the libzim backend or attached bulk bytes"
+            )));
+        }
         let bytes = self.object_bytes(object_id)?;
         let start = (offset as usize).min(bytes.len());
         let end = start.saturating_add(length as usize).min(bytes.len());
@@ -589,8 +773,10 @@ impl Adapter for KiwixAdapter {
                 })
             }
             // Mutating (L4 single-writer): move the position. The core gates
-            // whether this device may mutate; the adapter just applies it and
-            // bumps the generation.
+            // whether this device may mutate; the adapter validates the new
+            // article against the real ZIM first (fail closed: an entry the
+            // ZIM does not have refuses the whole navigation) and then
+            // applies it and bumps the generation.
             "reader.navigate" => {
                 let path = req
                     .params
@@ -608,28 +794,53 @@ impl Adapter for KiwixAdapter {
                     .params
                     .get("title")
                     .and_then(|v| v.as_str())
-                    .unwrap_or(path)
-                    .to_string();
-                self.state.position.article_path = path.to_string();
-                self.state.position.article_title = title.clone();
+                    .map(str::to_string);
+                // Validate + extract against the real backend when present.
+                #[cfg(feature = "zim-backend")]
+                let (resolved_path, resolved_title, resolved_bytes) =
+                    if let Some(src) = &self.zim_source {
+                        let item = src
+                            .archive
+                            .item(path)
+                            .map_err(|e| AdapterError::Incompatible(format!("zim entry: {e}")))?;
+                        let rp = item
+                            .path()
+                            .map_err(|e| AdapterError::Incompatible(format!("zim path: {e}")))?;
+                        let rt = item
+                            .title()
+                            .map_err(|e| AdapterError::Incompatible(format!("zim title: {e}")))?;
+                        let size = item.size();
+                        let rb = item
+                            .read_range(0, size)
+                            .map_err(|e| AdapterError::Incompatible(format!("zim read: {e}")))?;
+                        (rp, rt, Some(rb))
+                    } else {
+                        (path.to_string(), String::new(), None)
+                    };
+                #[cfg(not(feature = "zim-backend"))]
+                let (resolved_path, resolved_title, resolved_bytes) =
+                    (path.to_string(), String::new(), Option::<Vec<u8>>::None);
+
+                self.state.position.article_path = resolved_path;
+                self.state.position.article_title = title.unwrap_or_else(|| resolved_title.clone());
                 self.state.position.scroll_y = scroll_y;
                 self.state.position.opaque_platform_state = None;
                 self.state.history.push(HistoryEntry {
                     zim_id: self.state.zim.uuid.clone(),
-                    article_url: format!("zim://{path}"),
-                    title,
+                    article_url: format!("zim://{}", self.state.position.article_path),
+                    title: self.state.position.article_title.clone(),
                     timestamp: self.generation,
                 });
                 self.generation += 1;
-                // Phase 1: the new article's bytes are NOT extracted from the
-                // ZIM (no libzim backend) — the article object becomes empty
-                // and is honestly reported as such.
-                self.article = Vec::new();
+                // Real backend: the new article's bytes come from the ZIM.
+                // Pure-Rust path: honestly empty and reported as such.
+                self.article = resolved_bytes.unwrap_or_default();
+                let article_available = !self.article.is_empty();
                 let output = serde_json::json!({
                     "generation": self.generation,
                     "article_path": self.state.position.article_path,
                     "scroll_y": self.state.position.scroll_y,
-                    "article_bytes_available": false,
+                    "article_bytes_available": article_available,
                 });
                 let output_hash = hex_sha256(&serde_json::to_vec(&output).unwrap_or_default());
                 Ok(ActionResultWire {
@@ -640,8 +851,14 @@ impl Adapter for KiwixAdapter {
                         agreed: true,
                         output_hash,
                         detail: format!(
-                            "navigated to {} at generation {} (article bytes: UNSUPPORTED until libzim backend)",
-                            self.state.position.article_path, self.generation
+                            "navigated to {} at generation {} (article bytes: {})",
+                            self.state.position.article_path,
+                            self.generation,
+                            if article_available {
+                                "extracted from zim"
+                            } else {
+                                "UNSUPPORTED without libzim backend"
+                            }
                         ),
                     },
                 })
@@ -660,14 +877,13 @@ impl Adapter for KiwixAdapter {
                     .get("length")
                     .and_then(|v| v.as_u64())
                     .unwrap_or(0);
-                let size = match &self.zim_bytes {
-                    Some(b) => b.len() as u64,
-                    None => {
-                        return Err(AdapterError::Incompatible(
-                            "UNSUPPORTED (Phase 1): library.materialize requires the libzim backend / attached bulk bytes".into(),
-                        ))
-                    }
-                };
+                let size = self.zim_bulk_size();
+                if size == 0 {
+                    return Err(AdapterError::Incompatible(
+                        "UNSUPPORTED: library.materialize requires the libzim backend / attached bulk bytes"
+                            .into(),
+                    ));
+                }
                 if let Some(end) = offset.checked_add(length) {
                     if end > size {
                         return Err(AdapterError::OutOfRange(format!(
@@ -769,6 +985,7 @@ impl Adapter for KiwixAdapter {
                 "generation": self.generation,
                 "zim_uuid": self.state.zim.uuid,
                 "zim_size": self.state.zim.size,
+                "zim_bulk_size": self.zim_bulk_size(),
                 "zim_bulk_attached": self.zim_bytes.is_some(),
                 "article_hash": hex_sha256(&self.article),
                 "auth_hash": self.auth_hash(),
