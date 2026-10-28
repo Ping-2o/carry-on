@@ -244,11 +244,68 @@ Honest limits: headless means no viewport — `restore` activates the document
 and selects the layers by name+occurrence, but the viewport fragment is
 carried, not applied (the engine has no view state; `ui-egui` owns it).
 
-### 7.3 The flagship measurement — see `evidence/journal-vs-snapshot.json`
+### 7.3 The flagship measurement — OBSERVED (LOCAL)
 
-(Filled after the measurement run; numbers quoted in the Phase-2 final report.)
+Evidence: [`evidence/journal-vs-snapshot.json`](evidence/journal-vs-snapshot.json)
+(harness `examples/journal_vs_snapshot.rs`, feature `inprocess`), plus the
+real-photo probe
+[`evidence/pcraft-size-probe.json`](evidence/pcraft-size-probe.json)
+(`examples/pcraft_size_probe.rs`, built from the repo's 2400×1500
+`docs/images/photocraft-demo.jpg`).
+
+`bytes_before_first_action` = document + unsaved (mode-dependent) + meta
+(the prerequisites both actions declare; the ephemeral workspace is optional
+and deferred). Measured:
+
+| document | document B | unsaved snapshot B | unsaved journal B | bfa snapshot | bfa journal | reduction |
+|---|---:|---:|---:|---:|---:|---:|
+| small-simple (256², 1 layer, 3 strokes) | 5,984 | 12,950 | 535 | 19,292 | 6,877 | 2.8× |
+| medium-layered (1024², 6+2 layers, 15 strokes) | 23,804 | 97,081 | 2,173 | 121,272 | 26,364 | 4.6× |
+| large-multi-layer (4096², 12+3 layers, 30 strokes) | 72,972 | 329,931 | 4,287 | 403,272 | 77,628 | 5.2× |
+| real photo (2400×1500, layered + 1 dirty stroke) | 7,038,470 | 7,419,132 | 90 | 14,457,972 | 7,038,930 | 2.0× (82,437× on the unsaved object) |
+
+Honest conditions: synthetic documents are sparse canvases (white background,
+thin strokes) — document bytes understate real photo sizes; the real-photo row
+is the representative one for content, and there the unsaved journal is
+**82,437× smaller** than the unsaved snapshot (90 B vs 7.4 MiB) because the
+journal carries *what you did* (one `paint.stroke`), not *what the pixels are*.
+The more edits accumulate, the more journal bytes grow while the snapshot
+stays ~document-sized; the crossover is far beyond typical handoff windows.
+
+**Replay oracle**: for every synthetic case, replaying the journal on a clean
+session (opened on the saved document) reproduced the source's composite
+**pixels exactly** (sha256 over the flattened composite PNG: identical in all
+three cases; steps_ran = journal length; no step failed). Two honest caveats,
+both recorded in the evidence file: (1) `.pcraft` *bytes* are NOT equal across
+sessions — layer-id allocation differs (the very reason PhotoCraft actions
+record layer names, RESEARCH §1.3.2) — so the comparable projection is the
+flattened composite, not the serialization; (2) `revision` is a per-session
+history-step counter (the source counts pre-save setup commands the
+destination never ran), so revision *equality* across sessions is
+coincidental alignment, not an invariant — recorded, not asserted.
+
+Relation to target #4 (< 50% pre-action bytes): journal-mode bfa is 19–36% of
+snapshot-mode bfa across the tested documents — **OBSERVED, LOCAL, on this
+grid** — the same caveat TARGETS.md #4 carries (tested conditions only).
 
 ### 7.4 The 16 MiB object cap — PROPOSAL ONLY (orchestrator decision)
 
-(Filled after real `.pcraft` sizes are measured; the options are in §7.4
-below. The core's cap is NOT changed unilaterally.)
+Measured real `.pcraft` sizes (photo probe, single 2400×1500 photo layer,
+zstd-tile compressed): document 6.9 MiB; layered variant 6.7 MiB; dirty-state
+snapshot 7.1 MiB — **all under the cap**, comfortably. Extrapolating linearly
+in pixels (the honest estimate this sparse evidence supports): a 45 MP
+camera photo layer lands around 40–90 MB, over the cap; large multi-layer
+canvases (6000×4000+) exceed it sooner. So the cap binds exactly at the
+"serious photography" threshold, not at "toy documents".
+
+Options — **orchestrator decision; the core cap is NOT changed here**:
+
+| Option | What | Cost/risk | Recommendation |
+|---|---|---|---|
+| A. Raise the core cap (configurable per session) | one constant; the store's chunked transfer already handles large objects (57 KB–MBs moved in the live L3; chunking is transport-side) | weakens a memory-allocation ceiling for ALL adapters; needs a policy story (per-session budget, not global) | reasonable middle step if PhotoCraft is the only big-object adapter |
+| B. Split PhotoCraft documents into per-tile/per-layer objects | exploit the `.pcraft` content-addressed tiles (BLAKE3, RESEARCH §1.5): manifest.json one object, each tile one object (16 MiB each is plenty), layers as slices | real adapter work: the document object becomes a mini-manifest with parents = tile objects; dedup between saves becomes engine-visible | **recommended**: it makes the carry *progressive at the tile level* (Phase-5 theorem: endpoint dilation on layered-image pyramids, FRONTIER §5) instead of a monolithic blob; incremental `.pcraft` saves already tell us exactly which tiles changed |
+| C. Keep 16 MiB; journal-mode only | the journal object is tiny; the *document* is the only big object | real photo documents cannot be carried at all (6.9 MiB fits today, 45 MP does not); a never-saved or heavily-edited base doesn't fit the journal story | not viable alone |
+
+Recommendation: **B** (per-tile splitting), with A as the interim step if
+Phase 3 needs real photo carries before B lands. Not implemented; the
+skeleton still declares `MAX_OBJECT_BYTES = 16 MiB` (the observed cap).

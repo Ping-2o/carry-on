@@ -30,7 +30,7 @@
 //!   --example journal_vs_snapshot -- <out.json> [workdir]
 //! ```
 
-use carryon_adapter_photocraft::inprocess::{authorize_policy, InProcessConfig, InProcessDriver};
+use carryon_adapter_photocraft::inprocess::{InProcessConfig, InProcessDriver};
 use carryon_adapter_photocraft::model::{hex_sha256, PhotocraftMeta, UnsavedMode};
 use carryon_adapter_photocraft::{PhotocraftDriver, Step};
 use serde_json::{json, Value};
@@ -46,9 +46,9 @@ struct Spec {
 }
 
 fn main() {
-    let out_path = std::env::args().nth(1).unwrap_or_else(|| {
-        "docs/artcraft-bridge/evidence/journal-vs-snapshot.json".into()
-    });
+    let out_path = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "docs/artcraft-bridge/evidence/journal-vs-snapshot.json".into());
     let work = std::env::args()
         .nth(2)
         .map(PathBuf::from)
@@ -57,15 +57,38 @@ fn main() {
     std::fs::create_dir_all(&work).unwrap();
 
     let specs = [
-        Spec { name: "small-simple", w: 256, h: 256, layers: 1, adjustments: 0, strokes: 3 },
-        Spec { name: "medium-layered-adjustments", w: 1024, h: 1024, layers: 6, adjustments: 2, strokes: 15 },
-        Spec { name: "large-multi-layer", w: 4096, h: 4096, layers: 12, adjustments: 3, strokes: 30 },
+        Spec {
+            name: "small-simple",
+            w: 256,
+            h: 256,
+            layers: 1,
+            adjustments: 0,
+            strokes: 3,
+        },
+        Spec {
+            name: "medium-layered-adjustments",
+            w: 1024,
+            h: 1024,
+            layers: 6,
+            adjustments: 2,
+            strokes: 15,
+        },
+        Spec {
+            name: "large-multi-layer",
+            w: 4096,
+            h: 4096,
+            layers: 12,
+            adjustments: 3,
+            strokes: 30,
+        },
     ];
 
     let mut results: Vec<Value> = Vec::new();
     for spec in &specs {
-        println!("=== {} ({}x{}, {} layers, {} adjustments, {} strokes)",
-            spec.name, spec.w, spec.h, spec.layers, spec.adjustments, spec.strokes);
+        println!(
+            "=== {} ({}x{}, {} layers, {} adjustments, {} strokes)",
+            spec.name, spec.w, spec.h, spec.layers, spec.adjustments, spec.strokes
+        );
 
         let mut driver = InProcessDriver::new(InProcessConfig {
             work_root: work.clone(),
@@ -94,20 +117,22 @@ fn main() {
             driver
                 .session_mut()
                 .execute(
-                    if a % 2 == 0 { "layer.newAdjustmentLayer.brightnessContrast" } else { "layer.newAdjustmentLayer.hueSaturation" },
+                    if a % 2 == 0 {
+                        "layer.newAdjustmentLayer.brightnessContrast"
+                    } else {
+                        "layer.newAdjustmentLayer.hueSaturation"
+                    },
                     json!({"brightness": 10, "hue": 20, "saturation": 5}),
                 )
                 .unwrap();
         }
 
         // 2. Save the document object; mark the journal checkpoint (the
-        //    save/dirty boundary).
-        let doc_path = work.join(format!("{}.pcraft", spec.name));
-        driver
-            .session_mut()
-            .execute("file.saveAs", json!({"path": doc_path.to_string_lossy()}))
+        //    save/dirty boundary). save_active_under_root marks saved state
+        //    AND takes the checkpoint in one step.
+        let doc_path = driver
+            .save_active_under_root(&format!("{}.pcraft", spec.name))
             .unwrap();
-        driver.mark_saved_checkpoint();
 
         // 3. The edit script — journaled, through the authorize gate.
         let cx = spec.w as f64 / 2.0;
@@ -139,7 +164,10 @@ fn main() {
             .unwrap();
         driver
             .session_mut()
-            .execute("select.rect", json!({"x": spec.w/8, "y": spec.h/8, "width": spec.w/4, "height": spec.h/4}))
+            .execute(
+                "select.rect",
+                json!({"x": spec.w/8, "y": spec.h/8, "width": spec.w/4, "height": spec.h/4}),
+            )
             .unwrap();
 
         // 4. Measure both unsaved-carry modes.
@@ -156,9 +184,11 @@ fn main() {
         // 5. Replay oracle: a second clean session on the saved document
         //    replays the journal; the replayed revision must match and the
         //    replayed dirty snapshot must hash equal to the source's.
-        let mut dest = InProcessDriver::new(InProcessConfig { work_root: work.clone() }).unwrap();
-        dest.session_mut()
-            .execute("file.open", json!({"path": doc_path.to_string_lossy()}))
+        let mut dest = InProcessDriver::new(InProcessConfig {
+            work_root: work.clone(),
+        })
+        .unwrap();
+        dest.open_under_root(&format!("{}.pcraft", spec.name))
             .unwrap();
         let steps: Vec<Step> = {
             let pairs: Vec<(String, Value)> = serde_json::from_slice(&journal_bytes).unwrap();
@@ -173,8 +203,14 @@ fn main() {
         let dest_meta = dest.meta().unwrap();
         let replay_ok_revision = dest_meta.revision == meta.revision;
         let replay_snapshot = dest.unsaved_bytes_as(UnsavedMode::Snapshot).unwrap();
-        let replay_hash = hex_sha256(&replay_snapshot);
-        let source_hash = hex_sha256(&snapshot_bytes);
+        // Replay oracle: composite PIXELS must hash equal (`.pcraft` bytes
+        // legitimately differ across sessions — layer-id allocation; that is
+        // why PhotoCraft actions record layer names).
+        let replay_pixels = dest.composite_bytes_of_active().unwrap();
+        let source_pixels = driver.composite_bytes_of_active().unwrap();
+        let replay_hash = hex_sha256(&replay_pixels);
+        let source_hash = hex_sha256(&source_pixels);
+        let pcraft_hash_match = hex_sha256(&replay_snapshot) == hex_sha256(&snapshot_bytes);
         let replay_ok_hash = replay_hash == source_hash;
         println!(
             "  document {} B | snapshot(unsaved) {} B | journal(unsaved) {} B ({} steps) | meta {} B",
@@ -182,7 +218,9 @@ fn main() {
         );
         println!(
             "  replay: steps_ran={} revision match={} hash match={} ({src} vs {dst})",
-            outcome.steps_ran, replay_ok_revision, replay_ok_hash,
+            outcome.steps_ran,
+            replay_ok_revision,
+            replay_ok_hash,
             src = &source_hash[..12],
             dst = &replay_hash[..12]
         );
@@ -205,9 +243,12 @@ fn main() {
             "replay_oracle": {
                 "steps_ran": outcome.steps_ran,
                 "revision_match": replay_ok_revision,
-                "dirty_state_hash_match": replay_ok_hash,
-                "source_dirty_sha256": source_hash,
-                "replayed_dirty_sha256": replay_hash,
+                "revision_match_note": "revision is a per-session counter of history steps; the source session counts its pre-save setup commands, the destination (opened on the saved file) does not — equality is coincidental alignment, not a semantic invariant. The replay ORACLE is composite_pixel_hash_match.",
+                "composite_pixel_hash_match": replay_ok_hash,
+                "pcraft_bytes_hash_match": pcraft_hash_match,
+                "note": "pcraft bytes are not expected to match across sessions (layer-id allocation differs; PhotoCraft actions record layer names for this reason — RESEARCH 1.3.2); the composite-pixel hash is the oracle",
+                "source_composite_sha256": source_hash,
+                "replayed_composite_sha256": replay_hash,
             },
             "source_meta": meta,
         }));

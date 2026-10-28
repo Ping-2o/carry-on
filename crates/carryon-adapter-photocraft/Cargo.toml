@@ -8,10 +8,12 @@ description = "Carry-On PhotoCraft adapter (L3/L4): layered-image sessions with 
 [features]
 default = []
 # Phase 2b: in-process driver over a real PhotoCraft engine session. Off by
-# default so the workspace stays light; the pinned git dependency (rev below)
-# joins the build only with --features inprocess. See docs/artcraft-bridge/
-# ADAPTER-DESIGN.md §5 and PHOTOCRAFT-PIN.md.
-inprocess = ["dep:photocraft-engine"]
+# default so the workspace stays light; the pinned git dependencies (rev below)
+# join the build only with --features inprocess. See docs/artcraft-bridge/
+# ADAPTER-DESIGN.md §5 and PHOTOCRAFT-PIN.md. Three crates, all at the pin:
+# engine (Session, journal, authorize), automation (the same files:: module the
+# headless CLI uses for .pcraft open/save) and io (ExportOptions).
+inprocess = ["dep:photocraft-engine", "dep:photocraft-automation", "dep:photocraft-io"]
 
 [dependencies]
 carryon-adapter-api = { workspace = true }
@@ -19,8 +21,24 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 photocraft-engine = { git = "file:///Volumes/ADATA ELITE SE880/compilation/photocraft", rev = "1f7fc0f53696e54da79b95015abb37d7c22cdd1a", optional = true }
+photocraft-automation = { git = "file:///Volumes/ADATA ELITE SE880/compilation/photocraft", rev = "1f7fc0f53696e54da79b95015abb37d7c22cdd1a", optional = true }
+photocraft-io = { git = "file:///Volumes/ADATA ELITE SE880/compilation/photocraft", rev = "1f7fc0f53696e54da79b95015abb37d7c22cdd1a", optional = true }
 
 [dev-dependencies]
 carryon-core = { workspace = true }
 carryon-net = { workspace = true }
 tempfile = { workspace = true }
+
+# The live L3 experiment needs the desktop app's control channel (no engine
+# dependency) — but `l3_live` also runs standalone; keep it always available.
+[[example]]
+name = "l3_live"
+
+# The in-process measurement/probe examples need the pinned engine deps.
+[[example]]
+name = "journal_vs_snapshot"
+required-features = ["inprocess"]
+
+[[example]]
+name = "pcraft_size_probe"
+required-features = ["inprocess"]

@@ -98,6 +98,16 @@ pub struct Viewport {
     pub rotation: f64,
 }
 
+impl Default for Viewport {
+    fn default() -> Self {
+        Viewport {
+            zoom: 1.0,
+            center: [0.5, 0.5],
+            rotation: 0.0,
+        }
+    }
+}
+
 /// `photocraft.workspace.v1` — the ephemeral working position: what makes the
 /// destination open the same document at the same spot, never needed for
 /// correctness (ADAPTER-DESIGN §1).
