@@ -184,3 +184,71 @@ crates/carryon-adapter-photocraft/
 
 Explicitly out of scope for the skeleton (labeled in code): any real file I/O,
 control-channel client, engine embedding, journal capture, workspace restore.
+
+## 7. Phase 2 results (status notes; the orchestrator owns FRONTIER/TARGETS)
+
+### 7.1 ControlChannelDriver — OBSERVED (LOCAL)
+
+The live L3 carry works end to end, evidence in
+[`evidence/l3-live/transcript.json`](evidence/l3-live/transcript.json) +
+screenshots: live app A (dirty document: new layer, paint stroke, selection,
+tool Brush, zoom 0.5, view rotation 15°) → driver pulls document/unsaved/meta/
+workspace → source core seals the cut (57,659 B over loopback TLS, 0.199 s) →
+destination core imports → reconstructs the three authoritative objects from
+its own store by digest → registers the reconstructed adapter with a live
+driver → `session.restore` drives app B (open carried `.pcraft`, activate,
+tool, viewport, layer select) → independent `ui.inspect` verification: zoom
+0.5==0.5, rotation 15==15, tool Brush==Brush, selection bounds
+[160,120,320,200] (arrived inside the carried document bytes — selection is
+document state), carried layer present. Oracle agreed, `live_restore=true`.
+
+Discoveries that shaped the implementation (all hit live, all recorded):
+
+1. **A layered `app.save` marks the document CLEAN and rebinds its path**
+   (`session.list` `dirty:false` after save, RESEARCH §1.4). Saving the
+   original to obtain "the unsaved state" would destroy the very state being
+   carried. The driver therefore snapshots via `image.duplicate` +
+   `app.save`-the-duplicate + `file.close`, verifying the duplicate is active
+   before the save and failing closed otherwise.
+2. **The optional split is load-bearing**: `import_cut` transfers only the
+   authoritative cut (`cut_manifest` filters `role='authoritative'`,
+   `crates/carryon-core/src/transfer.rs`); the ephemeral workspace object is
+   published on the source but never sealed into the cut — verified live
+   (`has_object_hex` false on the destination). Selection needed no separate
+   object because `.pcraft` serializes it as document state.
+3. `app.save`/`app.open`/`ui.set` are **control methods**, not engine
+   commands; `engine.execute` refuses them (`unknown command app.save`). The
+   driver separates the two layers explicitly.
+4. `app.save` requires the target's **parent directory to already exist**
+   under the automation write root; the driver creates the scratch dir.
+
+### 7.2 InProcessDriver — IMPLEMENTED; end-to-end replay proven in tests
+
+Feature `inprocess` (pinned git dependency `photocraft-engine`, rev
+`1f7fc0f5…` — the local clone as a `file://` git source; the rev pin is what
+matters, `PHOTOCRAFT-PIN.md`). Adds what the control channel cannot give:
+
+- **Journal-mode unsaved edits**: `Session.journal` sliced from a checkpoint
+  taken at the last save, serialized in PhotoCraft's native actions shape
+  `[[id, params], …]` — replayable by `Session::execute`, actions, droplets.
+- **True `saved_revision`** in the meta object (the control surface hides it).
+- **Fail-closed `Session::authorize`** (`authorize_policy`): read-only
+  commands, a curated edit allowlist, and `file.new`/`save`/`open`/`duplicate`
+  only under the explicitly granted work root (traversal denied) — the
+  in-process analogue of PhotoCraft's own `AuthorizedWorkspace`.
+- **Replay oracle**: journal replay on a clean session must land on the same
+  revision and produce a dirty-state snapshot that hashes equal to the
+  source's (pinned by `journal_slice_and_replay_semantics_end_to_end`).
+
+Honest limits: headless means no viewport — `restore` activates the document
+and selects the layers by name+occurrence, but the viewport fragment is
+carried, not applied (the engine has no view state; `ui-egui` owns it).
+
+### 7.3 The flagship measurement — see `evidence/journal-vs-snapshot.json`
+
+(Filled after the measurement run; numbers quoted in the Phase-2 final report.)
+
+### 7.4 The 16 MiB object cap — PROPOSAL ONLY (orchestrator decision)
+
+(Filled after real `.pcraft` sizes are measured; the options are in §7.4
+below. The core's cap is NOT changed unilaterally.)

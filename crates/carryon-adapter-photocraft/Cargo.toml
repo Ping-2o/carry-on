@@ -5,11 +5,20 @@ edition.workspace = true
 license.workspace = true
 description = "Carry-On PhotoCraft adapter (L3/L4): layered-image sessions with unsaved edits and authority transfer. Phase-1 skeleton: object model + fail-closed driver seam; no PhotoCraft dependency yet (docs/artcraft-bridge/ADAPTER-DESIGN.md)."
 
+[features]
+default = []
+# Phase 2b: in-process driver over a real PhotoCraft engine session. Off by
+# default so the workspace stays light; the pinned git dependency (rev below)
+# joins the build only with --features inprocess. See docs/artcraft-bridge/
+# ADAPTER-DESIGN.md §5 and PHOTOCRAFT-PIN.md.
+inprocess = ["dep:photocraft-engine"]
+
 [dependencies]
 carryon-adapter-api = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
+photocraft-engine = { git = "file:///Volumes/ADATA ELITE SE880/compilation/photocraft", rev = "1f7fc0f53696e54da79b95015abb37d7c22cdd1a", optional = true }
 
 [dev-dependencies]
 carryon-core = { workspace = true }

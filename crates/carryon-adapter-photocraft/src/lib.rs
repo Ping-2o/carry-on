@@ -41,6 +41,10 @@ use crate::model::{
 use carryon_adapter_api::*;
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "inprocess")]
+pub mod inprocess;
+#[cfg(feature = "inprocess")]
+pub use inprocess::{authorize_policy, InProcessConfig, InProcessDriver};
 pub mod control;
 pub mod driver;
 pub mod model;
