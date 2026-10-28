@@ -1,0 +1,86 @@
+{
+  "all_checks_passed": true,
+  "checks": {
+    "dest_edit_after_source_off": true,
+    "dest_not_ambiguous": true,
+    "dest_owner_local": true,
+    "dest_owns": true,
+    "dest_owns_after_source_off": true,
+    "edit_landed_in_app_b": true,
+    "epoch_advanced": true,
+    "receipts_match": true,
+    "restarted_source_app_alive": true,
+    "restarted_source_guard_refused": true,
+    "restarted_source_may_mutate_false": true,
+    "restore_layer": true,
+    "restore_live": true,
+    "restore_oracle_agreed": true,
+    "restore_rotation": true,
+    "restore_selection": true,
+    "restore_tool": true,
+    "restore_zoom": true,
+    "source_app_killed": true,
+    "source_read_only": true
+  },
+  "experiment": "live-l4-authority-transfer + source-off continuation",
+  "photocraft_pin": "1f7fc0f53696e54da79b95015abb37d7c22cdd1a",
+  "restore": {
+    "checks_zoom_rotation_tool_selection": {
+      "hasSelection": true,
+      "rotation": 15.0,
+      "selectionBounds": [
+        160,
+        120,
+        320,
+        200
+      ],
+      "tool": "Brush",
+      "zoom": 0.5
+    },
+    "seconds": 0.060892542
+  },
+  "scope": "LOCAL (one machine; loopback TLS between two cores; two live app processes)",
+  "source_app": {
+    "digests": {
+      "photocraft.document.v1": "f18587919e7daa192d29a8b6e8745ac5d78c334e6699c6e003b7763b2843ff4a",
+      "photocraft.meta.v1": "fb17eaf294438c3ee8d55415a0b74fd56da38f3c3049ef007cc5cb3ef3f1274f",
+      "photocraft.unsaved_edits.v1": "a0643b0ef2b89cb1bb95e3257269133d9092dfc94db66e104cd2851061476975",
+      "photocraft.workspace.v1": "5c058424ce2a0b973755f8a2a493b1bf55e5b99a6dd9b7303497a4ef0de3440e"
+    },
+    "document_bytes": 10761,
+    "revision": 5,
+    "unsaved_bytes": 30463
+  },
+  "source_off": {
+    "dest_dirty": true,
+    "dest_revision_after_edit": 3,
+    "document_edit_output": {
+      "revision": 3,
+      "steps_ran": 1,
+      "unsaved_hash": "a18a7f8e7dcee6065ea4fc1ce741b7b618e6872fa9a18e1813db89a0030ac426"
+    },
+    "edit_seconds": 0.165083542,
+    "kill_method": "SIGKILL via std::process::Child::kill() (kill -9)",
+    "source_pid": 52441
+  },
+  "source_restart": {
+    "guard_mutation_error": "AUTH_ReadOnly: session is a read-only replica (AUTH-005)",
+    "may_mutate": false
+  },
+  "token_policy": "tokens read from 0600 files, never logged (EVD-006)",
+  "transcript_source_driver": {
+    "calls": 19
+  },
+  "transfer": {
+    "dest_state": {
+      "ambiguous": false,
+      "epoch": 1,
+      "owner": "local"
+    },
+    "receipts": {
+      "dest_epoch": 1,
+      "source_epoch": 1
+    },
+    "seconds": 0.747415791
+  }
+}

@@ -476,6 +476,11 @@ impl ControlChannelDriver {
         self.call("ui.screenshot", &serde_json::json!({ "path": rel_path }))
     }
 
+    /// Ask the app to quit gracefully (`app.quit`).
+    pub fn quit(&mut self) -> Result<serde_json::Value, DriverError> {
+        self.call("app.quit", &serde_json::json!({}))
+    }
+
     /// One `ui.inspect` (public: used by the trait impl and by harnesses).
     pub fn inspect(&mut self) -> Result<serde_json::Value, DriverError> {
         self.call("ui.inspect", &serde_json::json!({}))

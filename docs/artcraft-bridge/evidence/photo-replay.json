@@ -1,0 +1,35 @@
+{
+  "experiment": "photo-document journal replay (real photo)",
+  "measurements": {
+    "composite_png_bytes": 3675115,
+    "document_bytes": 6867549,
+    "journal_step_ids": [
+      "paint.stroke",
+      "paint.stroke",
+      "layer.setProps",
+      "select.rect",
+      "filter.blur.gaussianBlur",
+      "select.deselect"
+    ],
+    "journal_steps": 6,
+    "unsaved_journal_bytes": 397,
+    "unsaved_snapshot_bytes": 7022517
+  },
+  "photocraft_pin": "1f7fc0f53696e54da79b95015abb37d7c22cdd1a",
+  "replay_oracle": {
+    "composite_pixel_hash_match": true,
+    "composite_pixel_sha256_replayed": "ca463278f34616c4399bbc8c5ec8d3f47491dbf32d9a4a198428fb5737284977",
+    "composite_pixel_sha256_source": "ca463278f34616c4399bbc8c5ec8d3f47491dbf32d9a4a198428fb5737284977",
+    "note": "same caveat as Phase 2: .pcraft bytes and revision counts are session-relative; the composite-pixel hash is the oracle",
+    "revision_dest_session_relative": 7,
+    "revision_source_session_relative": 10,
+    "steps_expected": 6,
+    "steps_ran": 6
+  },
+  "scope": "LOCAL (in-process engine sessions, one machine)",
+  "source_photo": {
+    "bytes": 1078162,
+    "dimensions": "2400x1500",
+    "name": "photocraft-demo.jpg"
+  }
+}

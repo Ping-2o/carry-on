@@ -76,8 +76,9 @@ const EDIT_ALLOWLIST: &[&str] = &[
     "layer.rasterize.type",
     // selection
     "select.rect",
-    "select.none",
-    "select.invert",
+    "select.deselect",
+    "select.inverse",
+    "select.all",
     // adjustments/filters (applied destructively)
     "image.adjustments.invert",
     "filter.blur.gaussianBlur",

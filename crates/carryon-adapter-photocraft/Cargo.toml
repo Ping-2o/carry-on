@@ -42,3 +42,7 @@ required-features = ["inprocess"]
 [[example]]
 name = "pcraft_size_probe"
 required-features = ["inprocess"]
+
+[[example]]
+name = "photo_replay"
+required-features = ["inprocess"]
