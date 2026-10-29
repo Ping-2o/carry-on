@@ -1,8 +1,11 @@
 # Frontier system (ecosystem) — roadmap & progress
 
 Living document. The **frontier target** is a continuity ecosystem: the Carry-On
-engine + zero-config discovery + signed apps on **macOS, iOS and Android** + an
-open SDK + flagship application integrations.
+engine + zero-config discovery + signed apps + an open SDK + flagship application
+integrations. **Owner decision 2026-10-29: the scope is TWO platforms — macOS and
+Android.** iOS is dropped from scope ("Android↔Mac and back is enough"); it may
+return later, and the dropped iOS work is inventoried in the branches, but no iOS
+claim exists anywhere.
 
 Claim labels are law ([`AGENTS.md`](../AGENTS.md) §2): everything on this page is
 **TARGET** unless a status row cites evidence. No platform is "supported" until §30
@@ -23,17 +26,12 @@ completes, its rows move to `docs/TARGETS.md` with real evidence — not before.
 
 ## 2. Frontier phases
 
-### Phase 1 — iOS bring-up · `TARGET` (not started)
+### Phase 1 — iOS bring-up · **DROPPED by owner (2026-10-29)**
 
-Highest technical risk first: the transport model (source listens; destination
-connects) collides with iOS background restrictions.
-
-- [ ] Cross-compile engine to `aarch64-apple-ios`; `cargo test` on simulator.
-- [ ] Transport-role redesign: iOS as destination-first (connects out), handoff
-      while foregrounded; document the role contract as a spec change if needed.
-- [ ] Minimal iOS destination app (Swift shell over the C ABI).
-- [ ] First physical Mac→iPhone handoff, evidence-bundled (`collect_evidence.sh`).
-- [ ] App-suspension survival: `request_suspend`/`resume_import` on real iOS lifecycle.
+~~iOS bring-up~~ — out of scope by owner decision. The transport-role analysis
+stays relevant if iOS ever returns; the artcraft engine and libzim already
+cross-compile for aarch64-apple-ios (compile-level only, OBSERVED labels dropped
+with the scope).
 
 ### Phase 2 — Real discovery · `TARGET` (not started)
 
@@ -41,12 +39,11 @@ connects) collides with iOS background restrictions.
 - [ ] NSD discovery on Android.
 - [ ] PIN/QR pairing UX; zero-config < 10 s, NET-003 minimal metadata.
 
-### Phase 3 — Packaging + §30 × 3 platforms · `TARGET` (not started)
+### Phase 3 — Packaging + §30 × 2 platforms (macOS, Android) · `TARGET` (not started)
 
-- [ ] Signed iOS app (TestFlight), identities recorded (PLAT-006).
 - [ ] Signed APK, identities recorded (PLAT-006).
-- [ ] PLAT-002 secure storage: Keychain / Android Keystore for device credentials.
-- [ ] §30 acceptance harness, run on all three platforms on real hardware →
+- [ ] PLAT-002 secure storage: Android Keystore for device credentials.
+- [ ] §30 acceptance harness, run on both platforms on real hardware →
       only then may a platform be called "supported".
 
 ### Phase 4 — SDK + flagship integrations · `TARGET` (Phase 1 done on both flagship branches — unmerged; Phase 2 dispatched)
@@ -64,7 +61,7 @@ connects) collides with iOS background restrictions.
   - [x] Phase 2 — libzim C-ABI backend (C++ shim → C ABI → Rust FFI) **IMPLEMENTED** (host 12/12 tests incl. 4 real-ZIM; Android arm64 static link; iOS compile); **on-device probe + real session capture OBSERVED (physical)** on the Galaxy A04 — real Kiwix app session (27 MB ZIM, uuid cross-check passed), Chromium bundle carried but DROPPED-labeled; flagship measurement **OBSERVED (LOCAL, real bytes)**: A = 27,041,691 B vs D = 31,205 B → **D/A = 0.1154% (866.6×)** — target #4 passes by ~434×.
   - [x] Phase 3 — **physical LAN carry of the real session (45,522 B, OBSERVED, physical)**; **L4 over the reading position ON HARDWARE + reader.navigate on device after transfer (physical)**; **progressive ZIM materialization: article readable at 23.787% (physical)**; portable authority hash (uuid+size+sha256, cross-path regression); GB-scale math on WikiMed 1.86 GB: D/A = 0.0007% (138,769×, LOCAL); ZIM bulk correctly lives as L1 outside the cut.
   - [x] Phase 4 (partial, on branch, session cancelled + respawned) — **sparse lazy-index materialization: 0.0138% of the 1.7 GB WikiMed before first read (OBSERVED, physical)** — two orders past the planned ~3% target; **companion-shell first paint renders the carried article on-device (OBSERVED, physical)**. Gates 14/14 green on the branch.
-  - [ ] Phase 4 remainder — iOS simulator run (fresh session `ses_e78edc67cffe6Q4gHsB5Yn49mb`): simctl spawn zim_probe → OBSERVED (simulator) — a simulator is not a §30 platform; XCFramework (stretch). Engine decision points (partial-fetch API, tiered caps) remain REPORT-ONLY.
+  - [x] ~~iOS simulator run~~ — **DROPPED by owner (2026-10-29)** with the whole iOS scope; the respawned session is winding down (no iOS artifacts committed; leftovers inventoried for the record). Engine decision points (partial-fetch API, tiered caps) remain REPORT-ONLY.
 
 ### Phase 5 — Theorem into the engine · `TARGET` / `RESEARCH`
 
@@ -113,3 +110,4 @@ massive content, mass audience).
 | 2026-10-29 | **Kiwix Phase 3 complete** (`kiwix-bridge`, orchestrator-verified 14/14): physical LAN carry (45,522 B) + on-device L4 navigate (OBSERVED, physical); progressive materialization readable at 23.787% (physical); portable authority-hash fix; WikiMed GB-scale: D/A = 0.0007% (LOCAL). iOS simulator cut from scope — compile-level only, honestly labeled. |
 | 2026-10-29 | **Context handoff**: Phase 4 dispatched to two FRESH sessions in the same worktrees/branches (artcraft → tile-splitting + physical L4; kiwix → iOS sim + first paint + scale-up). Engine decision points from kiwix (partial-fetch API, tiered caps) routed REPORT-ONLY to avoid two branches editing core concurrently. |
 | 2026-10-29 | Kiwix Phase 4 partial landed before its session was cancelled (respawned fresh): **lazy-index materialization 0.0138% of the 1.7 GB WikiMed before first read (physical)** + **rendered first paint on-device (physical)** — 14/14 verified on the branch; iOS simulator delegated to a fresh session. ArtCraft: tile-splitting core series committed (progressive §6.8 budgets, parent-linked tiles, `tile_progressive` on the real photo); physical L4 in flight (Android cross-build of the destination). |
+| 2026-10-29 | **Owner decision: iOS DROPPED from scope** — two-platform frontier (macOS + Android; "Android↔Mac and back is enough"). Phase 1 struck out; Phase 3 is now §30 × 2; the iOS sim session wound down without committing iOS artifacts (inventory kept in the worktree). iOS may return later; nothing is lost. |
