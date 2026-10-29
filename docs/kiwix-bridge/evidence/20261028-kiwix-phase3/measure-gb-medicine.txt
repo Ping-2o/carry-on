@@ -1,0 +1,26 @@
+=== kiwix_measure (LOCAL, real object bytes through read_object) ===
+zim = /Volumes/ADATA ELITE SE880/compilation/wikipedia_en_medicine_maxi_2026-10.zim
+article = Wikipedia:WikiProject_Medicine/Open_Textbook_of_Medicine2
+
+strategy A (everything up front):
+   kiwix.session.v1                  539
+   kiwix.article.v1                12813
+   kiwix.bookmarks.v1                  2
+   kiwix.history.v1                    2
+   kiwix.settings.v1                  34
+   kiwix.meta.v1                      82
+   kiwix.zimfile.v1           1864210320  sha256=9a1570f2f346aa18694ee520e0483f19b7447f69e0970e2f727c53ccf0dcc7d6
+   bytes_before_first_action = 1864223792
+
+strategy D (prerequisites only):
+   kiwix.session.v1                  539  sha256=42d628d1c10b1d899bcc897a8e07e5b023f10488d5a185d027b332ac42016034
+   kiwix.article.v1                12813  sha256=37dbc021e7300e094df3e083df86392db77e99189518e62fbe6cb9d8ba14ae7a
+   kiwix.meta.v1                      82  sha256=2c677805a9ea5b00a4f0ecc56274c1af41fe980b298b501d5794b2c9657ceb28
+   bytes_before_first_action = 13434
+   deferred (optional, on demand): kiwix.zimfile.v1 (1864210320 B, L1 object), kiwix.bookmarks.v1 (2 B), kiwix.history.v1 (2 B), kiwix.settings.v1 (34 B)
+
+D/A ratio            = 0.000007 (0.0007%)
+D < 50% of A         = true
+first paint from article object alone (no ZIM) = true
+A/D asymmetry factor = 138769.1x
+MEASURE_OK

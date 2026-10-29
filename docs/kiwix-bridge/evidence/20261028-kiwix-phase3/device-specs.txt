@@ -1,0 +1,12 @@
+=== device specs (Galaxy A04 via adb) ===
+SM-A045F
+samsung
+13
+arm64-v8a
+mt6765
+MemTotal:        3882400 kB
+
+=== mac host ===
+MacBookAir10,1
+27.0
+8

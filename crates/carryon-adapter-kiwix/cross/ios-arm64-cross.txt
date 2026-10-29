@@ -1,0 +1,28 @@
+# aarch64-apple-ios cross-file for libzim (staticlib, no Xcode app) —
+# proven in docs/kiwix-bridge/BUILD-EVIDENCE.md §C.
+# Usage:
+#   SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+#   PKG_CONFIG_PATH= meson setup build-ios \
+#     --cross-file ios-arm64-cross.txt \
+#     -Dwith_xapian=false -Ddefault_library=static -Dbuildtype=release \
+#     --wrap-mode=forcefallback -Dzstd:bin_programs=false
+#   ninja -C build-ios
+# (ar/strip below resolve via xcrun; substitute the absolute paths
+#  `xcrun --find ar` / `xcrun --find strip` print on your machine.)
+[binaries]
+c       = 'clang'
+cpp     = 'clang++'
+ar      = '/Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar'
+strip   = '/Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/strip'
+
+[properties]
+c_args      = ['-arch', 'arm64', '-isysroot', '/Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.0.sdk', '-mios-version-min=15.0']
+cpp_args    = ['-arch', 'arm64', '-isysroot', '/Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.0.sdk', '-mios-version-min=15.0', '-stdlib=libc++']
+c_link_args = ['-arch', 'arm64', '-isysroot', '/Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.0.sdk', '-mios-version-min=15.0']
+cpp_link_args = ['-arch', 'arm64', '-isysroot', '/Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.0.sdk', '-mios-version-min=15.0']
+
+[host_machine]
+system = 'darwin'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'

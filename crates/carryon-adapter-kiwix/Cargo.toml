@@ -1,0 +1,26 @@
+[package]
+name = "carryon-adapter-kiwix"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Carry-On Kiwix adapter (L1 ZIM bulk + L3 reading session + L4 position authority): progressive continuation over massive immutable content."
+
+[dependencies]
+carryon-adapter-api = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+
+[build-dependencies]
+cc = "1"
+
+[dev-dependencies]
+sha2 = { workspace = true }
+rusqlite = { workspace = true }
+carryon-net = { workspace = true }
+
+[features]
+# Real libzim backend via the C++ shim (see shim/, build.rs). Without it the
+# crate is pure Rust and every ZIM-dependent path fails closed.
+default = ["zim-backend"]
+zim-backend = []

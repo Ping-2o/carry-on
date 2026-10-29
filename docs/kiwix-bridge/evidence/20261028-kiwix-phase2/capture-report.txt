@@ -1,0 +1,13 @@
+prefs container: legacy SharedPreferences XML
+CAPTURED zim identity from real file: uuid=e648a210-47dd-5898-33e1-88f16a0ec2c8 size=27010448
+--- capture report ---
+currentzimfile = Some("/storage/emulated/0/Android/media/org.kiwix.kiwixmobile.standalone/Kiwix/wikipedia_ru_mathematics_mini_2026-10.zim")
+currenttab     = Some(0)
+scrollY        = Some(0)
+article (history table) = Some(("https://kiwix.app/index", "Википедия"))
+article bytes  = 30723
+settings       = zoom=None theme=None
+DROPPED: webViewBackForwardListBundle: 3988 bytes carried as opaque_platform_state (base64); the Chromium back/forward serialization inside is platform-versioned and NOT interpreted
+DROPPED: bookmarks: stored by the app in libkiwix XML (not Room) — not captured in Phase 2
+FALLBACK: article path from the app's own HistoryRoomEntity: index
+CAPTURE_OK

@@ -1,0 +1,13 @@
+dest: connecting to 192.168.3.26:49151...
+dest: header ok: v6.3 articles=476218 clusters=3815 mime_list@80 title_idx@18446744073709551615 clusters@1864179784 checksum@1864210304
+dest: probed namespace range 'C' = [0, 476201); dirent region starts at 1831676082
+dest: sparse index: 58 dirent probes (15312 wire bytes, 116 requests) — vs 28693958 B dense region + 3809744 B urlPtr table
+dest: index fetched (wire 47880/1864210320 = 0.003%, unique 45304/1864210320 = 0.002%)
+dest: article 'Wikipedia:WikiProject_Medicine/Open_Textbook_of_Medicine2' lives in cluster 1653 blob 12
+dest: listing cluster 3814 header only: 9 B (info + offsets table; blob 1486468 B NOT read at open)
+dest: after index+listing, article not yet readable (read: zim read failed) — expected (cluster hole)
+dest: fetching cluster 1653 whole: range [381408861, 381618491) = 209630 B (compression 0x05)
+dest: ARTICLE READABLE — wire 257521/1864210320 bytes = 0.0138% | unique 254943/1864210320 bytes = 0.0137% of the ZIM (index wire 47880)
+dest: article sha256=37dbc021e7300e094df3e083df86392db77e99189518e62fbe6cb9d8ba14ae7a
+dest: wire sent=32292 recv=385006
+dest: MATERIALIZE_OK

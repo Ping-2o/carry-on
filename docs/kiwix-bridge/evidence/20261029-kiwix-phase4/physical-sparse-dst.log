@@ -1,0 +1,13 @@
+dest: connecting to 192.168.3.26:49141...
+dest: header ok: v6.3 articles=31576 clusters=94 mime_list@80 title_idx@18446744073709551615 clusters@27009680 checksum@27010432
+dest: probed namespace range 'C' = [0, 31559); dirent region starts at 23863896
+dest: sparse index: 47 dirent probes (12408 wire bytes, 94 requests) — vs 2893176 B dense region + 252608 B urlPtr table
+dest: index fetched (wire 15208/27010448 = 0.056%, unique 12197/27010448 = 0.045%)
+dest: article 'index' lives in cluster 92 blob 111
+dest: listing cluster 93 header only: 9 B (info + offsets table; blob 85236 B NOT read at open)
+dest: after index+listing, article not yet readable (read: zim read failed) — expected (cluster hole)
+dest: fetching cluster 92 whole: range [23734008, 23778659) = 44651 B (compression 0x05)
+dest: ARTICLE READABLE — wire 59870/27010448 bytes = 0.2217% | unique 56857/27010448 bytes = 0.2105% of the ZIM (index wire 15208)
+dest: article sha256=795cdfcd45285b3432ab3668d2d76a77a52a182eb600a257e707a79d6404bede
+dest: wire sent=26457 recv=113944
+dest: MATERIALIZE_OK

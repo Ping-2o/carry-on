@@ -1,0 +1,11 @@
+dest: connecting to 192.168.3.26:48990...
+dest: imported {"completed":true,"mirror_cut":0}
+dest(after import): WIRE sent=1859 recv=45522 bytes
+dest: RESTORE {"oracle":{"agreed":true,"checked":true,"detail":"reading restored at generation 1 (index @ scroll 0)"},"output":{"article_hash":"795cdfcd45285b3432ab3668d2d76a77a52a182eb600a257e707a79d6404bede","article_path":"index","generation":1,"scroll_y":0,"tab_index":0,"zim_size":27010448,"zim_uuid":"e648a210-47dd-5898-33e1-88f16a0ec2c8"},"output_hash":"c5afce82101e4c37f6570ce179f3910c2f321aaaf92645c485dce3274cba76c1"}
+dest: may_mutate before transfer = false
+dest: receipt={"proposal_id":"46f5d11a-8882-4150-a99c-239f2a287191","new_epoch":1,"dest_receipt":"accept:0:77175902cdb8d6ddfed41d9bf5fb75f14a30214e0b9c2566c320cd98163bc169","source_receipt":"relinquish:46f5d11a-8882-4150-a99c-239f2a287191:77175902cdb8d6ddfed41d9bf5fb75f14a30214e0b9c2566c320cd98163bc169"}
+dest: may_mutate after transfer = true
+dest: NAVIGATE {"oracle":{"agreed":true,"checked":true,"detail":"navigated to Эйнштейн,_Альберт at generation 2 (article bytes: extracted from zim)"},"output":{"article_bytes_available":true,"article_path":"Эйнштейн,_Альберт","generation":2,"scroll_y":321},"output_hash":"2a15a29e2a7a020d607411c5d51266aef808c0663dc97bee1bcce0d924df1098"}
+dest: RESTORE-AT-OLD-CUT refused (expected — stale cut): rc=300 OBJECT_Missing: object kiwix.session.v1 gen 2
+dest(final): WIRE sent=2143 recv=46288 bytes
+dest: OK — authoritative owner; position moved on-device
