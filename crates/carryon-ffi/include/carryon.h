@@ -31,7 +31,7 @@ extern "C" {
 
 /* ABI version. Check against carryon_abi_version() at load. */
 #define CARRYON_ABI_MAJOR 1u
-#define CARRYON_ABI_MINOR 0u
+#define CARRYON_ABI_MINOR 1u
 
 /* Result codes. */
 #define CARRYON_OK                    0

@@ -28,8 +28,11 @@ pub mod handle;
 pub mod strings;
 
 /// C ABI version. Major changes break the header; minor are additive.
+/// 1.1: `carryon_import_cut` / `carryon_resume_import` result JSON gains the
+/// additive `partial_budget` shape (§6.8 progressive budget admission); no
+/// signature changes.
 pub const CARRYON_ABI_MAJOR: u32 = 1;
-pub const CARRYON_ABI_MINOR: u32 = 0;
+pub const CARRYON_ABI_MINOR: u32 = 1;
 
 /// Write the ABI version into the out-params. Lets a shell check compatibility at
 /// load time against the header's `#define`s.

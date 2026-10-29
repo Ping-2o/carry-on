@@ -275,6 +275,21 @@ fn write_outcome(out: *mut *mut c_char, outcome: &ImportOutcome) -> i32 {
         ImportOutcome::Suspended(token) => {
             serde_json::json!({ "suspended": true, "resume_token": token })
         }
+        // Additive shape (ABI 1.1): the budget admitted a prefix of the closure
+        // (§6.8 progressive admission). Nothing sealed; retry `carryon_import_cut`
+        // with a replenished budget — published objects are skipped by dedup.
+        ImportOutcome::PartialBudget(partial) => serde_json::json!({
+            "partial_budget": true,
+            "remote_session": partial.remote_session,
+            "remote_cut": partial.remote_cut,
+            "published": partial
+                .published
+                .iter()
+                .map(|(id, gen)| serde_json::json!({ "object_id": id, "generation": gen }))
+                .collect::<Vec<_>>(),
+            "deferred": partial.deferred,
+            "deferred_bytes": partial.deferred_bytes,
+        }),
     };
     write_out_string(out, json.to_string())
 }

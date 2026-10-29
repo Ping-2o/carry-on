@@ -26,7 +26,7 @@ pub mod transfer;
 
 pub use crate::authority_xfer::{AuthorityReceiptSet, SourcePending};
 pub use crate::core::{Core, CreateSessionReq};
-pub use crate::transfer::{ImportOutcome, ImportResume};
+pub use crate::transfer::{ImportOutcome, ImportResume, PartialImport};
 pub use error::{CoreError, Result};
 
 /// Phase 2 transport re-export so callers drive handoff with one dependency.
