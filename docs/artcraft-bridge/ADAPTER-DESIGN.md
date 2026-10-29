@@ -403,3 +403,50 @@ test).
   synthetic contract + REAL round-trip + REAL progressive windows through two
   cores over loopback TLS), `crates/carryon-core/tests/mobile_transfer.rs`
   (+2: prefix publish/retry-complete, below-every-object refusal).
+
+### 7.8 Phase 4.2 results — PHYSICAL L4 authority transfer (status notes; the orchestrator owns FRONTIER/TARGETS)
+
+The gap between LOCAL-L4 (Phase 3: two live apps, loopback) and PHYSICAL-L3
+(Phase 3: mac → Galaxy A04 carry, no authority) is closed — **OBSERVED,
+PHYSICAL** (two machines, two NICs, LAN TLS 1.3, pin-based, port 48964):
+[`evidence/phys-l4/bundle.json`](evidence/phys-l4/bundle.json) +
+`scripts/phys_l4_handoff.sh`, harness `examples/phys_l4_source.rs` (mac) /
+`examples/phys_l4_dest.rs` (Galaxy A04, aarch64-android, **with the
+in-process engine embedded** — the Phase-1 cross-build paying off).
+
+Flow, all checks green:
+1. LIVE PhotoCraft app on the mac (control channel) builds the flagship dirty
+   session; the source core seals a **split cut** (manifest + tile objects —
+   the tile-split encoding crosses the wire physically; the flagship 1024×768
+   document is one tile, so this run proves the split *mechanism*, while the
+   60-tile granularity is the LOCAL §7.7 measurement). Honest encoding note:
+   the live app's `app.save` is export→bytes→file (`services.rs` `save_through`
+   at the pin), so it cannot write directory bundles; the harness converts the
+   app's saved base zip into a directory bundle **on the same machine with the
+   same pinned engine** (PhotoCraft itself writes the bundle), and the
+   composite-pixel oracle pins content identity.
+2. The device imports over LAN TLS (50,391 B wire, 1.53 s), re-hashes every
+   object from **its own store** (all match), reconstructs, opens the carried
+   dirty state with the **on-device engine**, and renders — composite-pixel
+   sha256 `ef8c0c13…` identical mac↔device (the same hash as the Phase-3
+   physical L3 carry: same document, same oracle).
+3. §21.2 over the same TLS session: proposal bound to the authoritative-state
+   hash, destination re-derivation agrees, durable accept — **epoch 0→1, the
+   device owns (owner=local, not ambiguous), the source drops to read-only**.
+4. Source-off: mac SIGKILLs the live app; the **reopened mac core** reports
+   `may_mutate=false` and `guard_mutation` refuses **AUTH_ReadOnly
+   (AUTH-005)**; a relaunched app runs alive (read-only-paired — the CORE is
+   what refuses).
+5. The device's **fresh process** (strongest source-independence proof in the
+   series — new process, everything re-derived from the device store; the
+   mac's app is dead) re-owns the epoch and edits through its own core:
+   `document.edit` **steps_ran=2, revision→3, still owns**, post-edit
+   composite hash recorded (`bdfe779f…`).
+
+### 7.9 Phase 4.3 — live-harness xtask convention (stretch, IMPLEMENTED)
+
+`cargo xtask demo --list` enumerates the three live physical/LOCAL harnesses
+(`l3-live`, `l4-live`, `phys-handoff`, `phys-l4-handoff`, and the
+measurement examples) with their exact run commands and feature flags, so the
+evidence conventions are repeatable from one entry point
+([`xtask/src/main.rs`](../../../xtask/src/main.rs) `demo` subcommand).

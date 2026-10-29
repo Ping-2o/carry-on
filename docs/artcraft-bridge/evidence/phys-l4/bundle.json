@@ -1,0 +1,111 @@
+{
+  "experiment": "physical L4 authority transfer (mac -> Galaxy A04)",
+  "scope": "PHYSICAL (two machines, two NICs; LAN TLS 1.3, pin-based)",
+  "photocraft_pin": "1f7fc0f53696e54da79b95015abb37d7c22cdd1a",
+  "transport": {
+    "port": 48974,
+    "source_lan_ip": "192.168.3.26",
+    "tls": "rustls TLS 1.3, pin-based"
+  },
+  "device": {
+    "model": "SM-A045F",
+    "android": "13",
+    "abi": "arm64-v8a",
+    "hardware": "Hardware\t: MT6765V/CB",
+    "meminfo": "MemTotal:        3882400 kB"
+  },
+  "flow": [
+    "live app (control channel) -> source core seals split cut (manifest + tiles)",
+    "LAN TLS serve: cut + \u00a721.2 authority transfer (same session)",
+    "device imports, reconstructs from its own store by digest, on-device composite oracle, accepts epoch 1",
+    "mac SIGKILLs the live app; reopened mac core: may_mutate=false, guard refused",
+    "relaunched mac app alive (read-only-paired: the CORE refuses)",
+    "device FRESH process: re-owns, document.edit source-off, 2 steps"
+  ],
+  "source": {
+    "authority_receipts": {
+      "new_epoch": 1,
+      "proposal_id": "e13a7b4b-0de8-4de6-b4b8-9c939d8b704b"
+    },
+    "base_zip_bytes": 10761,
+    "carried_wire_bytes": 50245,
+    "carry_seconds": 1.435547208,
+    "composite_png_sha256_of_dirty_state": "ef8c0c13df0d359dd0c3412a2db38ea7f4d78294d1b8a7c1dd53d838c5d977fd",
+    "cut_number": 0,
+    "document_encoding": "split (manifest + tiles; base zip converted to a directory bundle by the pinned engine on this machine)",
+    "experiment": "physical-L4 source side (live app, mac)",
+    "photocraft_pin": "1f7fc0f53696e54da79b95015abb37d7c22cdd1a",
+    "scope": "PHYSICAL (two machines, two NICs; LAN TLS 1.3, pin-based)",
+    "session": "b0664de2-e687-4536-a2a6-b338a3fe692d",
+    "source_meta": {
+      "adapter_version": "0.1.0",
+      "dirty": true,
+      "document_encoding": "split",
+      "document_name": "base.pcraft",
+      "original_path": "base.pcraft",
+      "photocraft_pin": "1f7fc0f53696e54da79b95015abb37d7c22cdd1a",
+      "revision": 5,
+      "saved_revision": 0,
+      "schema_id": "carryon.photocraft.session",
+      "schema_version": 1,
+      "unsaved_mode": "snapshot"
+    },
+    "source_read_only_after": true,
+    "transfer_seconds_total": 4.402239334,
+    "unsaved_bytes": 30463
+  },
+  "destination_take": {
+    "authority": {
+      "ambiguous": false,
+      "device_owns": true,
+      "new_epoch": 1,
+      "owner_device": "local"
+    },
+    "composite_png_sha256_on_device": "ef8c0c13df0d359dd0c3412a2db38ea7f4d78294d1b8a7c1dd53d838c5d977fd",
+    "computed_on_device_by": "photocraft-engine embedded in phys_l4_dest (aarch64-linux-android)",
+    "device_store_rehash_all_match": true,
+    "experiment": "physical-L4 destination take (Galaxy A04)",
+    "import_seconds": 1.534183385,
+    "import_wire_bytes": 50391,
+    "mirror_cut": 0,
+    "photocraft_pin": "1f7fc0f53696e54da79b95015abb37d7c22cdd1a",
+    "registered_adapter": "org.carryon.photocraft",
+    "scope": "PHYSICAL (two machines, two NICs; LAN TLS 1.3, pin-based)"
+  },
+  "destination_continue": {
+    "device_still_owns": true,
+    "document_edit_output": {
+      "revision": 3,
+      "steps_ran": 2,
+      "unsaved_hash": "bdfe779fb6391f60d85d1a74a86200111adfac8db897143bb2b908a9a5dafaf5"
+    },
+    "edit_revision": 3,
+    "edit_seconds": 1.453061846,
+    "edit_steps_ran": 2,
+    "experiment": "physical-L4 destination continue, source-off (Galaxy A04)",
+    "fresh_process": true,
+    "post_edit_unsaved_hash": "bdfe779fb6391f60d85d1a74a86200111adfac8db897143bb2b908a9a5dafaf5",
+    "scope": "PHYSICAL; fresh process; source app killed, source core dropped on the mac"
+  },
+  "source_reopen_read_only": {
+    "authority_state": {
+      "ambiguous": false,
+      "epoch": 1,
+      "mode": "ReadOnlyReplica",
+      "owner_device": "remote"
+    },
+    "guard_mutation_error": "AUTH_ReadOnly: session is a read-only replica (AUTH-005)",
+    "reopened_source_guard_refused": true,
+    "reopened_source_may_mutate": false
+  },
+  "oracle": {
+    "composite_pixel_sha256_source": "ef8c0c13df0d359dd0c3412a2db38ea7f4d78294d1b8a7c1dd53d838c5d977fd",
+    "composite_pixel_sha256_device_before_edits": "ef8c0c13df0d359dd0c3412a2db38ea7f4d78294d1b8a7c1dd53d838c5d977fd",
+    "computed_on_device_by": "photocraft-engine embedded in phys_l4_dest (aarch64-linux-android)",
+    "result": "match"
+  },
+  "source_relaunch_probe": {
+    "note": "the relaunched app runs normally; authority lives in the cores \u2014 the device's core owns epoch 1, the mac's core refuses mutation (AUTH_ReadOnly)",
+    "restarted_source_app_alive": true
+  }
+}

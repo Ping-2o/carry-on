@@ -56,6 +56,14 @@ name = "tile_progressive"
 required-features = ["inprocess"]
 
 [[example]]
+name = "phys_l4_source"
+required-features = ["inprocess"]
+
+[[example]]
+name = "phys_l4_dest"
+required-features = ["inprocess"]
+
+[[example]]
 name = "phys_source"
 required-features = ["inprocess"]
 
