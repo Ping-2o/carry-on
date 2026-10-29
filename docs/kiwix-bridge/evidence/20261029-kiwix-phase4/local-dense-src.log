@@ -1,0 +1,7 @@
+source: bulk_sha256=9e1b3a3e08eda0dcc7dcec3f0a93afdb1b1c3eb7b91dd721a081e4d3d1a12b7f
+source: bulk_size=27010448
+source: article_path=index
+source: article_sha256=795cdfcd45285b3432ab3668d2d76a77a52a182eb600a257e707a79d6404bede
+source: listening on 127.0.0.1:49121, waiting for destination...
+source: served 6425017 bytes of 27010448 (23.787%) — wire sent=8577384 recv=8593
+source: MATERIALIZE_SERVE_OK

@@ -68,8 +68,17 @@ czim_archive *czim_open_noxapian(const char *utf8_path) {
     return nullptr;
   }
   try {
+    /* Progressive open for partially-materialized archives:
+     * - no eager Xapian preload (lazy; fails closed while sparse);
+     * - preloadDirentRanges(0): libzim's DEFAULT OpenConfig preloads
+     *   DIRENT_LOOKUP_CACHE_SIZE (1024) dirent ranges at open, which
+     *   touches ~1025 dirents spread over the whole dirent region — the
+     *   whole region would have to be materialized. With 0, libzim uses
+     *   the lazy DirentLookup binary search (src/dirent_lookup.h), which
+     *   reads only the O(log n) dirents each lookup actually probes. */
     auto arch = std::make_shared<zim::Archive>(
-        std::string(utf8_path), zim::OpenConfig().preloadXapianDb(false));
+        std::string(utf8_path),
+        zim::OpenConfig().preloadDirentRanges(0).preloadXapianDb(false));
     auto out = new (std::nothrow) czim_archive{std::move(arch)};
     return out;
   } catch (...) {

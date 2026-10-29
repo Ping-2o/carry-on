@@ -1,0 +1,13 @@
+dest: connecting to 127.0.0.1:49132...
+dest: header ok: v6.3 articles=31576 clusters=94 mime_list@80 title_idx@18446744073709551615 clusters@27009680 checksum@27010432
+dest: mime list [80, 2048); clusters occupy the hole; dirents at [23863896, 26757072)
+dest: index fetched (wire 3148592/27010448 = 11.657%, unique 3148584/27010448 = 11.657%)
+dest: dense scan walked 31576 urlPtr offsets, parsed 31576 dirents
+dest: article 'index' lives in cluster 92 blob 111
+dest: listing cluster 93 header 9 B + blob 85228 B (blob-range fetch)
+dest: after index+listing, article not yet readable (read: zim read failed) — expected (cluster hole)
+dest: fetching cluster 92 whole: range [23734008, 23778659) = 44651 B (compression 0x05)
+dest: ARTICLE READABLE — wire 3278482/27010448 bytes = 12.1378% | unique 3278472/27010448 bytes = 12.1378% of the ZIM (index wire 3148592)
+dest: article sha256=795cdfcd45285b3432ab3668d2d76a77a52a182eb600a257e707a79d6404bede
+dest: wire sent=6517 recv=4379360
+dest: MATERIALIZE_OK

@@ -1,0 +1,7 @@
+source: bulk_sha256=9a1570f2f346aa18694ee520e0483f19b7447f69e0970e2f727c53ccf0dcc7d6
+source: bulk_size=1864210320
+source: article_path=Wikipedia:WikiProject_Medicine/Open_Textbook_of_Medicine2
+source: article_sha256=37dbc021e7300e094df3e083df86392db77e99189518e62fbe6cb9d8ba14ae7a
+source: listening on 0.0.0.0:49152, waiting for destination...
+source: served 34232379 bytes of 1864210320 (1.836%) — wire sent=45690226 recv=36911
+source: MATERIALIZE_SERVE_OK
