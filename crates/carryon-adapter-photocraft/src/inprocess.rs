@@ -325,6 +325,147 @@ impl InProcessDriver {
         Ok(full)
     }
 
+    /// Save the active document as a **directory bundle** under the work root
+    /// (TILE-SPLITTING.md §2): PhotoCraft writes `manifest.json` +
+    /// `tiles/<blake3>.zst` + `blobs/<blake3>.zst` (+ previews, which the carry
+    /// does not take). The same save/checkpoint semantics as
+    /// [`Self::save_active_under_root`]; this is the split-mode base save.
+    pub fn save_active_bundle_under_root(&mut self, rel_dir: &str) -> Result<PathBuf, DriverError> {
+        if rel_dir.contains("..") {
+            return Err(DriverError::Failed("traversal in save path".into()));
+        }
+        let full = self.cfg.work_root.join(rel_dir);
+        std::fs::create_dir_all(&full)
+            .map_err(|e| DriverError::Failed(format!("create bundle dir: {e}")))?;
+        let idx = self.active_index()?;
+        let mut named = (*self.session.documents()[idx].doc).clone();
+        // The bundle reports the final name component (files.rs
+        // `named_for_output`); a directory's name is its last component.
+        if let Some(name) = rel_dir.rsplit('/').next().filter(|n| !n.is_empty()) {
+            named.name = name.to_owned();
+        }
+        // `files::save` dispatches on `pcraft` + an existing directory →
+        // `PcraftWriter::save_dir` (RESEARCH §1.5: incremental, content-addressed).
+        photocraft_automation::files::save(
+            &named,
+            &full,
+            Some("pcraft"),
+            &photocraft_io::ExportOptions::default(),
+            None,
+        )
+        .map_err(|e| DriverError::Failed(format!("save bundle: {e}")))?;
+        let path_str = full.to_string_lossy().into_owned();
+        let st = self
+            .session
+            .active_mut()
+            .ok_or_else(|| DriverError::Failed("no active document".into()))?;
+        st.saved_to(path_str);
+        self.saved_checkpoint = self.session.journal.len();
+        Ok(full)
+    }
+
+    /// Read a directory bundle under the work root into a [`DocumentBundle`]
+    /// (manifest + every tile/blob entry's exact bytes; previews are not
+    /// carried, TILE-SPLITTING.md §2). Fail closed on anything unexpected
+    /// inside the bundle directory.
+    pub fn bundle_of_dir(&self, dir: &Path) -> Result<crate::model::DocumentBundle, DriverError> {
+        let manifest = std::fs::read(dir.join("manifest.json"))
+            .map_err(|e| DriverError::Failed(format!("read manifest.json: {e}")))?;
+        let mut parts = std::collections::BTreeMap::new();
+        for sub in ["tiles", "blobs"] {
+            let subdir = dir.join(sub);
+            let entries = std::fs::read_dir(&subdir)
+                .map_err(|e| DriverError::Failed(format!("read {}: {e}", subdir.display())))?;
+            for entry in entries {
+                let entry = entry.map_err(|e| DriverError::Failed(format!("list dir: {e}")))?;
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let Some(stem) = name.strip_suffix(".zst") else {
+                    return Err(DriverError::Failed(format!(
+                        "unexpected non-.zst entry in bundle {sub}: {name}"
+                    )));
+                };
+                // Content-addressed names only: PhotoCraft writes <blake3>.zst
+                // (RESEARCH §1.5); anything else is not a bundle part.
+                if stem.len() != 64 || !stem.bytes().all(|b| b.is_ascii_hexdigit()) {
+                    return Err(DriverError::Failed(format!(
+                        "bundle entry {sub}/{name} is not content-addressed"
+                    )));
+                }
+                let bytes = std::fs::read(entry.path())
+                    .map_err(|e| DriverError::Failed(format!("read part: {e}")))?;
+                parts.insert(format!("{sub}/{name}"), bytes);
+            }
+        }
+        Ok(crate::model::DocumentBundle { manifest, parts })
+    }
+
+    /// Write a [`DocumentBundle`] into `rel_dir` under the work root — the
+    /// destination-side reconstruction (TILE-SPLITTING.md §3): `manifest.json`
+    /// plus every part, bytes exact. The **fail-closed closure check belongs to
+    /// PhotoCraft's own loader**: the manifest names parts by bare BLAKE3
+    /// hash and the loader fetches each hash it needs, refusing on the first
+    /// missing one — so an incomplete carry can never open as a document (a
+    /// wrong extra part is ignored, exactly as PhotoCraft ignores
+    /// unreferenced bundle entries on open; the GC only removes them on save).
+    pub fn write_bundle_under_root(
+        &self,
+        rel_dir: &str,
+        bundle: &crate::model::DocumentBundle,
+    ) -> Result<PathBuf, DriverError> {
+        if rel_dir.contains("..") {
+            return Err(DriverError::Failed("traversal in write path".into()));
+        }
+        let full = self.cfg.work_root.join(rel_dir);
+        for sub in ["tiles", "blobs"] {
+            std::fs::create_dir_all(full.join(sub))
+                .map_err(|e| DriverError::Failed(format!("create bundle dir: {e}")))?;
+        }
+        for (path, bytes) in &bundle.parts {
+            let (sub, name) = path
+                .split_once('/')
+                .ok_or_else(|| DriverError::Failed(format!("bad part path {path}")))?;
+            std::fs::write(full.join(sub).join(name), bytes)
+                .map_err(|e| DriverError::Failed(format!("write part {path}: {e}")))?;
+        }
+        std::fs::write(full.join("manifest.json"), &bundle.manifest)
+            .map_err(|e| DriverError::Failed(format!("write manifest.json: {e}")))?;
+        Ok(full)
+    }
+
+    /// The active document serialized as single-file `.pcraft` zip bytes —
+    /// the MONOLITHIC encoding of the same state the bundle carries
+    /// (TILE-SPLITTING.md §6 measures both). In-memory; touches no DocState.
+    pub fn zip_bytes_of_active(&self) -> Result<Vec<u8>, DriverError> {
+        self.pcraft_bytes_of_active()
+    }
+
+    /// The saved base document as a **split bundle** (the split-mode analogue
+    /// of [`PhotocraftDriver::document_bytes`]): reads the bundle directory
+    /// the document was saved into. Fail closed when the saved base is a zip
+    /// (split carry needs a directory-bundle base) or outside the root.
+    pub fn document_bundle_of_active(&self) -> Result<crate::model::DocumentBundle, DriverError> {
+        let idx = self.active_index()?;
+        let path = self.session.documents()[idx].path.clone();
+        match path {
+            Some(p) if under_root(&p) => {
+                let dir = Path::new(&p);
+                if !dir.is_dir() {
+                    return Err(DriverError::Failed(format!(
+                        "saved base {p:?} is not a directory bundle; \
+                         save with save_active_bundle_under_root for split carry"
+                    )));
+                }
+                self.bundle_of_dir(dir)
+            }
+            Some(p) => Err(DriverError::Failed(format!(
+                "document path {p:?} is outside the granted work root"
+            ))),
+            None => Err(DriverError::Failed(
+                "document has no saved base; save_active_bundle_under_root first".into(),
+            )),
+        }
+    }
+
     /// Open a document from under the work root and make it active. The
     /// in-process analogue of app.open / doc.open.
     pub fn open_under_root(&mut self, rel: &str) -> Result<usize, DriverError> {
@@ -394,6 +535,10 @@ impl PhotocraftDriver for InProcessDriver {
         }
     }
 
+    fn document_bundle(&mut self) -> Result<crate::model::DocumentBundle, DriverError> {
+        self.document_bundle_of_active()
+    }
+
     fn unsaved_bytes(&mut self) -> Result<Vec<u8>, DriverError> {
         self.unsaved_bytes_as(self.unsaved_mode())
     }
@@ -406,6 +551,13 @@ impl PhotocraftDriver for InProcessDriver {
             let n = d.doc.name.clone();
             (n, p)
         };
+        // Split carry requires a directory-bundle saved base; the encoding
+        // follows the actual on-disk shape (fail closed in `document_bundle`
+        // when they disagree).
+        let document_encoding = match &path {
+            Some(p) if Path::new(p).is_dir() => crate::model::DocumentEncoding::Split,
+            _ => crate::model::DocumentEncoding::Monolithic,
+        };
         Ok(PhotocraftMeta {
             schema_id: "carryon.photocraft.session".into(),
             schema_version: 1,
@@ -417,6 +569,7 @@ impl PhotocraftDriver for InProcessDriver {
             dirty: d.is_dirty(),
             photocraft_pin: PHOTOCRAFT_PIN.into(),
             unsaved_mode: self.unsaved_mode(),
+            document_encoding,
         })
     }
 

@@ -35,8 +35,8 @@
 //! bound to the authoritative-state hash (§21.2): document + unsaved + meta.
 
 use crate::model::{
-    PhotocraftMeta, Workspace, ADAPTER_ID, MAX_OBJECT_BYTES, SCHEMA_DOC, SCHEMA_META,
-    SCHEMA_UNSAVED, SCHEMA_WORKSPACE,
+    DocumentBundle, DocumentEncoding, PhotocraftMeta, Workspace, ADAPTER_ID, MAX_OBJECT_BYTES,
+    SCHEMA_DOC, SCHEMA_DOC_MANIFEST, SCHEMA_META, SCHEMA_UNSAVED, SCHEMA_WORKSPACE,
 };
 use carryon_adapter_api::*;
 use serde::{Deserialize, Serialize};
@@ -52,11 +52,21 @@ pub mod model;
 pub use control::{ControlChannelConfig, ControlChannelConfigFile, ControlChannelDriver, Secret};
 pub use driver::{DriverError, EditOutcome, PhotocraftDriver, Step, StubDriver};
 
+/// The saved document's carried representation. `Monolithic` is the Phase 1–3
+/// shape (one `.pcraft` zip object, [`model::SCHEMA_DOC`]); `Split` is the
+/// tile-split shape (TILE-SPLITTING.md §2: one manifest object +
+/// parent-linked content-addressed tile/blob objects).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DocumentState {
+    Monolithic(Vec<u8>),
+    Split(DocumentBundle),
+}
+
 /// In-memory session state: what the adapter serves bytes for. On a real
 /// machine the Phase-2 driver fills it from (or pushes it into) PhotoCraft.
 pub struct PhotocraftAdapter {
     session: String,
-    document: Vec<u8>,
+    document: DocumentState,
     unsaved: Vec<u8>,
     workspace: Workspace,
     meta: PhotocraftMeta,
@@ -85,16 +95,44 @@ struct Proposal {
 impl PhotocraftAdapter {
     /// A session from explicit state — the constructor a Phase-2 driver uses
     /// after it has pulled state out of PhotoCraft (or pushed carried state in).
+    /// Monolithic document mode (the Phase 1–3 shape).
     pub fn with_state(
         session: impl Into<String>,
         document: Vec<u8>,
         unsaved: Vec<u8>,
         workspace: Workspace,
-        meta: PhotocraftMeta,
+        mut meta: PhotocraftMeta,
     ) -> Self {
+        // The constructor is the authority on the byte shape; the meta label can
+        // never disagree with the served objects.
+        meta.document_encoding = DocumentEncoding::Monolithic;
         PhotocraftAdapter {
             session: session.into(),
-            document,
+            document: DocumentState::Monolithic(document),
+            unsaved,
+            workspace,
+            meta,
+            generation: 1,
+            driver: None,
+            pending: None,
+        }
+    }
+
+    /// A session whose saved document is carried as a **split bundle**
+    /// (TILE-SPLITTING.md §2): the manifest is one object, every tile/blob a
+    /// parent-linked content-addressed object. `meta.document_encoding` must
+    /// say `Split` — fail closed on a mismatch (an honest manifest).
+    pub fn with_split_state(
+        session: impl Into<String>,
+        bundle: DocumentBundle,
+        unsaved: Vec<u8>,
+        workspace: Workspace,
+        mut meta: PhotocraftMeta,
+    ) -> Self {
+        meta.document_encoding = DocumentEncoding::Split;
+        PhotocraftAdapter {
+            session: session.into(),
+            document: DocumentState::Split(bundle),
             unsaved,
             workspace,
             meta,
@@ -133,6 +171,7 @@ impl PhotocraftAdapter {
             dirty: true,
             photocraft_pin: "1f7fc0f53696e54da79b95015abb37d7c22cdd1a".into(),
             unsaved_mode: model::UnsavedMode::Snapshot,
+            document_encoding: model::DocumentEncoding::Monolithic,
         };
         let workspace = Workspace {
             active_document_index: 0,
@@ -167,11 +206,36 @@ impl PhotocraftAdapter {
 
     fn object_bytes(&self, object_id: &str) -> Option<Vec<u8>> {
         match object_id {
-            SCHEMA_DOC => Some(self.document.clone()),
             SCHEMA_UNSAVED => Some(self.unsaved.clone()),
             SCHEMA_META => Some(self.meta_bytes()),
             SCHEMA_WORKSPACE => Some(self.workspace_bytes()),
-            _ => None,
+            SCHEMA_DOC => match &self.document {
+                DocumentState::Monolithic(b) => Some(b.clone()),
+                DocumentState::Split(_) => None,
+            },
+            SCHEMA_DOC_MANIFEST => match &self.document {
+                DocumentState::Split(b) => Some(b.manifest.clone()),
+                DocumentState::Monolithic(_) => None,
+            },
+            other => match &self.document {
+                DocumentState::Split(bundle) => bundle
+                    .part_entries()
+                    .into_iter()
+                    .find(|(id, _)| id == other)
+                    .and_then(|(_, path)| bundle.parts.get(&path).cloned()),
+                DocumentState::Monolithic(_) => None,
+            },
+        }
+    }
+
+    /// The document's logical bytes for the authoritative-state hash: the zip
+    /// bytes (monolithic) or the bundle's canonical serialization (split —
+    /// deterministic across machines, TILE-SPLITTING.md §2). The same length-
+    /// prefixed hash formula either way (ADAPTER-DESIGN §3).
+    fn document_logical_bytes(&self) -> Vec<u8> {
+        match &self.document {
+            DocumentState::Monolithic(b) => b.clone(),
+            DocumentState::Split(bundle) => bundle.canonical_bytes(),
         }
     }
 
@@ -179,20 +243,22 @@ impl PhotocraftAdapter {
     /// (ADAPTER-DESIGN §3). Authority proposals are bound to this, never to a
     /// token or a process.
     fn auth_hash(&self) -> String {
-        model::authoritative_hash(&self.document, &self.unsaved, &self.meta_bytes())
+        model::authoritative_hash(
+            &self.document_logical_bytes(),
+            &self.unsaved,
+            &self.meta_bytes(),
+        )
     }
 
-    fn entry(&self, object_id: &str, kind: ObjectKindWire) -> ObjectEntry {
-        let bytes = self.object_bytes(object_id).unwrap_or_default();
-        // The unsaved object derives from the saved document; record lineage.
-        let parents = if object_id == SCHEMA_UNSAVED {
-            vec![ObjectVersionWire {
-                object_id: SCHEMA_DOC.into(),
-                generation: self.generation,
-            }]
-        } else {
-            vec![]
-        };
+    /// One manifest entry with explicit parents (the split tiles' parent link
+    /// is the document manifest, TILE-SPLITTING.md §2).
+    fn entry_with(
+        &self,
+        object_id: &str,
+        kind: ObjectKindWire,
+        bytes: Vec<u8>,
+        parents: Vec<ObjectVersionWire>,
+    ) -> ObjectEntry {
         ObjectEntry {
             object_id: object_id.to_string(),
             generation: self.generation,
@@ -212,15 +278,91 @@ impl PhotocraftAdapter {
         }
     }
 
+    fn entry(&self, object_id: &str, kind: ObjectKindWire) -> ObjectEntry {
+        let bytes = self.object_bytes(object_id).unwrap_or_default();
+        // The unsaved object derives from the saved document; record lineage.
+        let parents = if object_id == SCHEMA_UNSAVED {
+            vec![ObjectVersionWire {
+                object_id: self.document_root_id().into(),
+                generation: self.generation,
+            }]
+        } else {
+            vec![]
+        };
+        self.entry_with(object_id, kind, bytes, parents)
+    }
+
+    /// The root document object id of the current encoding: the zip object
+    /// (monolithic) or the manifest object (split). Unsaved-edits lineage and
+    /// tile parent links hang off this.
+    fn document_root_id(&self) -> &'static str {
+        match self.document {
+            DocumentState::Monolithic(_) => SCHEMA_DOC,
+            DocumentState::Split(_) => SCHEMA_DOC_MANIFEST,
+        }
+    }
+
+    /// Object ids every declared action's prerequisites must resolve to, in
+    /// **admission-priority order** (small + critical first): meta, unsaved,
+    /// the document root, then — in split mode — every referenced part sorted
+    /// by id (TILE-SPLITTING.md §5: progressive budget admission takes this
+    /// prefix, so a small window still banks the session identity, the edit
+    /// journal and the manifest before any pixels).
+    fn document_prerequisite_ids(&self) -> Vec<String> {
+        match &self.document {
+            DocumentState::Monolithic(_) => vec![SCHEMA_DOC.into()],
+            DocumentState::Split(bundle) => {
+                let mut ids = vec![SCHEMA_DOC_MANIFEST.into()];
+                ids.extend(bundle.part_entries().into_iter().map(|(id, _)| id));
+                ids
+            }
+        }
+    }
+
     fn all_entries(&self) -> Vec<ObjectEntry> {
-        vec![
-            self.entry(SCHEMA_DOC, ObjectKindWire::Authoritative),
-            self.entry(SCHEMA_UNSAVED, ObjectKindWire::Authoritative),
+        // Admission-priority order: meta + unsaved first (tiny, critical),
+        // then the document closure (TILE-SPLITTING.md §5).
+        let mut entries = vec![
             self.entry(SCHEMA_META, ObjectKindWire::Authoritative),
-            // Workspace is ephemeral + optional: published but never sealed
-            // into the cut, deferrable by a progressive carry.
-            self.entry(SCHEMA_WORKSPACE, ObjectKindWire::Ephemeral),
-        ]
+            self.entry(SCHEMA_UNSAVED, ObjectKindWire::Authoritative),
+        ];
+        match &self.document {
+            DocumentState::Monolithic(_) => {
+                entries.push(self.entry(SCHEMA_DOC, ObjectKindWire::Authoritative));
+            }
+            DocumentState::Split(bundle) => {
+                let doc_parent = ObjectVersionWire {
+                    object_id: SCHEMA_DOC_MANIFEST.into(),
+                    generation: self.generation,
+                };
+                let doc_entries = std::iter::once(self.entry_with(
+                    SCHEMA_DOC_MANIFEST,
+                    ObjectKindWire::Authoritative,
+                    bundle.manifest.clone(),
+                    vec![],
+                ))
+                .chain(bundle.part_entries().into_iter().filter_map(|(id, path)| {
+                    // Each part: one object, parent-linked to the manifest,
+                    // bytes exactly as PhotoCraft wrote them.
+                    bundle.parts.get(&path).map(|bytes| {
+                        self.entry_with(
+                            &id,
+                            ObjectKindWire::Authoritative,
+                            bytes.clone(),
+                            vec![doc_parent.clone()],
+                        )
+                    })
+                }))
+                .collect::<Vec<_>>();
+                // After meta + unsaved: admission order banks identity and
+                // edit journal before any pixels (TILE-SPLITTING.md §5).
+                entries.extend(doc_entries);
+            }
+        }
+        // Workspace is ephemeral + optional: published but never sealed
+        // into the cut, deferrable by a progressive carry.
+        entries.push(self.entry(SCHEMA_WORKSPACE, ObjectKindWire::Ephemeral));
+        entries
     }
 }
 
@@ -234,6 +376,7 @@ impl Adapter for PhotocraftAdapter {
             executable: AdapterInfo::COMPILED_IN.into(),
             state_schemas: vec![
                 SCHEMA_DOC.into(),
+                SCHEMA_DOC_MANIFEST.into(),
                 SCHEMA_UNSAVED.into(),
                 SCHEMA_META.into(),
                 SCHEMA_WORKSPACE.into(),
@@ -279,9 +422,21 @@ impl Adapter for PhotocraftAdapter {
         // `generation` is the snapshot counter; PhotoCraft's own revision
         // travels in the meta object). Detached mode: state stands as built.
         if let Some(driver) = self.driver.as_deref_mut() {
-            let document = driver
-                .document_bytes()
-                .map_err(|e| AdapterError::Incompatible(format!("document_bytes: {e}")))?;
+            let document = match self.document {
+                // Split mode: the driver must serve the bundle (in-process
+                // driver; the control channel fails closed on split mode,
+                // TILE-SPLITTING.md §7).
+                DocumentState::Split(_) => DocumentState::Split(
+                    driver
+                        .document_bundle()
+                        .map_err(|e| AdapterError::Incompatible(format!("document_bundle: {e}")))?,
+                ),
+                DocumentState::Monolithic(_) => DocumentState::Monolithic(
+                    driver
+                        .document_bytes()
+                        .map_err(|e| AdapterError::Incompatible(format!("document_bytes: {e}")))?,
+                ),
+            };
             let unsaved = driver
                 .unsaved_bytes()
                 .map_err(|e| AdapterError::Incompatible(format!("unsaved_bytes: {e}")))?;
@@ -345,22 +500,19 @@ impl Adapter for PhotocraftAdapter {
     ) -> Result<DependencyPlanWire, AdapterError> {
         match req.class.as_str() {
             // Both actions need the authoritative content; the workspace object
-            // is optional (latency-only); meta is provenance (§6.6).
+            // is optional (latency-only); meta is provenance (§6.6). In split
+            // mode the document closure is the manifest + every referenced
+            // part (TILE-SPLITTING.md §2/§3).
             "document.edit" | "session.restore" => Ok(DependencyPlanWire {
-                prerequisites: vec![
-                    ObjectVersionWire {
-                        object_id: SCHEMA_DOC.into(),
+                prerequisites: self
+                    .document_prerequisite_ids()
+                    .into_iter()
+                    .chain([SCHEMA_UNSAVED.to_string(), SCHEMA_META.to_string()])
+                    .map(|object_id| ObjectVersionWire {
+                        object_id,
                         generation: self.generation,
-                    },
-                    ObjectVersionWire {
-                        object_id: SCHEMA_UNSAVED.into(),
-                        generation: self.generation,
-                    },
-                    ObjectVersionWire {
-                        object_id: SCHEMA_META.into(),
-                        generation: self.generation,
-                    },
-                ],
+                    })
+                    .collect(),
                 provenance: vec![ObjectVersionWire {
                     object_id: SCHEMA_META.into(),
                     generation: self.generation,
@@ -380,9 +532,30 @@ impl Adapter for PhotocraftAdapter {
         versions: &[ObjectVersionWire],
     ) -> Result<ValidationReport, AdapterError> {
         let known = [SCHEMA_DOC, SCHEMA_UNSAVED, SCHEMA_META, SCHEMA_WORKSPACE];
+        let known_split = [
+            SCHEMA_DOC_MANIFEST,
+            SCHEMA_UNSAVED,
+            SCHEMA_META,
+            SCHEMA_WORKSPACE,
+        ];
+        let split = matches!(self.document, DocumentState::Split(_));
+        // Split mode additionally accepts every part object id this bundle
+        // declares (the destination validates the exact set it was handed).
+        let part_ids: Vec<String> = match &self.document {
+            DocumentState::Split(bundle) => bundle
+                .part_entries()
+                .into_iter()
+                .map(|(id, _)| id)
+                .collect(),
+            DocumentState::Monolithic(_) => Vec::new(),
+        };
         let missing: Vec<_> = versions
             .iter()
-            .filter(|v| !known.contains(&v.object_id.as_str()))
+            .filter(|v| {
+                let id = v.object_id.as_str();
+                !(known.contains(&id)
+                    || (split && (known_split.contains(&id) || part_ids.iter().any(|p| p == id))))
+            })
             .cloned()
             .collect();
         Ok(ValidationReport {
@@ -506,7 +679,7 @@ impl Adapter for PhotocraftAdapter {
                     }
                 };
                 let output = serde_json::json!({
-                    "document_hash": model::hex_sha256(&self.document),
+                    "document_hash": model::hex_sha256(&self.document_logical_bytes()),
                     "unsaved_hash": model::hex_sha256(&self.unsaved),
                     "revision": self.meta.revision,
                     "dirty": self.meta.dirty,
@@ -520,8 +693,11 @@ impl Adapter for PhotocraftAdapter {
                 let output_hash =
                     model::hex_sha256(&serde_json::to_vec(&output).unwrap_or_default());
                 let auth = self.auth_hash();
-                let rederived =
-                    model::authoritative_hash(&self.document, &self.unsaved, &self.meta_bytes());
+                let rederived = model::authoritative_hash(
+                    &self.document_logical_bytes(),
+                    &self.unsaved,
+                    &self.meta_bytes(),
+                );
                 // Agreed = the carried state is internally consistent AND the
                 // live restore (if one was attempted) succeeded. Detached
                 // mode: state consistency only.
@@ -617,7 +793,7 @@ impl Adapter for PhotocraftAdapter {
             json: serde_json::json!({
                 "session": self.session,
                 "generation": self.generation,
-                "document_hash": model::hex_sha256(&self.document),
+                "document_hash": model::hex_sha256(&self.document_logical_bytes()),
                 "unsaved_hash": model::hex_sha256(&self.unsaved),
                 "auth_hash": self.auth_hash(),
                 "meta": self.meta,
@@ -683,6 +859,7 @@ mod tests {
             dirty: true,
             photocraft_pin: "pin".into(),
             unsaved_mode: model::UnsavedMode::Snapshot,
+            document_encoding: model::DocumentEncoding::Monolithic,
         };
         let meta_bytes = serde_json::to_vec(&meta).unwrap();
         let a = model::authoritative_hash(b"doc", b"unsaved", &meta_bytes);

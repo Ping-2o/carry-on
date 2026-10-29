@@ -52,6 +52,10 @@ name = "edit_stream"
 required-features = ["inprocess"]
 
 [[example]]
+name = "tile_progressive"
+required-features = ["inprocess"]
+
+[[example]]
 name = "phys_source"
 required-features = ["inprocess"]
 

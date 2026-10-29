@@ -26,6 +26,7 @@ fn meta() -> model::PhotocraftMeta {
         dirty: true,
         photocraft_pin: PIN.into(),
         unsaved_mode: model::UnsavedMode::Snapshot,
+        document_encoding: model::DocumentEncoding::Monolithic,
     }
 }
 

@@ -50,6 +50,19 @@ pub trait PhotocraftDriver: Send {
     /// under the automation write root; RESEARCH §2.2).
     fn document_bytes(&mut self) -> Result<Vec<u8>, DriverError>;
 
+    /// The saved document as a **split bundle** (TILE-SPLITTING.md §2):
+    /// `manifest.json` plus the exact content-addressed tile/blob entry bytes.
+    /// Split mode is how large documents travel; a driver that cannot serve
+    /// bundles fails closed here (the control-channel driver today —
+    /// TILE-SPLITTING.md §7).
+    fn document_bundle(&mut self) -> Result<crate::model::DocumentBundle, DriverError> {
+        Err(DriverError::Unsupported(
+            "document_bundle: this driver does not support split document encoding \
+             (TILE-SPLITTING.md §7); only the in-process driver serves bundles"
+                .into(),
+        ))
+    }
+
     /// Bytes of the unsaved state, in the mode `meta.unsaved_mode` names:
     /// snapshot `.pcraft` of the dirty state, or journal steps from the last
     /// saved revision.

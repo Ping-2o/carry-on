@@ -548,6 +548,9 @@ impl PhotocraftDriver for ControlChannelDriver {
             dirty,
             photocraft_pin: crate::model::PHOTOCRAFT_PIN.into(),
             unsaved_mode: UnsavedMode::Snapshot,
+            // The control channel serves the monolithic zip only (a split
+            // bundle would need a directory-bundle save; TILE-SPLITTING.md §7).
+            document_encoding: crate::model::DocumentEncoding::Monolithic,
         })
     }
 
