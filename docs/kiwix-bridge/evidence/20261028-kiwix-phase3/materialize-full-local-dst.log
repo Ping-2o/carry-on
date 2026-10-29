@@ -1,0 +1,9 @@
+dest: connecting to 127.0.0.1:49013...
+dest: header ok: articles=31576 clusters=94 mime_list@80 title_idx@18446744073709551615 index=[0..27010432) clusters@27009680 checksum@27010432
+dest: FULL mode — fetching the whole library
+dest: index fetched (27010448/27010448 = 100.000%)
+dest: FULL mode — reading 'index' after the complete fetch
+dest: article 'index' readable (sha256=795cdfcd45285b3432ab3668d2d76a77a52a182eb600a257e707a79d6404bede); materialized so far = 27010448/27010448 (100.000%)
+dest: FULL transfer complete — materialized 27010448/27010448 (100%)
+dest: wire sent=27337 recv=36048737
+dest: MATERIALIZE_OK

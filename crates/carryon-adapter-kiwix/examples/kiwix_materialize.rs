@@ -326,19 +326,24 @@ impl Fetcher<'_> {
     }
 }
 
-fn do_dest(
-    id_dir: &str,
-    out_zim: &str,
-    src_addr: &str,
-    src_pin: &str,
-    bulk_digest: &str,
+/// Destination arguments for do_dest (clippy: keep the arg list ≤ 7).
+struct DestArgs {
+    id_dir: String,
+    out_zim: String,
+    src_addr: String,
+    src_pin: String,
+    bulk_digest: String,
     total: u64,
-    article_path: &str,
-) {
-    let id = load_or_make_identity(id_dir, "dest");
-    let trust = trust_with(src_pin, "source");
-    println!("dest: connecting to {src_addr}...");
-    let mut sess = Session::connect(src_addr, &id, trust).expect("connect (pin)");
+    article_path: String,
+    full_article: Option<String>,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn do_dest(a: &DestArgs) {
+    let id = load_or_make_identity(&a.id_dir, "dest");
+    let trust = trust_with(&a.src_pin, "source");
+    println!("dest: connecting to {}...", a.src_addr);
+    let mut sess = Session::connect(&a.src_addr, &id, trust).expect("connect (pin)");
     sess.client_negotiate(vec![]).expect("client negotiate");
 
     // Empty sparse file of the full size: nothing materialized yet.
@@ -347,13 +352,13 @@ fn do_dest(
         .write(true)
         .create(true)
         .truncate(true)
-        .open(out_zim)
+        .open(&a.out_zim)
         .expect("create out zim");
-    file.set_len(total).expect("set_len (sparse)");
+    file.set_len(a.total).expect("set_len (sparse)");
     let mut fetcher = Fetcher {
         sess: &mut sess,
-        digest: bulk_digest.to_string(),
-        total,
+        digest: a.bulk_digest.to_string(),
+        total: a.total,
         file,
         fetched: 0,
     };
@@ -384,16 +389,18 @@ fn do_dest(
     //   dirents at ~86% of the file; then urlPtr, clusterPtr tables; checksum.
     // First-read needs: header + clusterPtr table + the dirent region
     //   [urlPtr[0], pathPtrPos) + urlPtr table — NOT the clusters.
-    let full_mode = article_path == "--full";
+    let full_mode = a.article_path == "--full";
     if full_mode {
         println!("dest: FULL mode — fetching the whole library");
-        fetcher.range(80, total - 80).expect("fetch full");
+        fetcher.range(80, a.total - 80).expect("fetch full");
     } else {
         // The tiny tables first (they tell us where the dirents start).
         fetcher
             .range(h.cluster_ptr_pos, h.cluster_count as u64 * 8)
             .expect("fetch clusterPtr table");
-        fetcher.range(h.path_ptr_pos, 8).expect("fetch first urlPtr");
+        fetcher
+            .range(h.path_ptr_pos, 8)
+            .expect("fetch first urlPtr");
         let mut b8 = [0u8; 8];
         use std::os::unix::fs::FileExt as _;
         fetcher
@@ -432,41 +439,46 @@ fn do_dest(
     println!(
         "dest: index fetched ({}/{} = {:.3}%)",
         fetcher.fetched,
-        total,
-        fetcher.fetched as f64 * 100.0 / total as f64
+        a.total,
+        fetcher.fetched as f64 * 100.0 / a.total as f64
     );
 
     // Stage 3: honest attempt — the archive typically OPENS with the index
     // alone; the article read needs its cluster.
     let article_to_read = if full_mode {
-        // Everything was fetched; read the archive's MAIN page entry.
-        let read_u32_at = |off: u64| -> u32 {
-            let mut b4 = [0u8; 4];
-            use std::os::unix::fs::FileExt as _;
-            fetcher.file.read_exact_at(&mut b4, off).expect("read u32");
-            u32::from_le_bytes(b4)
-        };
-        let read_u64_at = |off: u64| -> u64 {
-            let mut b8 = [0u8; 8];
-            use std::os::unix::fs::FileExt as _;
-            fetcher.file.read_exact_at(&mut b8, off).expect("read u64");
-            u64::from_le_bytes(b8)
-        };
-        let main_idx = read_u32_at(64);
-        let main_off = read_u64_at(h.path_ptr_pos + main_idx as u64 * 8);
-        let d = read_dirent_at(&fetcher.file, main_off).expect("parse main dirent");
-        println!("dest: FULL mode — reading the main entry '{}'", d.path);
-        d.path
+        if let Some(real) = a.full_article.clone() {
+            println!("dest: FULL mode — reading '{real}' after the complete fetch");
+            real
+        } else {
+            // Everything was fetched; read the archive's MAIN page entry.
+            let read_u32_at = |off: u64| -> u32 {
+                let mut b4 = [0u8; 4];
+                use std::os::unix::fs::FileExt as _;
+                fetcher.file.read_exact_at(&mut b4, off).expect("read u32");
+                u32::from_le_bytes(b4)
+            };
+            let read_u64_at = |off: u64| -> u64 {
+                let mut b8 = [0u8; 8];
+                use std::os::unix::fs::FileExt as _;
+                fetcher.file.read_exact_at(&mut b8, off).expect("read u64");
+                u64::from_le_bytes(b8)
+            };
+            let main_idx = read_u32_at(64);
+            let main_off = read_u64_at(h.path_ptr_pos + main_idx as u64 * 8);
+            let d = read_dirent_at(&fetcher.file, main_off).expect("parse main dirent");
+            println!("dest: FULL mode — reading the main entry '{}'", d.path);
+            d.path
+        }
     } else {
-        article_path.to_string()
+        a.article_path.to_string()
     };
-    match Fetcher::try_read_article(out_zim, &article_to_read) {
+    match Fetcher::try_read_article(&a.out_zim, &article_to_read) {
         Ok(sha) => println!(
             "dest: article '{article_to_read}' readable (sha256={sha}); materialized so far = \
              {}/{} ({:.3}%)",
             fetcher.fetched,
-            total,
-            fetcher.fetched as f64 * 100.0 / total as f64
+            a.total,
+            fetcher.fetched as f64 * 100.0 / a.total as f64
         ),
         Err(e) => {
             if full_mode {
@@ -483,7 +495,7 @@ fn do_dest(
     if full_mode {
         println!(
             "dest: FULL transfer complete — materialized {}/{} (100%)",
-            fetcher.fetched, total
+            fetcher.fetched, a.total
         );
     } else {
         let read_u64_at = |file: &std::fs::File, off: u64| -> u64 {
@@ -507,7 +519,7 @@ fn do_dest(
                 if first_samples.len() < 3 {
                     first_samples.push(format!("{}:'{}'", off, d.path));
                 }
-                if d.path == article_path {
+                if d.path == a.article_path {
                     target = Some(d);
                     break;
                 }
@@ -534,13 +546,16 @@ fn do_dest(
             target = Some(d);
         }
         let Some(d) = target else {
-            eprintln!("dest: FAIL article '{article_path}' not found in the fetched index");
+            eprintln!(
+                "dest: FAIL article '{}' not found in the fetched index",
+                a.article_path
+            );
             std::process::exit(1);
         };
         assert!(!d.is_redirect, "redirect chain must end at a real entry");
         println!(
-            "dest: article '{article_path}' lives in cluster {}",
-            d.cluster
+            "dest: article '{}' lives in cluster {}",
+            a.article_path, d.cluster
         );
 
         let c_start = read_u64_at(&fetcher.file, h.cluster_ptr_pos + d.cluster as u64 * 8);
@@ -585,14 +600,14 @@ fn do_dest(
         }
 
         // Stage 5: the read that matters.
-        let sha = Fetcher::try_read_article(out_zim, article_path)
+        let sha = Fetcher::try_read_article(&a.out_zim, &a.article_path)
             .expect("article readable from the partially-materialized ZIM");
         let fetched = fetcher.fetched;
         println!(
             "dest: ARTICLE READABLE — materialized {fetched}/{} bytes = {:.4}% of the ZIM \
              (index {index_stage_fetched} + cluster {})",
-            total,
-            fetched as f64 * 100.0 / total as f64,
+            a.total,
+            fetched as f64 * 100.0 / a.total as f64,
             fetched - index_stage_fetched
         );
         println!("dest: article sha256={sha}");
@@ -603,7 +618,7 @@ fn do_dest(
         .send(Message::ImportComplete {
             session: "kiwix-materialize".into(),
             cut_number: 0,
-            manifest_digest: bulk_digest.into(),
+            manifest_digest: a.bulk_digest.clone(),
         })
         .expect("send done");
     println!(
@@ -624,15 +639,23 @@ fn main() {
         Some("source") if args.len() >= 5 => {
             do_source(&args[1], &args[2], &args[3], &args[4], args.get(5).cloned())
         }
-        Some("dest") if args.len() >= 8 => do_dest(
-            &args[1],
-            &args[2],
-            &args[3],
-            &args[4],
-            &args[5],
-            args[6].parse().expect("total as u64"),
-            &args[7],
-        ),
+        Some("dest") if args.len() >= 8 => {
+            let full_article = if args[7] == "--full" {
+                args.get(8).cloned() // real article to read after a full fetch
+            } else {
+                None
+            };
+            do_dest(&DestArgs {
+                id_dir: args[1].clone(),
+                out_zim: args[2].clone(),
+                src_addr: args[3].clone(),
+                src_pin: args[4].clone(),
+                bulk_digest: args[5].clone(),
+                total: args[6].parse().expect("total as u64"),
+                article_path: args[7].clone(),
+                full_article,
+            })
+        }
         _ => {
             eprintln!(
                 "usage:\n  kiwix_materialize source <id_dir> <zim_path> <bind_addr> <dest_pin_hex> [article_path]\n  kiwix_materialize dest <id_dir> <out_zim> <src_addr> <src_pin_hex> <bulk_digest> <total> <article_path>"

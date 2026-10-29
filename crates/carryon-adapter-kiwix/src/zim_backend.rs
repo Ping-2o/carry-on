@@ -240,8 +240,7 @@ impl ZimArchive {
     }
 
     fn open_inner(path: &str, no_xapian: bool) -> Result<ZimArchive, ZimBackendError> {
-        let cpath =
-            CString::new(path).map_err(|_| ZimBackendError::BadPath(path.to_string()))?;
+        let cpath = CString::new(path).map_err(|_| ZimBackendError::BadPath(path.to_string()))?;
         // SAFETY: cpath is a valid NUL-terminated string for the duration.
         let raw = if no_xapian {
             unsafe { czim_open_noxapian(cpath.as_ptr()) }
