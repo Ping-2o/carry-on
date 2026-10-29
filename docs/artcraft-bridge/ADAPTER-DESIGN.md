@@ -357,3 +357,49 @@ The owner approved option B (per-tile splitting) as its own commit series
 after Phase 3. Until that lands, the core cap is unchanged and the adapter
 declares the observed 16 MiB. See [`TILE-SPLITTING.md`](TILE-SPLITTING.md)
 when it lands (design-first per the decision).
+
+### 7.7 Phase 4.1 results — tile splitting (status notes; the orchestrator owns FRONTIER/TARGETS)
+
+Design + implementation + measurement:
+[`TILE-SPLITTING.md`](TILE-SPLITTING.md) (written first, updated with the
+discoveries the implementation forced: the manifest references parts by **bare
+BLAKE3 hash**, and the fail-closed closure check belongs to **PhotoCraft's own
+loader**, which refuses on the first missing fetch — pinned by a holed-bundle
+test).
+
+- **Split object model IMPLEMENTED**: in split mode the saved document is
+  `photocraft.document.manifest.v1` (one object, the bundle's `manifest.json`)
+  + `photocraft.tile.<blake3>.v1` / `photocraft.blob.<blake3>.v1` objects,
+  each parent-linked to the manifest, bytes exactly as PhotoCraft wrote them;
+  journal-mode unsaved stays one small object; monolithic mode unchanged
+  (control channel, back-compat). The 16 MiB core cap is **unchanged and now
+  non-binding** (a 45 MP extrapolation is 60+ tile objects, none over KBs).
+- **Core change, called out**: budget admission (§6.8) is now **cumulative and
+  progressive** across the import closure
+  (`crates/carryon-core/src/transfer.rs`): not-yet-present objects are
+  counted in manifest order against a running spend; the longest prefix that
+  fits is pulled through the unchanged CORE-004 two-phase publish, the mirror
+  cut is **not** sealed (session stays `Importing`), the deferral is journaled
+  (`BUDGET_Rejected` / `BUDGET_Partial`) and returned as the new
+  `ImportOutcome::PartialBudget`. Pre-split behavior preserved where the
+  first object alone exceeds the budget (typed `BUDGET` refusal before any
+  bytes). FFI: additive `partial_budget` result shape, `CARRYON_ABI_MINOR`
+  0→1 (header append-only, no signature change). No schema migration.
+- **Measurement — OBSERVED (LOCAL)**, real photo (2400×1500, layered, 1 dirty
+  stroke, journal mode), evidence
+  [`evidence/tile-progressive.json`](evidence/tile-progressive.json):
+  bfa split **5,930,649 B** (manifest 15,376 + 61 content objects 5,914,792 +
+  journal 103 + meta 378) vs monolithic **6,868,017 B** (the delta is the zip's
+  embedded previews, which the split bundle does not carry); progressive
+  windows bank verified prefixes (64 KiB window → 7 objects, 256 KiB → 3 more,
+  replenished → complete) while the **monolith's document object is deferred
+  in every sub-6.87-MB window and a 256 KiB retry is refused before any
+  bytes**; tile dedup on re-carry is real — after 2 strokes + incremental
+  re-save, 6 of 67 content objects changed and the second carry to a store
+  holding cut 1 moved **222,413 B wire** (vs 5.9 MB) in 0.31 s. Oracle:
+  destination reconstructs from its own store by digest, opens, replays —
+  composite pixels identical (`b5bdb593…`, both sides).
+- Tests: `crates/carryon-adapter-photocraft/tests/split_session.rs` (7:
+  synthetic contract + REAL round-trip + REAL progressive windows through two
+  cores over loopback TLS), `crates/carryon-core/tests/mobile_transfer.rs`
+  (+2: prefix publish/retry-complete, below-every-object refusal).
