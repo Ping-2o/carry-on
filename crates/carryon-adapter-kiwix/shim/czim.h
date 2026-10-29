@@ -24,6 +24,12 @@ typedef struct czim_item czim_item;
  * NULL on any failure (missing file, bad format, ...). */
 czim_archive *czim_open(const char *utf8_path);
 
+/* Open WITHOUT eager Xapian preload (OpenConfig.preloadXapianDb(false)).
+ * For progressive/partially-materialized archives: reading works; full-text
+ * search loads its index lazily (and fails closed while sparse). NULL on any
+ * failure. */
+czim_archive *czim_open_noxapian(const char *utf8_path);
+
 /* Close and free an archive (NULL is a no-op). */
 void czim_close(czim_archive *arch);
 

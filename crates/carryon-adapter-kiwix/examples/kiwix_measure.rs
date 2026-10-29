@@ -123,9 +123,8 @@ fn main() {
         .iter()
         .any(|o| o.object_id == "kiwix.zimfile.v1");
     if !bulk_in_manifest && bulk_size > 0 {
-        let (moved, digest) =
-            move_object(&adapter, &token, "kiwix.zimfile.v1", bulk_size)
-                .expect("strategy A bulk move");
+        let (moved, digest) = move_object(&adapter, &token, "kiwix.zimfile.v1", bulk_size)
+            .expect("strategy A bulk move");
         a_bytes += moved;
         a_detail.push(format!(
             "{:<24} {:>12}  sha256={digest}",

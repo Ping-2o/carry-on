@@ -63,6 +63,20 @@ czim_archive *czim_open(const char *utf8_path) {
   }
 }
 
+czim_archive *czim_open_noxapian(const char *utf8_path) {
+  if (utf8_path == nullptr) {
+    return nullptr;
+  }
+  try {
+    auto arch = std::make_shared<zim::Archive>(
+        std::string(utf8_path), zim::OpenConfig().preloadXapianDb(false));
+    auto out = new (std::nothrow) czim_archive{std::move(arch)};
+    return out;
+  } catch (...) {
+    return nullptr;
+  }
+}
+
 void czim_close(czim_archive *arch) { delete arch; }
 
 int32_t czim_uuid(czim_archive *arch, char *buf, uint32_t buf_len) {

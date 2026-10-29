@@ -1,0 +1,8 @@
+total 186
+drwxrwxrwx 6 shell shell   3452 2026-10-28 23:35 .
+drwxrwxrwx 4 shell shell   3452 2026-10-28 23:35 ..
+drwxrwxrwx 2 shell shell   3452 2026-10-28 23:35 journals
+-rw-r--r-- 1 shell shell 172032 2026-10-28 23:35 metadata.sqlite3
+drwxrwxrwx 3 shell shell   3452 2026-10-28 23:35 objects
+drwxrwxrwx 2 shell shell   3452 2026-10-28 23:35 quarantine
+drwxrwxrwx 2 shell shell   3452 2026-10-28 23:35 staging

@@ -283,7 +283,8 @@ fn streaming_sha256(path: &str) -> String {
 }
 
 /// Minimal UTF-8 percent-decoder for the app's stored article URLs.
-fn percent_decode(s: &str) -> String {    let b = s.as_bytes();
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
     let mut out = Vec::with_capacity(b.len());
     let mut i = 0;
     while i < b.len() {

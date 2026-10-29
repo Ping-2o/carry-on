@@ -1,0 +1,9 @@
+source: strategy=D session=4765b9ca-834a-4251-bd57-97f5048bec29 cut=0
+source: listening=0.0.0.0:48990 waiting for destination...
+source(after cut): WIRE sent=45522 recv=1859 bytes
+source: cut served
+source: may_mutate before transfer = true
+source: receipt={"proposal_id":"46f5d11a-8882-4150-a99c-239f2a287191","new_epoch":1,"dest_receipt":"accept:0:77175902cdb8d6ddfed41d9bf5fb75f14a30214e0b9c2566c320cd98163bc169","source_receipt":"relinquish:46f5d11a-8882-4150-a99c-239f2a287191:77175902cdb8d6ddfed41d9bf5fb75f14a30214e0b9c2566c320cd98163bc169"}
+source: may_mutate after relinquishment = false
+source(final): WIRE sent=46288 recv=2143 bytes
+source: OK — authority relinquished; reading position moved to destination

@@ -23,6 +23,7 @@ struct CzimItemOpaque {
 
 extern "C" {
     fn czim_open(utf8_path: *const c_char) -> *mut CzimArchiveOpaque;
+    fn czim_open_noxapian(utf8_path: *const c_char) -> *mut CzimArchiveOpaque;
     fn czim_close(arch: *mut CzimArchiveOpaque);
     fn czim_uuid(arch: *mut CzimArchiveOpaque, buf: *mut c_char, buf_len: c_uint) -> c_int;
     fn czim_title(arch: *mut CzimArchiveOpaque, buf: *mut c_char, buf_len: c_uint) -> c_int;
@@ -228,9 +229,25 @@ impl ZimItem {
 impl ZimArchive {
     /// Open a ZIM file. Fail closed on any error.
     pub fn open(path: &str) -> Result<ZimArchive, ZimBackendError> {
-        let cpath = CString::new(path).map_err(|_| ZimBackendError::BadPath(path.to_string()))?;
+        Self::open_inner(path, false)
+    }
+
+    /// Open WITHOUT eager Xapian preload — for partially-materialized
+    /// archives: reading works; full-text search loads lazily (and fails
+    /// closed while the file is sparse). Fail closed on any error.
+    pub fn open_progressive(path: &str) -> Result<ZimArchive, ZimBackendError> {
+        Self::open_inner(path, true)
+    }
+
+    fn open_inner(path: &str, no_xapian: bool) -> Result<ZimArchive, ZimBackendError> {
+        let cpath =
+            CString::new(path).map_err(|_| ZimBackendError::BadPath(path.to_string()))?;
         // SAFETY: cpath is a valid NUL-terminated string for the duration.
-        let raw = unsafe { czim_open(cpath.as_ptr()) };
+        let raw = if no_xapian {
+            unsafe { czim_open_noxapian(cpath.as_ptr()) }
+        } else {
+            unsafe { czim_open(cpath.as_ptr()) }
+        };
         if raw.is_null() {
             return Err(ZimBackendError::OpenFailed(path.to_string()));
         }

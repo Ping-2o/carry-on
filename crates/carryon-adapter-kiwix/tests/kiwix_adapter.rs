@@ -48,11 +48,11 @@ fn manifest_kinds_respect_the_core_entry_cap() {
     // serve — an empty-digest entry would fail the core's validate_entry).
     let mut adapter = KiwixAdapter::sample();
     let (_, m) = manifest_of(&mut adapter);
-    assert!(m
-        .objects
-        .iter()
-        .all(|o| o.object_id != "kiwix.zimfile.v1"));
-    assert_eq!(entry(&m, "kiwix.session.v1").kind, ObjectKindWire::Authoritative);
+    assert!(m.objects.iter().all(|o| o.object_id != "kiwix.zimfile.v1"));
+    assert_eq!(
+        entry(&m, "kiwix.session.v1").kind,
+        ObjectKindWire::Authoritative
+    );
     // The immediate-tier object is Authoritative (sealed): first paint must
     // ride the cut without the bulk.
     assert_eq!(
@@ -173,10 +173,7 @@ fn zim_bulk_serves_chunked_when_attached_and_fails_closed_when_not() {
     // empty success.
     let mut bare = KiwixAdapter::sample();
     let (token, m) = manifest_of(&mut bare);
-    assert!(m
-        .objects
-        .iter()
-        .all(|o| o.object_id != "kiwix.zimfile.v1"));
+    assert!(m.objects.iter().all(|o| o.object_id != "kiwix.zimfile.v1"));
     let err = bare
         .read_object(&token, "kiwix.zimfile.v1", 0, CHUNK)
         .expect_err("must fail closed without libzim backend");

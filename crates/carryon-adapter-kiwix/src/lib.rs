@@ -780,18 +780,12 @@ impl Adapter for KiwixAdapter {
             // Mutating (L4): move the reading position. Needs the session +
             // meta only; everything else is optional.
             "reader.navigate" => {
-                let mut optional = vec![
-                    self.version(SCHEMA_ARTICLE),
-                    self.version(SCHEMA_HISTORY),
-                ];
+                let mut optional = vec![self.version(SCHEMA_ARTICLE), self.version(SCHEMA_HISTORY)];
                 if self.bulk_is_declared() {
                     optional.push(self.version(SCHEMA_ZIMFILE));
                 }
                 Ok(DependencyPlanWire {
-                    prerequisites: vec![
-                        self.version(SCHEMA_SESSION),
-                        self.version(SCHEMA_META),
-                    ],
+                    prerequisites: vec![self.version(SCHEMA_SESSION), self.version(SCHEMA_META)],
                     provenance: vec![self.version(SCHEMA_META)],
                     optional,
                 })

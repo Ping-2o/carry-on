@@ -106,10 +106,9 @@ fn authority_transfers_across_machines_when_the_local_zim_path_differs() {
         session: "s".into(),
         cut_number: 1,
     };
-    let mut source = KiwixAdapter::from_zim("x", &path_a, "index", 500)
-        .expect("from_zim at path A");
-    let mut dest = KiwixAdapter::from_zim("x", &path_b, "index", 500)
-        .expect("from_zim at path B");
+    let mut source =
+        KiwixAdapter::from_zim("x", &path_a, "index", 500).expect("from_zim at path A");
+    let mut dest = KiwixAdapter::from_zim("x", &path_b, "index", 500).expect("from_zim at path B");
     // The local paths differ but the identity must not.
     assert_ne!(source.state().zim.filename, dest.state().zim.filename);
     assert_eq!(source.state().zim.uuid, dest.state().zim.uuid);

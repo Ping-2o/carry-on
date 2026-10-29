@@ -202,7 +202,16 @@ struct Dirent {
     redirect_index: u32,
     cluster: u32,
     _blob: u32,
+    ns: u8,
     path: String,
+}
+
+/// Read + parse the dirent stored at `off` in the materialized file.
+fn read_dirent_at(file: &std::fs::File, off: u64) -> Option<Dirent> {
+    let mut db = [0u8; 512];
+    use std::os::unix::fs::FileExt as _;
+    let n = file.read_at(&mut db, off).expect("read dirent");
+    parse_dirent(&db[..n])
 }
 
 fn parse_dirent(b: &[u8]) -> Option<Dirent> {
@@ -213,7 +222,7 @@ fn parse_dirent(b: &[u8]) -> Option<Dirent> {
     let mut o = 2usize;
     let _extra_len = b[o];
     o += 1;
-    let _ns = b[o];
+    let ns = b[o];
     o += 1;
     o += 4; // version
     let (redirect_index, cluster, blob) = if redirect {
@@ -231,6 +240,7 @@ fn parse_dirent(b: &[u8]) -> Option<Dirent> {
         redirect_index,
         cluster,
         _blob: blob,
+        ns,
         path,
     })
 }
@@ -292,7 +302,9 @@ impl Fetcher<'_> {
     }
 
     fn try_read_article(zim_path: &str, article: &str) -> Result<String, String> {
-        let arch = ZimArchive::open(zim_path).map_err(|e| format!("open: {e}"))?;
+        // Progressive open: no eager Xapian preload, so sparse clusters the
+        // open path doesn't truly need never block the read.
+        let arch = ZimArchive::open_progressive(zim_path).map_err(|e| format!("open: {e}"))?;
         let item = arch.item(article).map_err(|e| format!("entry: {e}"))?;
         let size = item.size();
         let mut out = Vec::new();
@@ -366,9 +378,57 @@ fn do_dest(
         h.checksum_pos
     );
 
-    // Stage 2: the index region (mime list, dirents, pointer tables).
-    let index_end = h.cluster_ptr_pos + h.cluster_count as u64 * 8;
-    fetcher.range(80, index_end - 80).expect("fetch index");
+    // Stage 2: the genuinely minimal "index" fetch. Real ZIM v6 layout
+    // (verified from this file's own header):
+    //   [0,80) header; [80,~2K) mime list; clusters at clusterPtr[0]…;
+    //   dirents at ~86% of the file; then urlPtr, clusterPtr tables; checksum.
+    // First-read needs: header + clusterPtr table + the dirent region
+    //   [urlPtr[0], pathPtrPos) + urlPtr table — NOT the clusters.
+    let full_mode = article_path == "--full";
+    if full_mode {
+        println!("dest: FULL mode — fetching the whole library");
+        fetcher.range(80, total - 80).expect("fetch full");
+    } else {
+        // The tiny tables first (they tell us where the dirents start).
+        fetcher
+            .range(h.cluster_ptr_pos, h.cluster_count as u64 * 8)
+            .expect("fetch clusterPtr table");
+        fetcher.range(h.path_ptr_pos, 8).expect("fetch first urlPtr");
+        let mut b8 = [0u8; 8];
+        use std::os::unix::fs::FileExt as _;
+        fetcher
+            .file
+            .read_exact_at(&mut b8, h.path_ptr_pos)
+            .expect("read first urlPtr");
+        let dirent_start = u64::from_le_bytes(b8);
+        // The first cluster begins right after the mime list.
+        fetcher
+            .file
+            .read_exact_at(&mut b8, h.cluster_ptr_pos)
+            .expect("read first clusterPtr");
+        let first_cluster_start = u64::from_le_bytes(b8);
+        println!(
+            "dest: mime list [80, {first_cluster_start}); clusters occupy the hole; \
+             dirents at [{dirent_start}, {})",
+            h.path_ptr_pos
+        );
+        // Header + mime list only — the clusters between them stay sparse.
+        fetcher
+            .range(80, first_cluster_start - 80)
+            .expect("fetch header+mime");
+        fetcher
+            .range(dirent_start, h.path_ptr_pos - dirent_start)
+            .expect("fetch dirent region");
+        fetcher
+            .range(h.path_ptr_pos, h.article_count as u64 * 8)
+            .expect("fetch urlPtr table");
+        if h.title_idx_pos != u64::MAX && h.title_idx_pos > h.cluster_ptr_pos {
+            // Old-format title listing lives after the cluster table.
+            fetcher
+                .range(h.title_idx_pos, h.article_count as u64 * 4)
+                .expect("fetch title table");
+        }
+    }
     println!(
         "dest: index fetched ({}/{} = {:.3}%)",
         fetcher.fetched,
@@ -378,91 +438,165 @@ fn do_dest(
 
     // Stage 3: honest attempt — the archive typically OPENS with the index
     // alone; the article read needs its cluster.
-    match Fetcher::try_read_article(out_zim, article_path) {
-        Ok(sha) => println!("dest: article readable right after index (sha256={sha})"),
-        Err(e) => println!("dest: after index, article not yet readable ({e}) — expected"),
+    let article_to_read = if full_mode {
+        // Everything was fetched; read the archive's MAIN page entry.
+        let read_u32_at = |off: u64| -> u32 {
+            let mut b4 = [0u8; 4];
+            use std::os::unix::fs::FileExt as _;
+            fetcher.file.read_exact_at(&mut b4, off).expect("read u32");
+            u32::from_le_bytes(b4)
+        };
+        let read_u64_at = |off: u64| -> u64 {
+            let mut b8 = [0u8; 8];
+            use std::os::unix::fs::FileExt as _;
+            fetcher.file.read_exact_at(&mut b8, off).expect("read u64");
+            u64::from_le_bytes(b8)
+        };
+        let main_idx = read_u32_at(64);
+        let main_off = read_u64_at(h.path_ptr_pos + main_idx as u64 * 8);
+        let d = read_dirent_at(&fetcher.file, main_off).expect("parse main dirent");
+        println!("dest: FULL mode — reading the main entry '{}'", d.path);
+        d.path
+    } else {
+        article_path.to_string()
+    };
+    match Fetcher::try_read_article(out_zim, &article_to_read) {
+        Ok(sha) => println!(
+            "dest: article '{article_to_read}' readable (sha256={sha}); materialized so far = \
+             {}/{} ({:.3}%)",
+            fetcher.fetched,
+            total,
+            fetcher.fetched as f64 * 100.0 / total as f64
+        ),
+        Err(e) => {
+            if full_mode {
+                panic!("FULL mode must yield a readable article: {e}");
+            }
+            println!("dest: after index, article not yet readable ({e}) — expected");
+        }
     }
     let index_stage_fetched = fetcher.fetched;
 
-    // Stage 4: find the article's dirent in the fetched index, fetch its
-    // cluster range only.
-    let read_u64_at = |file: &std::fs::File, off: u64| -> u64 {
-        let mut b8 = [0u8; 8];
-        use std::os::unix::fs::FileExt as _;
-        file.read_exact_at(&mut b8, off).expect("read u64");
-        u64::from_le_bytes(b8)
-    };
-    let read_dirent = |file: &std::fs::File, off: u64| -> Option<Dirent> {
-        let mut db = [0u8; 512];
-        use std::os::unix::fs::FileExt as _;
-        let n = file.read_at(&mut db, off).expect("read dirent");
-        parse_dirent(&db[..n])
-    };
-    let mut dirent_offsets = Vec::with_capacity(h.article_count as usize);
-    for i in 0..h.article_count as u64 {
-        dirent_offsets.push(read_u64_at(&fetcher.file, h.path_ptr_pos + i * 8));
-    }
-    let mut target: Option<Dirent> = None;
-    for off in &dirent_offsets {
-        if let Some(d) = read_dirent(&fetcher.file, *off) {
-            if d.path == article_path {
-                target = Some(d);
-                break;
+    // Stage 4+5: FULL mode is done (everything materialized); otherwise find
+    // the article's dirent in the fetched index, fetch ONLY its cluster, and
+    // make the read that matters.
+    if full_mode {
+        println!(
+            "dest: FULL transfer complete — materialized {}/{} (100%)",
+            fetcher.fetched, total
+        );
+    } else {
+        let read_u64_at = |file: &std::fs::File, off: u64| -> u64 {
+            let mut b8 = [0u8; 8];
+            use std::os::unix::fs::FileExt as _;
+            file.read_exact_at(&mut b8, off).expect("read u64");
+            u64::from_le_bytes(b8)
+        };
+        let find_dirent =
+            |file: &std::fs::File, off: u64| -> Option<Dirent> { read_dirent_at(file, off) };
+        let mut dirent_offsets = Vec::with_capacity(h.article_count as usize);
+        for i in 0..h.article_count as u64 {
+            dirent_offsets.push(read_u64_at(&fetcher.file, h.path_ptr_pos + i * 8));
+        }
+        let mut target: Option<Dirent> = None;
+        let mut parsed = 0u64;
+        let mut first_samples = Vec::new();
+        for off in &dirent_offsets {
+            if let Some(d) = find_dirent(&fetcher.file, *off) {
+                parsed += 1;
+                if first_samples.len() < 3 {
+                    first_samples.push(format!("{}:'{}'", off, d.path));
+                }
+                if d.path == article_path {
+                    target = Some(d);
+                    break;
+                }
             }
         }
-    }
-    // Follow the redirect chain if the article path is a redirect.
-    if let Some(d) = target {
-        let mut d = d;
-        let mut hops = 0;
-        while d.is_redirect && hops < 8 {
-            let off = dirent_offsets
-                .get(d.redirect_index as usize)
-                .copied()
-                .expect("redirect index in range");
-            d = read_dirent(&fetcher.file, off).expect("parse redirect target");
-            hops += 1;
+        println!(
+            "dest: [debug] walked {} urlPtr offsets, parsed {} dirents, samples: {}",
+            dirent_offsets.len(),
+            parsed,
+            first_samples.join(", ")
+        );
+        // Follow the redirect chain if the article path is a redirect.
+        if let Some(d) = target {
+            let mut d = d;
+            let mut hops = 0;
+            while d.is_redirect && hops < 8 {
+                let off = dirent_offsets
+                    .get(d.redirect_index as usize)
+                    .copied()
+                    .expect("redirect index in range");
+                d = find_dirent(&fetcher.file, off).expect("parse redirect target");
+                hops += 1;
+            }
+            target = Some(d);
         }
-        target = Some(d);
+        let Some(d) = target else {
+            eprintln!("dest: FAIL article '{article_path}' not found in the fetched index");
+            std::process::exit(1);
+        };
+        assert!(!d.is_redirect, "redirect chain must end at a real entry");
+        println!(
+            "dest: article '{article_path}' lives in cluster {}",
+            d.cluster
+        );
+
+        let c_start = read_u64_at(&fetcher.file, h.cluster_ptr_pos + d.cluster as u64 * 8);
+        let c_end = if d.cluster as u64 + 1 < h.cluster_count as u64 {
+            read_u64_at(
+                &fetcher.file,
+                h.cluster_ptr_pos + (d.cluster as u64 + 1) * 8,
+            )
+        } else {
+            h.checksum_pos
+        };
+        let c_len = c_end - c_start;
+        println!(
+            "dest: fetching cluster {} range [{c_start}, {c_end}) = {c_len} B",
+            d.cluster
+        );
+        fetcher.range(c_start, c_len).expect("fetch cluster");
+
+        // The OPEN path additionally reads the title-ordering index entry
+        // 'X/listing/titleOrdered/v1' (fileimpl.cpp:264) — its cluster must
+        // be materialized too. Xapian stays lazy (progressive open).
+        let title_cluster = dirent_offsets.iter().find_map(|off| {
+            find_dirent(&fetcher.file, *off).and_then(|x| {
+                (x.ns == b'X' && x.path == "listing/titleOrdered/v1" && !x.is_redirect)
+                    .then_some(x.cluster)
+            })
+        });
+        if let Some(tc) = title_cluster {
+            let t_start = read_u64_at(&fetcher.file, h.cluster_ptr_pos + tc as u64 * 8);
+            let t_end = if tc as u64 + 1 < h.cluster_count as u64 {
+                read_u64_at(&fetcher.file, h.cluster_ptr_pos + (tc as u64 + 1) * 8)
+            } else {
+                h.checksum_pos
+            };
+            println!(
+                "dest: fetching title-index cluster {tc} range [{t_start}, {t_end}) = {} B",
+                t_end - t_start
+            );
+            fetcher
+                .range(t_start, t_end - t_start)
+                .expect("fetch title cluster");
+        }
+
+        // Stage 5: the read that matters.
+        let sha = Fetcher::try_read_article(out_zim, article_path)
+            .expect("article readable from the partially-materialized ZIM");
+        let fetched = fetcher.fetched;
+        println!(
+            "dest: ARTICLE READABLE — materialized {fetched}/{} bytes = {:.4}% of the ZIM \
+             (index {index_stage_fetched} + cluster {})",
+            total,
+            fetched as f64 * 100.0 / total as f64,
+            fetched - index_stage_fetched
+        );
+        println!("dest: article sha256={sha}");
     }
-    let Some(d) = target else {
-        eprintln!("dest: FAIL article '{article_path}' not found in the fetched index");
-        std::process::exit(1);
-    };
-    assert!(!d.is_redirect, "redirect chain must end at a real entry");
-    println!(
-        "dest: article '{article_path}' lives in cluster {}",
-        d.cluster
-    );
-
-    let c_start = read_u64_at(&fetcher.file, h.cluster_ptr_pos + d.cluster as u64 * 8);
-    let c_end = if d.cluster as u64 + 1 < h.cluster_count as u64 {
-        read_u64_at(
-            &fetcher.file,
-            h.cluster_ptr_pos + (d.cluster as u64 + 1) * 8,
-        )
-    } else {
-        h.checksum_pos
-    };
-    let c_len = c_end - c_start;
-    println!(
-        "dest: fetching cluster {} range [{c_start}, {c_end}) = {c_len} B",
-        d.cluster
-    );
-    fetcher.range(c_start, c_len).expect("fetch cluster");
-
-    // Stage 5: the read that matters.
-    let sha = Fetcher::try_read_article(out_zim, article_path)
-        .expect("article readable from the partially-materialized ZIM");
-    let fetched = fetcher.fetched;
-    println!(
-        "dest: ARTICLE READABLE — materialized {fetched}/{} bytes = {:.4}% of the ZIM \
-         (index {index_stage_fetched} + cluster {})",
-        total,
-        fetched as f64 * 100.0 / total as f64,
-        fetched - index_stage_fetched
-    );
-    println!("dest: article sha256={sha}");
 
     fetcher
         .sess
@@ -483,6 +617,10 @@ fn do_dest(
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
+        Some("pin") if args.len() >= 2 => {
+            let id = load_or_make_identity(&args[1], "device");
+            println!("{}", id.pin().to_hex());
+        }
         Some("source") if args.len() >= 5 => {
             do_source(&args[1], &args[2], &args[3], &args[4], args.get(5).cloned())
         }
