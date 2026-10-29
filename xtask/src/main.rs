@@ -24,13 +24,142 @@ fn main() {
         "bench" => run_bench(),
         "fault-injection" => run_fault_injection(),
         "bench-aggregate" => run_bench_aggregate(),
+        "demo" => run_demo(),
         _ => {
             eprintln!(
                 "usage: xtask <evidence|handoff-evidence|ffi-demo|bench|fault-injection|\
-                 bench-aggregate> [out_dir]"
+                 bench-aggregate|demo> [out_dir]"
             );
             std::process::exit(2);
         }
+    }
+}
+
+/// One live harness in the PhotoCraft adapter's evidence registry
+/// (`docs/artcraft-bridge/`): what it proves, the exact command that runs
+/// it, and where its evidence bundle lands. Scope labels are law: LOCAL is
+/// one machine, PHYSICAL is two machines + two NICs (§2/§30).
+struct Demo {
+    name: &'static str,
+    /// Claim label the run earns.
+    scope: &'static str,
+    /// What the harness proves.
+    proves: &'static str,
+    /// Feature flags needed to build/run.
+    features: &'static str,
+    /// The exact invocation (repo-root relative).
+    run: &'static str,
+    /// Evidence bundle, repo-root relative (empty = harness prints its own).
+    evidence: &'static str,
+}
+
+const DEMOS: &[Demo] = &[
+    Demo {
+        name: "l3-live",
+        scope: "OBSERVED, LOCAL",
+        proves: "L3 carry between two LIVE desktop apps (seal, loopback transfer, live restore)",
+        features: "(none)",
+        run: "cargo run -p carryon-adapter-photocraft --example l3_live -- <cfg.json>",
+        evidence: "docs/artcraft-bridge/evidence/l3-live/transcript.json",
+    },
+    Demo {
+        name: "l4-live",
+        scope: "OBSERVED, LOCAL",
+        proves: "L4 authority transfer between two LIVE apps + source-off continuation + restarted-source read-only",
+        features: "(none)",
+        run: "cargo run -p carryon-adapter-photocraft --example l4_live -- <cfg.json>",
+        evidence: "docs/artcraft-bridge/evidence/l4-live/transcript.json",
+    },
+    Demo {
+        name: "phys-handoff",
+        scope: "OBSERVED, PHYSICAL",
+        proves: "L3 carry mac -> Galaxy A04 over LAN TLS with on-device composite oracle",
+        features: "inprocess (source + android dest cross-build)",
+        run: "MAC_IP=<lan-ip> docs/artcraft-bridge/scripts/phys_handoff.sh",
+        evidence: "docs/artcraft-bridge/evidence/phys-carry/bundle.json",
+    },
+    Demo {
+        name: "phys-l4-handoff",
+        scope: "OBSERVED, PHYSICAL",
+        proves: "L4 authority transfer to the DEVICE: epoch 0->1, source-off fresh-process edit, mac read-only proof, on-device oracle",
+        features: "inprocess (source + android dest cross-build)",
+        run: "MAC_IP=<lan-ip> docs/artcraft-bridge/scripts/phys_l4_handoff.sh",
+        evidence: "docs/artcraft-bridge/evidence/phys-l4/bundle.json",
+    },
+    Demo {
+        name: "tile-progressive",
+        scope: "OBSERVED, LOCAL",
+        proves: "split-carry bfa, progressive budget windows, tile dedup on re-carry, composite oracle",
+        features: "inprocess",
+        run: "cargo run -q -p carryon-adapter-photocraft --features inprocess --example tile_progressive -- \
+               <photo.jpg> docs/artcraft-bridge/evidence/tile-progressive.json",
+        evidence: "docs/artcraft-bridge/evidence/tile-progressive.json",
+    },
+    Demo {
+        name: "photo-replay",
+        scope: "OBSERVED, LOCAL",
+        proves: "real-photo journal replay oracle (journal B vs snapshot B)",
+        features: "inprocess",
+        run: "cargo run -q -p carryon-adapter-photocraft --features inprocess --example photo_replay -- \
+               <photo.jpg> docs/artcraft-bridge/evidence/photo-replay.json",
+        evidence: "docs/artcraft-bridge/evidence/photo-replay.json",
+    },
+    Demo {
+        name: "edit-stream",
+        scope: "OBSERVED, LOCAL",
+        proves: "journal growth over a 240-step varied session on the real photo (no-crossover range)",
+        features: "inprocess",
+        run: "cargo run -q -p carryon-adapter-photocraft --features inprocess --example edit_stream -- \
+               <photo.jpg> docs/artcraft-bridge/evidence/edit-stream.json",
+        evidence: "docs/artcraft-bridge/evidence/edit-stream.json",
+    },
+];
+
+/// The repeatable harness/evidence convention: one entry point that names
+/// every live harness, its claim label, its exact run command, and whether its
+/// evidence bundle is currently on disk. Re-running a harness overwrites its
+/// evidence; a missing bundle means the claim is not currently reproducible.
+fn run_demo() {
+    let sub = std::env::args().nth(2);
+    if let Some(filter) = sub {
+        let Some(d) = DEMOS.iter().find(|d| d.name == filter) else {
+            eprintln!(
+                "no demo named {filter:?}; known: {}",
+                DEMOS.iter().map(|d| d.name).collect::<Vec<_>>().join(", ")
+            );
+            std::process::exit(2);
+        };
+        print_demo(d, true);
+        return;
+    }
+    for d in DEMOS {
+        print_demo(d, false);
+    }
+    let missing: Vec<&str> = DEMOS
+        .iter()
+        .filter(|d| !d.evidence.is_empty() && !std::path::Path::new(d.evidence).exists())
+        .map(|d| d.name)
+        .collect();
+    if missing.is_empty() {
+        println!("all evidence bundles present");
+    } else {
+        println!("MISSING evidence bundles: {}", missing.join(", "));
+    }
+}
+
+fn print_demo(d: &Demo, detail: bool) {
+    let present = d.evidence.is_empty() || std::path::Path::new(d.evidence).exists();
+    println!(
+        "{:<18} [{:<17}] evidence: {}",
+        d.name,
+        d.scope,
+        if present { "on disk" } else { "MISSING" }
+    );
+    if detail {
+        println!("  proves   : {}", d.proves);
+        println!("  features : {}", d.features);
+        println!("  run      : {}", d.run);
+        println!("  bundle   : {}", d.evidence);
     }
 }
 

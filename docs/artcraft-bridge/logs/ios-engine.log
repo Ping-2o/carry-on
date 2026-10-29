@@ -1,0 +1,341 @@
+=== rustc: rustc 1.99.0 (b940084d7 2026-09-28)
+=== command: cargo build -p photocraft-engine --target aarch64-apple-ios
+    Updating git repository `https://github.com/storytold/egui.git`
+    Updating git repository `https://github.com/storytold/winit.git`
+    Updating crates.io index
+    Updating git repository `https://github.com/storytold/craft-libs`
+    Updating git repository `https://github.com/storytold/winprint.rs`
+warning: patch `egui_demo_lib v0.37.0 (https://github.com/storytold/egui.git?rev=6d518fc799681571963842f95b55a6b68431b15a#6d518fc7)` was not used in the crate graph
+warning: patch `egui_inspection v0.37.0 (https://github.com/storytold/egui.git?rev=6d518fc799681571963842f95b55a6b68431b15a#6d518fc7)` was not used in the crate graph
+warning: patch `egui_system_font_provider v0.37.0 (https://github.com/storytold/egui.git?rev=6d518fc799681571963842f95b55a6b68431b15a#6d518fc7)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+ Downloading crates ...
+  Downloaded core_maths v0.1.1
+  Downloaded alloc-stdlib v0.2.4
+  Downloaded bit_field v0.10.3
+  Downloaded xmlwriter v0.1.0
+  Downloaded alloc-no-stdlib v2.0.4
+  Downloaded color_quant v1.1.0
+  Downloaded yoke-derive v0.8.3
+  Downloaded fax_derive v0.2.0
+  Downloaded float-cmp v0.9.0
+  Downloaded icu_locale_fallback_data v2.3.0
+  Downloaded primal-check v0.3.4
+  Downloaded jxl-oxide-common v1.0.0
+  Downloaded jxl-threadpool v1.0.0
+  Downloaded siphasher v1.0.4
+  Downloaded pico-args v0.5.0
+  Downloaded reborrow v0.5.5
+  Downloaded strict-num v0.1.1
+  Downloaded pulp-wasm-simd-flag v0.1.1
+  Downloaded zune-inflate v0.2.54
+  Downloaded equivalent v1.0.2
+  Downloaded arrayref v0.3.9
+  Downloaded fax v0.2.6
+  Downloaded zerovec-derive v0.11.6
+  Downloaded zune-core v0.4.12
+  Downloaded imagesize v0.13.0
+  Downloaded jxl-image v0.13.0
+  Downloaded jxl-vardct v0.11.1
+  Downloaded lebe v0.5.3
+  Downloaded num-integer v0.1.47
+  Downloaded parlance v0.1.0
+  Downloaded transpose v0.2.3
+  Downloaded unicode-bidi-mirroring v0.4.0
+  Downloaded unicode-ccc v0.4.0
+  Downloaded unicode-vo v0.1.0
+  Downloaded constant_time_eq v0.4.2
+  Downloaded crossbeam-deque v0.8.8
+  Downloaded either v1.18.0
+  Downloaded font-types v0.12.5
+  Downloaded icu_locale_fallback v2.3.0
+  Downloaded jobserver v0.1.35
+  Downloaded jxl-jbr v0.2.1
+  Downloaded rgb v0.8.53
+  Downloaded strength_reduce v0.2.4
+  Downloaded tinystr v0.8.4
+  Downloaded jxl-bitstream v1.1.0
+  Downloaded jxl-coding v1.0.1
+  Downloaded jxl-frame v0.13.3
+  Downloaded jxl-grid v0.6.2
+  Downloaded jxl-modular v0.11.3
+  Downloaded jxl-oxide v0.12.6
+  Downloaded num-complex v0.4.6
+  Downloaded parley_data v0.11.1
+  Downloaded semver v1.0.28
+  Downloaded simplecss v0.2.2
+  Downloaded string-interner v0.19.0
+  Downloaded svgtypes v0.15.3
+  Downloaded tiny-skia-path v0.11.4
+  Downloaded wasmi_collections v2.0.0
+  Downloaded crossbeam-epoch v0.9.21
+  Downloaded data-url v0.3.2
+  Downloaded fontconfig-parser v0.5.8
+  Downloaded gif v0.13.3
+  Downloaded gif v0.14.2
+  Downloaded iana-time-zone v0.1.65
+  Downloaded icu_provider v2.3.1
+  Downloaded jpeg-encoder v0.6.1
+  Downloaded jxl-color v0.11.0
+  Downloaded roxmltree v0.20.0
+  Downloaded roxmltree v0.21.1
+  Downloaded slotmap v1.1.1
+  Downloaded spin v0.9.9
+  Downloaded tinyvec v1.13.3
+  Downloaded twox-hash v2.1.4
+  Downloaded wasmi_ir v2.0.0
+  Downloaded yoke v0.8.3
+  Downloaded zune-jpeg v0.4.21
+  Downloaded unicode-bidi v0.3.18
+  Downloaded wasmi_core v2.0.0
+  Downloaded icu_normalizer_data v2.3.0
+  Downloaded image-webp v0.2.4
+  Downloaded qoi v0.4.1
+  Downloaded rayon-core v1.13.0
+  Downloaded resvg v0.45.1
+  Downloaded zerovec v0.11.8
+  Downloaded exacl v0.13.0
+  Downloaded jxl-render v0.12.4
+  Downloaded zerocopy-derive v0.8.59
+  Downloaded icu_locale_core v2.3.0
+  Downloaded icu_collections v2.3.0
+  Downloaded wasmparser v0.228.0
+  Downloaded ruzstd v0.9.1
+  Downloaded fontdb v0.23.0
+  Downloaded icu_properties v2.3.0
+  Downloaded parley v0.11.1
+  Downloaded png v0.17.16
+  Downloaded kurbo v0.11.3
+  Downloaded pulp v0.22.3
+  Downloaded usvg v0.45.1
+  Downloaded blake3 v1.8.7
+  Downloaded icu_properties_data v2.3.0
+  Downloaded rayon v1.12.0
+  Downloaded tiny-skia v0.11.4
+  Downloaded brotli-decompressor v5.0.3
+  Downloaded chrono v0.4.45
+  Downloaded exr v1.74.2
+  Downloaded rustybuzz v0.20.1
+  Downloaded wasmi v2.0.0
+  Downloaded rustfft v6.4.1
+  Downloaded icu_normalizer v2.3.0
+  Downloaded icu_segmenter_data v2.3.0
+  Downloaded icu_segmenter v2.3.0
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling crossbeam-utils v0.8.23
+   Compiling crossbeam-epoch v0.9.21
+   Compiling crossbeam-deque v0.8.8
+   Compiling rayon-core v1.13.0
+   Compiling once_cell v1.21.4
+   Compiling either v1.18.0
+   Compiling cfg-if v1.0.5
+   Compiling simd-adler32 v0.3.10
+   Compiling adler2 v2.0.1
+   Compiling serde_core v1.0.229
+   Compiling autocfg v1.5.1
+   Compiling crc32fast v1.5.3
+   Compiling libm v0.2.16
+   Compiling tracing-core v0.1.36
+   Compiling bitflags v2.13.2
+   Compiling pin-project-lite v0.2.17
+   Compiling stable_deref_trait v1.2.1
+   Compiling tracing v0.1.44
+   Compiling syn v3.0.6
+   Compiling miniz_oxide v0.9.1
+   Compiling num-traits v0.2.19
+   Compiling serde v1.0.229
+   Compiling rayon v1.12.0
+   Compiling smallvec v1.16.2
+   Compiling zlib-rs v0.6.8
+   Compiling version_check v0.9.5
+   Compiling libc v0.2.191
+   Compiling jxl-bitstream v1.1.0
+   Compiling writeable v0.6.4
+   Compiling zmij v1.0.23
+   Compiling synstructure v0.14.0
+   Compiling serde_json v1.0.154
+   Compiling photocraft-cms v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/cms)
+   Compiling memchr v2.8.3
+   Compiling jxl-oxide-common v1.0.0
+   Compiling syn v2.0.119
+   Compiling jxl-grid v0.6.2
+   Compiling itoa v1.0.18
+   Compiling litemap v0.8.3
+   Compiling jxl-threadpool v1.0.0
+   Compiling jxl-coding v1.0.1
+   Compiling miniz_oxide v0.8.9
+   Compiling flate2 v1.1.10
+   Compiling thiserror v2.0.21
+   Compiling fdeflate v0.3.7
+   Compiling weezl v0.1.12
+   Compiling utf8_iter v1.0.4
+   Compiling arrayvec v0.7.8
+   Compiling zerocopy v0.8.59
+   Compiling jxl-modular v0.11.3
+   Compiling jxl-image v0.13.0
+   Compiling log v0.4.34
+   Compiling color_quant v1.1.0
+   Compiling icu_locale_fallback_data v2.3.0
+   Compiling icu_properties_data v2.3.0
+   Compiling paste v1.0.15
+   Compiling jxl-vardct v0.11.1
+   Compiling pulp v0.22.3
+   Compiling slotmap v1.1.1
+   Compiling core_maths v0.1.1
+   Compiling float-cmp v0.9.0
+   Compiling shlex v2.0.1
+   Compiling alloc-no-stdlib v2.0.4
+   Compiling find-msvc-tools v0.1.14
+   Compiling zune-core v0.5.3
+   Compiling icu_segmenter_data v2.3.0
+   Compiling byteorder-lite v0.1.0
+   Compiling rustix v1.1.5
+   Compiling quick-error v2.0.1
+   Compiling icu_normalizer_data v2.3.0
+   Compiling zune-jpeg v0.5.15
+   Compiling jxl-frame v0.13.3
+   Compiling cc v1.5.1
+   Compiling alloc-stdlib v0.2.4
+   Compiling strict-num v0.1.1
+   Compiling ttf-parser v0.25.1
+   Compiling errno v0.3.14
+   Compiling num-integer v0.1.47
+   Compiling reborrow v0.5.5
+   Compiling pulp-wasm-simd-flag v0.1.1
+   Compiling roxmltree v0.20.0
+   Compiling foldhash v0.2.0
+   Compiling pxfm v0.1.30
+   Compiling arrayref v0.3.9
+   Compiling moxcms v0.8.1
+   Compiling fontconfig-parser v0.5.8
+   Compiling hashbrown v0.17.1
+   Compiling blake3 v1.8.7
+   Compiling bytemuck_derive v1.12.1
+   Compiling zerofrom-derive v0.1.8
+   Compiling yoke-derive v0.8.3
+   Compiling zerovec-derive v0.11.6
+   Compiling serde_derive v1.0.229
+   Compiling displaydoc v0.2.7
+   Compiling thiserror-impl v2.0.21
+   Compiling brotli-decompressor v5.0.3
+   Compiling bytemuck v1.25.2
+   Compiling num-complex v0.4.6
+   Compiling font-types v0.12.5
+   Compiling read-fonts v0.41.0
+   Compiling zerofrom v0.1.8
+   Compiling yoke v0.8.3
+   Compiling zerovec v0.11.8
+   Compiling tinystr v0.8.4
+   Compiling icu_locale_core v2.3.0
+   Compiling potential_utf v0.1.6
+   Compiling zerotrie v0.2.5
+   Compiling icu_provider v2.3.1
+   Compiling zerocopy-derive v0.8.59
+   Compiling icu_collections v2.3.0
+   Compiling fax_derive v0.2.0
+   Compiling icu_properties v2.3.0
+   Compiling icu_locale_fallback v2.3.0
+   Compiling qoi v0.4.1
+   Compiling tiny-skia-path v0.11.4
+   Compiling image-webp v0.2.4
+   Compiling gif v0.14.2
+   Compiling jxl-color v0.11.0
+   Compiling photocraft-geom v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/geom)
+   Compiling photocraft-color v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/color)
+   Compiling photocraft-raster v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/raster)
+   Compiling kurbo v0.11.3
+   Compiling photocraft-doc v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/doc)
+   Compiling fax v0.2.6
+   Compiling png v0.18.1
+   Compiling memmap2 v0.9.11
+   Compiling zune-inflate v0.2.54
+   Compiling bit_field v0.10.3
+   Compiling wasmi_ir v2.0.0
+   Compiling unicode-script v0.5.8
+   Compiling linebender_resource_handle v0.1.1
+   Compiling tinyvec v1.13.3
+   Compiling lebe v0.5.3
+   Compiling siphasher v1.0.4
+   Compiling strength_reduce v0.2.4
+   Compiling wasmparser v0.228.0
+   Compiling unicode-properties v0.1.4
+   Compiling bitflags v1.3.2
+   Compiling parlance v0.1.0
+   Compiling unicode-ccc v0.4.0
+   Compiling twox-hash v2.1.4
+   Compiling unicode-bidi-mirroring v0.4.0
+   Compiling ruzstd v0.9.1
+   Compiling rustybuzz v0.20.1
+   Compiling fontique v0.11.1
+   Compiling png v0.17.16
+   Compiling svgtypes v0.15.3
+   Compiling transpose v0.2.3
+   Compiling fontdb v0.23.0
+   Compiling image v0.25.10
+   Compiling jxl-render v0.12.4
+   Compiling craft-jpeg v0.1.0 (https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cf)
+   Compiling icu_normalizer v2.3.0
+   Compiling icu_segmenter v2.3.0
+   Compiling skrifa v0.44.0
+   Compiling harfrust v0.12.0
+   Compiling parley_data v0.11.1
+   Compiling jxl-jbr v0.2.1
+   Compiling photocraft-text v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/text)
+   Compiling primal-check v0.3.4
+   Compiling simplecss v0.2.2
+   Compiling wasmi_core v2.0.0
+   Compiling pico-args v0.5.0
+   Compiling unicode-vo v0.1.0
+   Compiling imagesize v0.13.0
+   Compiling wasmi v2.0.0
+   Compiling zune-core v0.4.12
+   Compiling unicode-bidi v0.3.18
+   Compiling jpeg-encoder v0.6.1
+   Compiling constant_time_eq v0.4.2
+   Compiling getrandom v0.3.4
+   Compiling data-url v0.3.2
+   Compiling half v2.7.1
+   Compiling xmlwriter v0.1.0
+   Compiling tiff v0.11.3
+   Compiling exr v1.74.2
+   Compiling base64 v0.22.1
+   Compiling usvg v0.45.1
+   Compiling photocraft-codecs v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/codecs)
+   Compiling zune-jpeg v0.4.21
+   Compiling rustfft v6.4.1
+   Compiling parley v0.11.1
+   Compiling jxl-oxide v0.12.6
+   Compiling tiny-skia v0.11.4
+   Compiling photocraft-vector v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/vector)
+   Compiling photocraft-psd v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/psd)
+   Compiling rgb v0.8.53
+   Compiling gif v0.13.3
+   Compiling spin v0.9.9
+   Compiling wasmi_collections v2.0.0
+   Compiling resvg v0.45.1
+   Compiling photocraft-compose v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/compose)
+   Compiling photocraft-format v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/format)
+   Compiling photocraft-algo v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/algo)
+   Compiling photocraft-raw v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/raw)
+   Compiling photocraft-affinity v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/affinity)
+   Compiling photocraft-paint v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/paint)
+   Compiling roxmltree v0.21.1
+   Compiling craft-docpath v0.1.0 (https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cf)
+   Compiling craft-winprint-gdi v0.1.0 (https://github.com/storytold/winprint.rs?rev=417ac3c4d14d3da5485a99c7d5ce8f05664ec312#417ac3c4)
+   Compiling fastrand v2.5.0
+   Compiling tempfile v3.27.0
+   Compiling craft-print v0.1.0 (https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cf)
+   Compiling photocraft-io v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/io)
+   Compiling photocraft-plugins v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/plugins)
+   Compiling photocraft-ops v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/ops)
+   Compiling chrono v0.4.45
+   Compiling semver v1.0.28
+   Compiling photocraft-ipp v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/ipp)
+   Compiling photocraft-engine v0.16.0 (/Volumes/ADATA ELITE SE880/compilation/photocraft/crates/engine)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 46m 03s
+=== EXIT: 0

@@ -1,0 +1,11 @@
+{
+  "authority_state": {
+    "ambiguous": false,
+    "epoch": 1,
+    "mode": "ReadOnlyReplica",
+    "owner_device": "remote"
+  },
+  "guard_mutation_error": "AUTH_ReadOnly: session is a read-only replica (AUTH-005)",
+  "reopened_source_guard_refused": true,
+  "reopened_source_may_mutate": false
+}

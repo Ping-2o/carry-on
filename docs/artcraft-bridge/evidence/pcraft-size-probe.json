@@ -1,0 +1,27 @@
+{
+  "core_cap_bytes": 16777216,
+  "digests": {
+    "composite_png": "6d77e265373de1ca4df4f0e945a5cff734cf984d4ee8808200669854dd2e6412",
+    "dirty_journal": "120170d6a23f838cfc4664caa87a7e8c9189e61f28999efdf665f875f69953b2",
+    "dirty_snapshot_pcraft": "d6d7c1358352ef7a77feacb11e4a8c20fec0565efdfcd18c5d6bdd1068f29c93",
+    "layered_pcraft": "bbbe340dd2ceec5ea467f1ca1bb432cf0cc0c97f8668c2a7f672189de261da64",
+    "single_layer_pcraft": "a644c2732e42b4597fb391f30858a4b78b98b3d072307b93b4a298ec344faf98"
+  },
+  "dirty_snapshot_over_cap": false,
+  "experiment": "pcraft-size-probe (16 MiB core object cap decision evidence)",
+  "layered_over_cap": false,
+  "measurements": {
+    "composite_png_bytes": 3597278,
+    "dirty_state_journal_bytes": 90,
+    "dirty_state_snapshot_pcraft_bytes": 7419132,
+    "layered_photo_pcraft_bytes": 7038470,
+    "single_layer_photo_pcraft_bytes": 6897711
+  },
+  "photocraft_pin": "1f7fc0f53696e54da79b95015abb37d7c22cdd1a",
+  "scope": "LOCAL (in-process engine session, one machine)",
+  "single_layer_over_cap": false,
+  "source_photo": {
+    "bytes": 1078162,
+    "name": "photocraft-demo.jpg"
+  }
+}

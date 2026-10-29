@@ -1,0 +1,7 @@
+split bundle: manifest 4627 B, 1 content objects
+sealed cut 0; source owns authority (session b0664de2-e687-4536-a2a6-b338a3fe692d)
+waiting for destination (session=b0664de2-e687-4536-a2a6-b338a3fe692d)
+carried 50245 B in 1.436s; authority epoch -> 1
+evidence: /Volumes/ADATA ELITE SE880/compilation/photocraft-live/phys-l4/src-evidence.json
+SESSION_STRING=b0664de2-e687-4536-a2a6-b338a3fe692d
+COMPOSITE_SHA=ef8c0c13df0d359dd0c3412a2db38ea7f4d78294d1b8a7c1dd53d838c5d977fd

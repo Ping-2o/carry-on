@@ -1,0 +1,60 @@
+{
+  "crossover_journal_exceeds_snapshot": null,
+  "edit_mix": "per 6 steps: 2 pressure-curve brush strokes, 1 large soft stroke, 1 layer-props edit, 1 selection+filter pass, 1 adjustment+undo; 240 total",
+  "experiment": "edit-stream journal growth (scripted-but-varied mix, NOT a captured human session)",
+  "final_state": {
+    "composite_sha256": "36271fe16f452a465f7c684f1eeab2fc2e80d3b48a636ba576f2feb38ee83759",
+    "dirty": true,
+    "revision": 364
+  },
+  "photocraft_pin": "1f7fc0f53696e54da79b95015abb37d7c22cdd1a",
+  "samples": [
+    {
+      "edits": 40,
+      "journal_bytes": 4691,
+      "journal_over_snapshot": 0.0005615218330964632,
+      "journal_steps": 58,
+      "snapshot_bytes": 8354083
+    },
+    {
+      "edits": 80,
+      "journal_bytes": 9418,
+      "journal_over_snapshot": 0.000977262409691687,
+      "journal_steps": 119,
+      "snapshot_bytes": 9637125
+    },
+    {
+      "edits": 120,
+      "journal_bytes": 14094,
+      "journal_over_snapshot": 0.0013256664027373403,
+      "journal_steps": 180,
+      "snapshot_bytes": 10631634
+    },
+    {
+      "edits": 160,
+      "journal_bytes": 18771,
+      "journal_over_snapshot": 0.0016340633124450753,
+      "journal_steps": 238,
+      "snapshot_bytes": 11487315
+    },
+    {
+      "edits": 200,
+      "journal_bytes": 23477,
+      "journal_over_snapshot": 0.0019621612206670394,
+      "journal_steps": 299,
+      "snapshot_bytes": 11964868
+    },
+    {
+      "edits": 240,
+      "journal_bytes": 28151,
+      "journal_over_snapshot": 0.0023083590872277,
+      "journal_steps": 360,
+      "snapshot_bytes": 12195243
+    }
+  ],
+  "scope": "LOCAL (in-process engine session, one machine)",
+  "source_photo": {
+    "dimensions": "2400x1500",
+    "name": "photocraft-demo.jpg"
+  }
+}

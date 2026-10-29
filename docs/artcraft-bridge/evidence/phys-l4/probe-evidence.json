@@ -1,0 +1,4 @@
+{
+  "note": "the relaunched app runs normally; authority lives in the cores — the device's core owns epoch 1, the mac's core refuses mutation (AUTH_ReadOnly)",
+  "restarted_source_app_alive": true
+}

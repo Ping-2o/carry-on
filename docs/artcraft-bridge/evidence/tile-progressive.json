@@ -1,0 +1,101 @@
+{
+  "bfa_delta_explanation": "split total is lower than monolithic because the monolithic zip embeds PhotoCraft's thumb.png + composite/preview.png previews (re-derived on open); the split bundle carries no previews — the delta is previews, not pixels",
+  "bytes_before_first_action": {
+    "monolithic": {
+      "TOTAL": 6868017,
+      "document_zip": 6867536,
+      "meta": 378,
+      "unsaved_journal": 103
+    },
+    "reference_snapshot_mode": {
+      "TOTAL_with_snapshot": 13840870,
+      "unsaved_snapshot": 6972956
+    },
+    "split": {
+      "TOTAL": 5930649,
+      "manifest": 15376,
+      "meta": 378,
+      "parts_total": 5914792,
+      "unsaved_journal": 103
+    }
+  },
+  "document": {
+    "blob_count": 1,
+    "dirty_edits": "1 paint stroke (post-save)",
+    "layers": "photo + brightness/contrast adjustment + retouch layer",
+    "tile_count": 60,
+    "unsaved_mode": "journal"
+  },
+  "experiment": "tile-split progressive carry on the real photo",
+  "monolithic_counterfactual": {
+    "note": "the budget binds at object granularity: the monolithic document is ONE object, so no sequence of sub-object-size windows can complete its carry (window B is refused with nothing left to bank); the split completed via windows and would have needed only many small ones",
+    "window_a_budget_bytes": 65536,
+    "window_a_document_deferred": true,
+    "window_a_outcome": "partial: meta + journal bank; the whole document object deferred",
+    "window_b_budget_bytes": 262144,
+    "window_b_refusal": "BUDGET_Network: object photocraft.document.v1 (6867536 deferred bytes over 1 objects) exceeds import budget (262144 bytes)",
+    "window_b_refused_before_bytes": true
+  },
+  "oracle": {
+    "composite_pixel_sha256_destination": "b5bdb593d26676f01cac37288efae39c29e0028fe310c0b20583a73b6a2b05ec",
+    "composite_pixel_sha256_source": "b5bdb593d26676f01cac37288efae39c29e0028fe310c0b20583a73b6a2b05ec",
+    "match": true
+  },
+  "photo": "/Volumes/ADATA ELITE SE880/compilation/photocraft/docs/images/photocraft-demo.jpg",
+  "photocraft_pin": "1f7fc0f53696e54da79b95015abb37d7c22cdd1a",
+  "progressive_windows": [
+    {
+      "attempt": 1,
+      "budget_bytes": 65536,
+      "deferred_bytes": 5865541,
+      "deferred_objects": 57,
+      "moved_logical_bytes": 65108,
+      "published_ids": [
+        "photocraft.meta.v1",
+        "photocraft.unsaved_edits.v1",
+        "photocraft.document.manifest.v1",
+        "photocraft.blob.63a257e88f6c0552710917a5c8c6d5f7881c92f9716842550e440f299406b3c1.v1",
+        "photocraft.tile.0148b019f9ed91cd25c9f32e71da1b9ad01c23483c36341b6a8e4a38a37968b5.v1",
+        "photocraft.tile.0ef79eef53191baa271e9648f84cbd14d1a8fbfd145538c164a470ea09cbacfe.v1",
+        "photocraft.tile.9f17721730b14b05a1e37b833dd7365e16e45feb3a542f877e7bee76ed7e5601.v1"
+      ],
+      "published_objects": 7,
+      "seconds": 0.47168425,
+      "wire_bytes": 120784
+    },
+    {
+      "attempt": 2,
+      "budget_bytes": 262144,
+      "deferred_bytes": 5604794,
+      "deferred_objects": 54,
+      "moved_logical_bytes": 260747,
+      "published_ids": [
+        "photocraft.tile.043d475f8e0b184be364dae6ff723ee317cc7a99fa415b0115ccc7e38b8b5b4f.v1",
+        "photocraft.tile.0e131bc6199c76e5f648a03bc1654f6070b0791b0e3e8b4d350d9a428ccc7006.v1",
+        "photocraft.tile.4cea838fd109d4142f28eb2012ed2e1e609825e758e8a9bdcab2bf5a0774781c.v1"
+      ],
+      "published_objects": 3,
+      "seconds": 0.419815542,
+      "wire_bytes": 380352
+    },
+    {
+      "attempt": 3,
+      "budget_bytes": 18446744073709551615,
+      "completed": true,
+      "mirror_cut": 0,
+      "seconds": 3.270874792,
+      "wire_bytes": 7522178
+    }
+  ],
+  "recarry_after_one_stroke": {
+    "changed_bytes": 122041,
+    "changed_objects": 6,
+    "content_objects_cut1": 61,
+    "content_objects_cut2": 67,
+    "observed_dedup_recarry_seconds": 0.31202775,
+    "observed_dedup_recarry_wire_bytes": 222413,
+    "recarry_journal_bytes": 0,
+    "scenario": "after 2 strokes the document was re-saved (incremental directory save); cut 2 is the NEW SAVED BASE (67 parts, empty post-save journal); the destination already held cut 1 and the content-addressed store deduplicated unchanged tiles (OBSERVED wire bytes, not an estimate)"
+  },
+  "scope": "LOCAL (one machine, loopback TLS, in-process PhotoCraft engine)"
+}

@@ -1,0 +1,15 @@
+{
+  "device_still_owns": true,
+  "document_edit_output": {
+    "revision": 3,
+    "steps_ran": 2,
+    "unsaved_hash": "bdfe779fb6391f60d85d1a74a86200111adfac8db897143bb2b908a9a5dafaf5"
+  },
+  "edit_revision": 3,
+  "edit_seconds": 1.453061846,
+  "edit_steps_ran": 2,
+  "experiment": "physical-L4 destination continue, source-off (Galaxy A04)",
+  "fresh_process": true,
+  "post_edit_unsaved_hash": "bdfe779fb6391f60d85d1a74a86200111adfac8db897143bb2b908a9a5dafaf5",
+  "scope": "PHYSICAL; fresh process; source app killed, source core dropped on the mac"
+}

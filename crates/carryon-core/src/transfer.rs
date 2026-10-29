@@ -26,7 +26,7 @@ use crate::db::migrations::now_utc;
 use crate::error::{BudgetCode, CoreError, InternalCode, ObjectCode, Result, TransferCode};
 use crate::ids::{Digest, ObjectId, ObjectVersion, SessionId};
 use crate::journal::{EventType, JournalEvent};
-use crate::model::object::{Object, ObjectKind};
+use crate::model::object::Object;
 use crate::store::publish::{publish_object_resumable, PublishProgress};
 use crate::store::ChunkSource;
 use carryon_adapter_api::{
@@ -43,6 +43,27 @@ pub enum ImportOutcome {
     Completed(u64),
     /// A cooperative suspend happened mid-object; resume with the token (§11.2).
     Suspended(ImportResume),
+    /// The byte budget (§6.8) admitted only a **prefix** of the closure: the
+    /// admitted objects were pulled, verified and durably published (CORE-004,
+    /// each object whole-object digest-checked), but the mirror cut is **not**
+    /// sealed and no action can run until a later attempt completes the closure
+    /// (fail closed). Retry `import_cut` with a replenished budget: already-
+    /// present objects are skipped by the store's dedup, so each window banks
+    /// verified progress at object granularity (§6.6 deferral until demand).
+    PartialBudget(PartialImport),
+}
+
+/// A budget-limited import attempt's report: what moved and what is deferred.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PartialImport {
+    pub remote_session: String,
+    pub remote_cut: u64,
+    /// Object versions this attempt pulled and published, in manifest order.
+    pub published: Vec<(String, u64)>,
+    /// Object ids the budget deferred, in manifest order.
+    pub deferred: Vec<String>,
+    /// Logical bytes still to move (the deferred objects' sizes).
+    pub deferred_bytes: u64,
 }
 
 impl ImportOutcome {
@@ -50,9 +71,40 @@ impl ImportOutcome {
     pub fn completed_cut(&self) -> Option<u64> {
         match self {
             ImportOutcome::Completed(n) => Some(*n),
-            ImportOutcome::Suspended(_) => None,
+            ImportOutcome::Suspended(_) | ImportOutcome::PartialBudget(_) => None,
         }
     }
+}
+
+/// Result of the shared chunked pull loop ([`Core::pull_objects`], private).
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum PullProgress {
+    /// Every admitted manifest object was pulled, verified and published.
+    Done,
+    /// A cooperative suspend checkpointed mid-object; nothing sealed.
+    Suspended(ImportResume),
+}
+
+/// Result of progressive budget admission ([`Core::admit_import_budget`],
+/// private; §6.8).
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Admission {
+    /// The whole closure fits the budget: pull everything, seal on completion.
+    All,
+    /// The budget admits a prefix: pull the admitted objects, defer the rest.
+    Prefix(BudgetPrefix),
+}
+
+/// What a budget-limited import admitted and deferred (§6.8) — the inputs to
+/// the (private) partial pull path.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BudgetPrefix {
+    /// Object ids admitted by the budget, in manifest order.
+    admitted: Vec<String>,
+    /// Object ids deferred by the budget, in manifest order.
+    deferred: Vec<String>,
+    /// Logical bytes the deferred objects still need.
+    deferred_bytes: u64,
 }
 
 /// A token to resume a suspended import (§11.2). Serde so a shell can persist it
@@ -288,12 +340,17 @@ impl Core {
     // ---- Destination side ----
 
     /// Import a sealed cut from a connected source (spec §18.6/§18.8). Pulls the
-    /// manifest, enforces the active budget (§6.8), publishes + verifies every
-    /// authoritative object through the local two-phase discipline (resumable +
-    /// suspendable, §11.2), then seals a mirror cut locally so source-off actions
-    /// run. Returns [`ImportOutcome::Completed`] with the mirror cut number, or
-    /// [`ImportOutcome::Suspended`] with a resume token if a cooperative suspend was
-    /// requested mid-object. Sends `ImportComplete` only on completion.
+    /// manifest, enforces the active budget **cumulatively and progressively**
+    /// (§6.8): not-yet-present objects are counted in manifest order against a
+    /// running spend, and the longest prefix that fits the budget is admitted.
+    /// The admitted prefix is pulled, published + verified through the local
+    /// two-phase discipline (resumable + suspendable, §11.2), then — only when
+    /// the closure is complete — a mirror cut is sealed locally so source-off
+    /// actions run. Returns [`ImportOutcome::Completed`] with the mirror cut
+    /// number, [`ImportOutcome::Suspended`] with a resume token if a cooperative
+    /// suspend was requested mid-object, or [`ImportOutcome::PartialBudget`]
+    /// when the budget deferred part of the closure (nothing sealed; retry to
+    /// continue from the store's dedup). Sends `ImportComplete` only on completion.
     pub fn import_cut(
         &mut self,
         session: &mut Session,
@@ -324,12 +381,26 @@ impl Core {
             crate::prepare::validate_entry(e)?;
         }
 
-        // Budget admission (§6.8): refuse an over-budget import before any bytes.
-        self.admit_import_budget(&manifest)?;
-
-        self.pull_and_seal(session, remote_session, remote_cut, &manifest)
+        // Budget admission (§6.8), cumulative across the closure.
+        match self.admit_import_budget(&manifest)? {
+            Admission::All => self.pull_and_seal(session, remote_session, remote_cut, &manifest),
+            Admission::Prefix(BudgetPrefix {
+                admitted,
+                deferred,
+                deferred_bytes,
+            }) => self.pull_partial(
+                session,
+                remote_session,
+                remote_cut,
+                &manifest,
+                BudgetPrefix {
+                    admitted,
+                    deferred,
+                    deferred_bytes,
+                },
+            ),
+        }
     }
-
     /// Resume a previously suspended import (§11.2). Re-requests the manifest, skips
     /// already-published objects (dedup fast-path), and resumes the pending object
     /// from its checkpointed offset. Returns the same outcome shape as `import_cut`.
@@ -363,9 +434,9 @@ impl Core {
         self.pull_and_seal(session, &token.remote_session, token.remote_cut, &manifest)
     }
 
-    /// Shared pull→publish→seal loop used by both `import_cut` and `resume_import`.
-    /// Uses `publish_object_resumable`, so a suspend request mid-object checkpoints
-    /// and returns a resume token instead of a sealed cut.
+    /// Shared pull→publish→seal loop used by `import_cut` (full closure) and
+    /// `resume_import`. Uses `publish_object_resumable`, so a suspend request
+    /// mid-object checkpoints and returns a resume token instead of a sealed cut.
     fn pull_and_seal(
         &mut self,
         session: &mut Session,
@@ -373,43 +444,25 @@ impl Core {
         remote_cut: u64,
         manifest: &ObjectManifest,
     ) -> Result<ImportOutcome> {
-        let chunk_size = self.chunk_size();
-        let suspend_flag = self.suspend_flag();
-        let mut authoritative = Vec::new();
-        for e in &manifest.objects {
-            let obj = raw_entry_to_object(e)?;
-            let src = NetChunkSource {
-                session: std::cell::RefCell::new(session),
-                content_hash: e.content_hash.clone(),
-            };
-            let (db, store, journal, _host) = self.parts();
-            // Verify against the manifest's declared digest — a lying source fails
-            // here with OBJECT_DigestMismatch (CORE-004 over the wire).
-            match publish_object_resumable(
-                db,
-                store,
-                journal,
-                &obj,
-                &src,
-                chunk_size,
-                &suspend_flag,
-            )? {
-                PublishProgress::Completed(_) => {
-                    if obj.kind == ObjectKind::Authoritative {
-                        authoritative.push(obj.version());
-                    }
-                }
-                PublishProgress::Suspended { next_offset, .. } => {
-                    // Checkpointed mid-object. Do NOT seal; hand back a resume token.
-                    return Ok(ImportOutcome::Suspended(ImportResume {
-                        remote_session: remote_session.to_string(),
-                        remote_cut,
-                        pending_content_hash: e.content_hash.clone(),
-                        next_offset,
-                    }));
-                }
-            }
+        let mut published = Vec::new();
+        match self.pull_objects(session, manifest, None, &mut published)? {
+            PullProgress::Suspended(token) => return Ok(ImportOutcome::Suspended(token)),
+            PullProgress::Done => {}
         }
+        // Only authoritative objects seal into the mirror cut (the manifest served
+        // for a cut is authoritative-only, but the kind check keeps the invariant).
+        let published_set: std::collections::HashSet<&String> =
+            published.iter().map(|(id, _)| id).collect();
+        let authoritative: Vec<ObjectVersion> = manifest
+            .objects
+            .iter()
+            .filter(|e| published_set.contains(&e.object_id))
+            .filter(|e| matches!(e.kind, ObjectKindWire::Authoritative))
+            .map(|e| ObjectVersion {
+                id: ObjectId(e.object_id.clone()),
+                generation: e.generation,
+            })
+            .collect();
 
         // Seal a mirror cut locally so the imported state is first-class.
         let local_session = self.ensure_mirror_session(remote_session, manifest)?;
@@ -450,17 +503,164 @@ impl Core {
         Ok(ImportOutcome::Completed(cut_number))
     }
 
-    /// Enforce the effective budget on the import closure (§6.8/§20.2). Builds an
-    /// [`crate::policy::Observation`] from the manifest and admits one
-    /// `JobKind::Transfer` proposal per not-yet-present object via the existing
-    /// `policy::admit`. An over-budget object is refused before any bytes move;
-    /// refusal is journaled (a normal, visible outcome, §6.8).
-    fn admit_import_budget(&mut self, manifest: &ObjectManifest) -> Result<()> {
+    /// Pull + publish only the budget-admitted prefix of a cut, **sealing nothing**
+    /// (§6.8/§6.6): each pulled object goes through the unchanged CORE-004
+    /// two-phase discipline; the mirror session is created (once) in `Importing`
+    /// state so the in-progress carry is observable; the deferred tail is
+    /// journaled and reported. No mirror cut, no actions, until a later attempt
+    /// completes the closure. The wire is closed with `Abort { BUDGET_PARTIAL … }`;
+    /// the source's `serve_cut` returns — a retry opens a fresh connection and
+    /// continues from the store's dedup (present objects are never re-counted).
+    fn pull_partial(
+        &mut self,
+        session: &mut Session,
+        remote_session: &str,
+        remote_cut: u64,
+        manifest: &ObjectManifest,
+        prefix: BudgetPrefix,
+    ) -> Result<ImportOutcome> {
+        let allowed: std::collections::HashSet<String> = prefix.admitted.iter().cloned().collect();
+        let mut published = Vec::new();
+        match self.pull_objects(session, manifest, Some(&allowed), &mut published)? {
+            PullProgress::Suspended(token) => return Ok(ImportOutcome::Suspended(token)),
+            PullProgress::Done => {}
+        }
+        // The mirror session row exists in `Importing` state (never sealed here).
+        let _ = self.ensure_mirror_session(remote_session, manifest)?;
+        self.journal().append(
+            &JournalEvent::new(EventType::TransferInterrupted, "BUDGET_Partial")
+                .with_session(remote_session.to_string())
+                .with_cut(remote_cut)
+                .with_metadata(serde_json::json!({
+                    "published_objects": published.len(),
+                    "deferred_objects": prefix.deferred.len(),
+                    "deferred_bytes": prefix.deferred_bytes,
+                })),
+        )?;
+        session.send(Message::Abort {
+            reason: format!(
+                "BUDGET_PARTIAL: {}/{} objects deferred by budget",
+                prefix.deferred.len(),
+                published.len() + prefix.deferred.len()
+            ),
+        })?;
+        Ok(ImportOutcome::PartialBudget(PartialImport {
+            remote_session: remote_session.to_string(),
+            remote_cut,
+            published,
+            deferred: prefix.deferred,
+            deferred_bytes: prefix.deferred_bytes,
+        }))
+    }
+
+    /// The shared chunked pull loop (§18.6). For each admitted manifest entry it
+    /// pulls the bytes over the transport and runs them through the destination's
+    /// two-phase publish (stage → whole-object digest verify → atomic publish;
+    /// CORE-004 over the wire). `admit_only` limits the pull to that set of
+    /// object ids (budget-prefix mode); `None` = every manifest object. A
+    /// cooperative suspend mid-object checkpoints and returns early without
+    /// publishing that object.
+    fn pull_objects(
+        &mut self,
+        session: &mut Session,
+        manifest: &ObjectManifest,
+        admit_only: Option<&std::collections::HashSet<String>>,
+        published: &mut Vec<(String, u64)>,
+    ) -> Result<PullProgress> {
+        let chunk_size = self.chunk_size();
+        let suspend_flag = self.suspend_flag();
+        for e in &manifest.objects {
+            if let Some(allowed) = admit_only {
+                if !allowed.contains(&e.object_id) {
+                    continue;
+                }
+            }
+            let obj = raw_entry_to_object(e)?;
+            let src = NetChunkSource {
+                session: std::cell::RefCell::new(session),
+                content_hash: e.content_hash.clone(),
+            };
+            let (db, store, journal, _host) = self.parts();
+            // Verify against the manifest's declared digest — a lying source fails
+            // here with OBJECT_DigestMismatch (CORE-004 over the wire).
+            match publish_object_resumable(
+                db,
+                store,
+                journal,
+                &obj,
+                &src,
+                chunk_size,
+                &suspend_flag,
+            )? {
+                PublishProgress::Completed(outcome) => {
+                    published.push((obj.id.0.clone(), obj.generation));
+                    let _ = outcome.deduplicated; // present objects were filtered already
+                }
+                PublishProgress::Suspended { next_offset, .. } => {
+                    // Checkpointed mid-object. Do NOT seal; hand back a resume token.
+                    return Ok(PullProgress::Suspended(ImportResume {
+                        remote_session: manifest.session.clone(),
+                        remote_cut: manifest.generation,
+                        pending_content_hash: e.content_hash.clone(),
+                        next_offset,
+                    }));
+                }
+            }
+        }
+        Ok(PullProgress::Done)
+    }
+
+    /// Pull + publish only the budget-admitted prefix of a cut, **sealing nothing**
+    /// (§6.8/§6.6): each pulled object goes through the unchanged CORE-004
+    /// two-phase discipline, the mirror session is created/kept in `Importing`
+    /// state so the in-progress carry is observable, and the deferred tail is
+    /// reported to the caller and journaled. Closes the wire with `Abort`
+    /// (reason `BUDGET_PARTIAL …`); the source's `serve_cut` returns — a retry
+    /// opens a fresh connection and continues from the store's dedup.
+    /// Enforce the effective budget on the import closure (§6.8/§20.2),
+    /// **cumulatively and progressively**. Builds an [`crate::policy::Observation`]
+    /// from the manifest and admits one `JobKind::Transfer` proposal per
+    /// not-yet-present object via the existing `policy::admit`, counting each
+    /// admitted object against a running spend in manifest order:
+    ///
+    /// - an object that alone exceeds the whole budget, or does not fit in the
+    ///   remaining budget, becomes the **cut point**; every not-present object
+    ///   from there on is deferred (journaled per cut point, a normal visible
+    ///   outcome per §6.8);
+    /// - when nothing is deferred the import proceeds in full (all-or-nothing
+    ///   when the closure fits — the pre-split behavior);
+    /// - when the FIRST not-present object already exceeds the budget, the
+    ///   import is refused before any bytes move (typed `BUDGET` error) — the
+    ///   fail-closed pre-split behavior is preserved for that case.
+    fn admit_import_budget(&mut self, manifest: &ObjectManifest) -> Result<Admission> {
         use crate::policy::{admit, AdmitRejection, JobKind, PrepMode, Proposal, RationaleCode};
         let budget = self.effective_budget();
         let obs = self.import_observation(manifest, budget);
+        let mut spent = 0u64;
+        let mut admitted: Vec<String> = Vec::new();
+        let mut deferred: Vec<String> = Vec::new();
+        let mut deferred_bytes = 0u64;
         for obj in &obs.objects {
             if obj.locally_present {
+                // Already in the store (verified): no bytes to move, no budget
+                // spend (dedup fast path on retry).
+                continue;
+            }
+            if spent + obj.logical_size > budget.total_net_bytes {
+                // The cut point: this object does not fit the remaining budget.
+                // Everything not-present from here on is deferred.
+                self.journal().append(
+                    &JournalEvent::new(EventType::TransferInterrupted, "BUDGET_Rejected")
+                        .with_metadata(serde_json::json!({
+                            "object_id": obj.id.0,
+                            "logical_size": obj.logical_size,
+                            "budget_net_bytes": budget.total_net_bytes,
+                            "spent_so_far": spent,
+                            "progressive": true,
+                        })),
+                )?;
+                deferred.push(obj.id.0.clone());
+                deferred_bytes += obj.logical_size;
                 continue;
             }
             let proposal = Proposal {
@@ -508,8 +708,32 @@ impl Core {
                     ),
                 ));
             }
+            spent += obj.logical_size;
+            admitted.push(obj.id.0.clone());
         }
-        Ok(())
+        if deferred.is_empty() {
+            Ok(Admission::All)
+        } else if admitted.is_empty() {
+            // Not one object fits: refuse before any bytes (fail closed, the
+            // pre-split semantics for a budget below every object).
+            let first = &deferred[0];
+            Err(CoreError::budget(
+                BudgetCode::Network,
+                format!(
+                    "object {first} ({} deferred bytes over {} objects) exceeds import budget \
+                     ({} bytes)",
+                    deferred_bytes,
+                    deferred.len(),
+                    budget.total_net_bytes
+                ),
+            ))
+        } else {
+            Ok(Admission::Prefix(BudgetPrefix {
+                admitted,
+                deferred,
+                deferred_bytes,
+            }))
+        }
     }
 
     /// Build a read-only observation of the import closure for budget admission.

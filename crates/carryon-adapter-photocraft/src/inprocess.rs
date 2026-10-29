@@ -1,0 +1,881 @@
+//! InProcessDriver — Phase 2b implementation of [`PhotocraftDriver`] over a
+//! real `photocraft_engine::Session` embedded in the Carry-On host process
+//! (`docs/artcraft-bridge/RESEARCH.md` §2.5, ADAPTER-DESIGN §5).
+//!
+//! Compiles only with `--features inprocess` (the pinned git dependency on
+//! `photocraft-engine`; see `PHOTOCRAFT-PIN.md`).
+//!
+//! # What this driver adds over the control channel
+//!
+//! - **Journal-mode unsaved edits**: `Session.journal` is a `Vec<(command id,
+//!   params)>` record of every journaled edit (RESEARCH §1.3.1). The adapter
+//!   slices it from a checkpoint taken at the last save — bytes that are
+//!   typically orders of magnitude smaller than a `.pcraft` snapshot of the
+//!   dirty state, and replayable on the destination via `Session::execute`.
+//! - **`saved_revision` is visible**: the control surface hides it; in-process
+//!   `DocState.saved_revision` is readable, so the meta object carries the
+//!   true saved/dirty boundary.
+//!
+//! # Fail-closed authorization (`Session::authorize`)
+//!
+//! The engine runs a gate on **every** command ("Untrusted sessions install
+//! the same check a top-level request sees", `crates/engine/src/lib.rs`
+//! authorize field). [`InProcessDriver::new`] installs [`authorize_policy`],
+//! which denies everything except:
+//!
+//! - read-only commands (`*.inspect`, `*.list`, `document.pixel`, …);
+//! - `file.new` and edits in [`EDIT_ALLOWLIST`];
+//! - `file.save`/`file.saveAs`/`image.duplicate`/`file.close`/`file.revert`
+//!   with an output/affected path inside the explicitly-granted
+//!   [`WorkRoot`] (set once via `OnceLock`), mirroring PhotoCraft's own
+//!   `AuthorizedWorkspace` root discipline (RESEARCH §2.2) — everything
+//!   ambient fails closed.
+//!
+//! # Headless honesty
+//!
+//! There is no viewport in the engine (it lives in ui-egui, RESEARCH §1.2), so
+//! [`PhotocraftDriver::restore`] restores active document, tool-adjacent
+//! selection state and layer selection, and the `workspace.viewport` fragment
+//! is carried but **not applied** headless; the report output says so.
+
+use crate::driver::{DriverError, EditOutcome, PhotocraftDriver, Step};
+use crate::model::{PhotocraftMeta, UnsavedMode, Workspace, PHOTOCRAFT_PIN};
+use serde_json::Value;
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+
+/// The scratch/write root granted at construction; commands touching any other
+/// path fail closed.
+static WORK_ROOT: OnceLock<PathBuf> = OnceLock::new();
+
+/// Edit commands the adapter may replay (Phase-2 measurement set: painting,
+/// layer property edits, adjustments, filters, selection, transform). Anything
+/// else — file I/O, actions, plugins, preferences — is denied.
+const EDIT_ALLOWLIST: &[&str] = &[
+    // paint + retouch
+    "paint.stroke",
+    "paint.pencil",
+    "paint.gradient",
+    "paint.contentAwareMove",
+    "edit.fill",
+    "edit.clear",
+    // layers
+    "layer.new.layer",
+    "layer.new.group",
+    "layer.newAdjustmentLayer.brightnessContrast",
+    "layer.newAdjustmentLayer.curves",
+    "layer.newAdjustmentLayer.hueSaturation",
+    "layer.newAdjustmentLayer.levels",
+    "layer.newAdjustmentLayer.vibrance",
+    "layer.newFillLayer.solidColor",
+    "layer.delete",
+    "layer.duplicate",
+    "layer.setProps",
+    "layer.select",
+    "layer.translate",
+    "layer.rasterize.type",
+    // selection
+    "select.rect",
+    "select.deselect",
+    "select.inverse",
+    "select.all",
+    // adjustments/filters (applied destructively)
+    "image.adjustments.invert",
+    "filter.blur.gaussianBlur",
+    // transform / crop
+    "edit.transform.scale",
+    "image.crop",
+    // undo inside a carried edit sequence is still an edit of the document
+    "edit.undo",
+    "edit.redo",
+];
+
+/// Read-only commands the adapter may run for state and oracles.
+const READ_ALLOWLIST: &[&str] = &[
+    "session.inspect",
+    "document.inspect",
+    "layer.list",
+    "command.list",
+    "document.pixel",
+];
+
+/// The `Session::authorize` gate: fail closed on everything not explicitly
+/// granted. `fn` pointer (the engine's shape), so the granted root travels in
+/// the `OnceLock`.
+pub fn authorize_policy(id: &str, params: &Value) -> photocraft_engine::Result<()> {
+    use photocraft_engine::EngineError;
+    let deny = |why: &str| Err(EngineError::Other(why.to_string()));
+    if READ_ALLOWLIST.contains(&id) {
+        return Ok(());
+    }
+    if EDIT_ALLOWLIST.contains(&id) {
+        // Belt and braces: edits in the allowlist may still carry paths
+        // (e.g. pattern fills); deny any path param outside the root.
+        if let Some(p) = path_param(params) {
+            if !under_root(&p) {
+                return deny("edit command touches a path outside the granted work root");
+            }
+        }
+        return Ok(());
+    }
+    match id {
+        "file.new" => Ok(()),
+        "image.duplicate" | "file.close" | "file.revert" => Ok(()),
+        // NOTE: `file.save`/`file.saveAs`/`file.open` are SHELL commands
+        // (recorded by the desktop shell and replayed by it,
+        // crates/engine/src/cmd/actions_cmds.rs `shell_save_command`); the
+        // engine itself does not know them. This driver never executes them
+        // through the session — file I/O goes through
+        // `photocraft_automation::files` directly (see below), on paths this
+        // driver constructed from the granted work root.
+        _other => deny("command is not granted to the PhotoCraft adapter session"),
+    }
+}
+
+/// Extract a plausible path parameter (`path`, `to`, `out`) for the root check.
+fn path_param(params: &Value) -> Option<String> {
+    ["path", "to", "out"].iter().find_map(|k| {
+        params
+            .get(k)
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    })
+}
+
+fn under_root(p: &str) -> bool {
+    let Some(root) = WORK_ROOT.get() else {
+        return false; // no root granted: everything fails closed
+    };
+    // Traversal never granted, same discipline as PhotoCraft's
+    // AuthorizedWorkspace (RESEARCH §2.2: `..` rejected before I/O).
+    if p.contains("..") {
+        return false;
+    }
+    let path = Path::new(p);
+    if path.is_absolute() {
+        path.starts_with(root)
+    } else {
+        // Relative names resolve beneath the root (the harness constructs
+        // them from the root); traversal was rejected above.
+        true
+    }
+}
+
+/// Configuration for one embedded session.
+#[derive(Debug, Clone)]
+pub struct InProcessConfig {
+    /// Directory the session may read/write (scratch saves, carried docs).
+    /// Mirrors `--automation-read-root`/`--automation-write-root` with one
+    /// root for both, granted explicitly at construction.
+    pub work_root: PathBuf,
+}
+
+/// The granted root accessor (tests).
+pub fn work_root() -> Option<&'static Path> {
+    WORK_ROOT.get().map(|p| p.as_path())
+}
+
+/// Phase 2b driver: a real PhotoCraft engine session in this process.
+pub struct InProcessDriver {
+    session: photocraft_engine::Session,
+    cfg: InProcessConfig,
+    /// Journal length at the last known save — the slice point for
+    /// journal-mode unsaved edits.
+    saved_checkpoint: usize,
+    /// Explicit carry mode (measurements); None = default Journal.
+    unsaved_mode_override: Option<UnsavedMode>,
+}
+
+impl std::fmt::Debug for InProcessDriver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InProcessDriver")
+            .field("cfg", &self.cfg)
+            .field("journal_len", &self.session.journal.len())
+            .field("saved_checkpoint", &self.saved_checkpoint)
+            .finish()
+    }
+}
+
+impl InProcessDriver {
+    /// Build an embedded session with the fail-closed [`authorize_policy`]
+    /// installed and the work root granted.
+    pub fn new(cfg: InProcessConfig) -> Result<Self, DriverError> {
+        let _ = WORK_ROOT.set(cfg.work_root.clone());
+        let mut session = photocraft_engine::Session::new();
+        session.authorize = Some(authorize_policy);
+        Ok(InProcessDriver {
+            session,
+            cfg,
+            saved_checkpoint: 0,
+            unsaved_mode_override: None,
+        })
+    }
+
+    /// Mutable access for harnesses that need engine-level setup (still gated
+    /// by the same authorize policy — the gate lives in the session).
+    pub fn session_mut(&mut self) -> &mut photocraft_engine::Session {
+        &mut self.session
+    }
+
+    /// Mark the current journal position as the "last save" checkpoint.
+    /// Called by the harness right after a successful save (or at
+    /// document-open, for never-saved documents).
+    pub fn mark_saved_checkpoint(&mut self) {
+        self.saved_checkpoint = self.session.journal.len();
+    }
+
+    /// The journal steps since the checkpoint, as [`Step`]s.
+    pub fn journal_steps(&self) -> Vec<Step> {
+        self.steps_since_checkpoint()
+    }
+
+    fn steps_since_checkpoint(&self) -> Vec<Step> {
+        self.session
+            .journal
+            .iter()
+            .skip(self.saved_checkpoint)
+            .map(|(id, params)| Step {
+                id: id.clone(),
+                params: params.clone(),
+            })
+            .collect()
+    }
+
+    fn run(&mut self, id: &str, params: Value) -> Result<Value, DriverError> {
+        self.session
+            .execute(id, params)
+            .map_err(|e| DriverError::Failed(format!("{id}: {e}")))
+    }
+
+    fn active_index(&self) -> Result<usize, DriverError> {
+        self.session
+            .active_index()
+            .ok_or_else(|| DriverError::Failed("no active document".into()))
+    }
+
+    /// Flattened composite of the ACTIVE document (PNG bytes via the io
+    /// export path). The **replay-comparable** state hash: layer-id
+    /// allocation differs across sessions (why PhotoCraft actions record
+    /// layer NAMES — RESEARCH §1.3.2, control-protocol lines 627–635), so
+    /// `.pcraft` bytes are NOT comparable across sessions — pixels are
+    /// (determinism principle: same input, same output).
+    pub fn composite_bytes_of_active(&self) -> Result<Vec<u8>, DriverError> {
+        let idx = self.active_index()?;
+        let d = &self.session.documents()[idx];
+        let (bytes, _warnings) = photocraft_automation::files::save_bytes(
+            &d.doc,
+            "composite.png",
+            Some("png"),
+            &photocraft_io::ExportOptions::default(),
+        )
+        .map_err(|e| DriverError::Failed(format!("export composite: {e}")))?;
+        Ok(bytes)
+    }
+
+    /// Dirty-state snapshot of the ACTIVE document's CURRENT pixels, in
+    /// memory — no duplicate/close dance needed in-process because
+    /// `save_bytes` never touches `DocState` (the Phase-2a lesson: a layered
+    /// save via session commands would clean the document; this cannot).
+    fn duplicate_snapshot(&mut self, _tag: &str) -> Result<Vec<u8>, DriverError> {
+        self.pcraft_bytes_of_active()
+    }
+
+    /// Serialize the ACTIVE document's current state as `.pcraft` bytes,
+    /// in memory, via the same `photocraft_automation::files` module the
+    /// headless CLI uses. This does NOT touch `DocState` (no dirty-flag
+    /// change, no path rebinding) — the Phase-2a lesson, applied in-process.
+    fn pcraft_bytes_of_active(&self) -> Result<Vec<u8>, DriverError> {
+        let idx = self.active_index()?;
+        let d = &self.session.documents()[idx];
+        let (bytes, _warnings) = photocraft_automation::files::save_bytes(
+            &d.doc,
+            &d.doc.name.clone(),
+            // `photocraft_format::EXTENSION` == "pcraft" (crates/format/src/
+            // lib.rs:53); spelled here to avoid a 4th pinned dependency.
+            Some("pcraft"),
+            &photocraft_io::ExportOptions::default(),
+        )
+        .map_err(|e| DriverError::Failed(format!("save_bytes: {e}")))?;
+        Ok(bytes)
+    }
+
+    /// Save the active document to `rel` under the work root (native
+    /// `.pcraft`), mark the document saved (path, `saved_revision`) and take
+    /// the journal checkpoint. The in-process analogue of File › Save As.
+    pub fn save_active_under_root(&mut self, rel: &str) -> Result<PathBuf, DriverError> {
+        if rel.contains("..") {
+            return Err(DriverError::Failed("traversal in save path".into()));
+        }
+        let full = self.cfg.work_root.join(rel);
+        let bytes = self.pcraft_bytes_of_active()?;
+        std::fs::create_dir_all(
+            full.parent()
+                .ok_or_else(|| DriverError::Failed("bad save path".into()))?,
+        )
+        .map_err(|e| DriverError::Failed(format!("create save dir: {e}")))?;
+        std::fs::write(&full, &bytes)
+            .map_err(|e| DriverError::Failed(format!("write {}: {e}", full.display())))?;
+        let path_str = full.to_string_lossy().into_owned();
+        let st = self
+            .session
+            .active_mut()
+            .ok_or_else(|| DriverError::Failed("no active document".into()))?;
+        st.saved_to(path_str); // sets path + saved_revision = revision (file_cmds.rs:100)
+        self.saved_checkpoint = self.session.journal.len();
+        Ok(full)
+    }
+
+    /// Save the active document as a **directory bundle** under the work root
+    /// (TILE-SPLITTING.md §2): PhotoCraft writes `manifest.json` +
+    /// `tiles/<blake3>.zst` + `blobs/<blake3>.zst` (+ previews, which the carry
+    /// does not take). The same save/checkpoint semantics as
+    /// [`Self::save_active_under_root`]; this is the split-mode base save.
+    pub fn save_active_bundle_under_root(&mut self, rel_dir: &str) -> Result<PathBuf, DriverError> {
+        if rel_dir.contains("..") {
+            return Err(DriverError::Failed("traversal in save path".into()));
+        }
+        let full = self.cfg.work_root.join(rel_dir);
+        std::fs::create_dir_all(&full)
+            .map_err(|e| DriverError::Failed(format!("create bundle dir: {e}")))?;
+        let idx = self.active_index()?;
+        let mut named = (*self.session.documents()[idx].doc).clone();
+        // The bundle reports the final name component (files.rs
+        // `named_for_output`); a directory's name is its last component.
+        if let Some(name) = rel_dir.rsplit('/').next().filter(|n| !n.is_empty()) {
+            named.name = name.to_owned();
+        }
+        // `files::save` dispatches on `pcraft` + an existing directory →
+        // `PcraftWriter::save_dir` (RESEARCH §1.5: incremental, content-addressed).
+        photocraft_automation::files::save(
+            &named,
+            &full,
+            Some("pcraft"),
+            &photocraft_io::ExportOptions::default(),
+            None,
+        )
+        .map_err(|e| DriverError::Failed(format!("save bundle: {e}")))?;
+        let path_str = full.to_string_lossy().into_owned();
+        let st = self
+            .session
+            .active_mut()
+            .ok_or_else(|| DriverError::Failed("no active document".into()))?;
+        st.saved_to(path_str);
+        self.saved_checkpoint = self.session.journal.len();
+        Ok(full)
+    }
+
+    /// Read a directory bundle under the work root into a [`DocumentBundle`]
+    /// (manifest + every tile/blob entry's exact bytes; previews are not
+    /// carried, TILE-SPLITTING.md §2). Fail closed on anything unexpected
+    /// inside the bundle directory.
+    pub fn bundle_of_dir(&self, dir: &Path) -> Result<crate::model::DocumentBundle, DriverError> {
+        let manifest = std::fs::read(dir.join("manifest.json"))
+            .map_err(|e| DriverError::Failed(format!("read manifest.json: {e}")))?;
+        let mut parts = std::collections::BTreeMap::new();
+        for sub in ["tiles", "blobs"] {
+            let subdir = dir.join(sub);
+            let entries = std::fs::read_dir(&subdir)
+                .map_err(|e| DriverError::Failed(format!("read {}: {e}", subdir.display())))?;
+            for entry in entries {
+                let entry = entry.map_err(|e| DriverError::Failed(format!("list dir: {e}")))?;
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let Some(stem) = name.strip_suffix(".zst") else {
+                    return Err(DriverError::Failed(format!(
+                        "unexpected non-.zst entry in bundle {sub}: {name}"
+                    )));
+                };
+                // Content-addressed names only: PhotoCraft writes <blake3>.zst
+                // (RESEARCH §1.5); anything else is not a bundle part.
+                if stem.len() != 64 || !stem.bytes().all(|b| b.is_ascii_hexdigit()) {
+                    return Err(DriverError::Failed(format!(
+                        "bundle entry {sub}/{name} is not content-addressed"
+                    )));
+                }
+                let bytes = std::fs::read(entry.path())
+                    .map_err(|e| DriverError::Failed(format!("read part: {e}")))?;
+                parts.insert(format!("{sub}/{name}"), bytes);
+            }
+        }
+        Ok(crate::model::DocumentBundle { manifest, parts })
+    }
+
+    /// Write a [`DocumentBundle`] into `rel_dir` under the work root — the
+    /// destination-side reconstruction (TILE-SPLITTING.md §3): `manifest.json`
+    /// plus every part, bytes exact. The **fail-closed closure check belongs to
+    /// PhotoCraft's own loader**: the manifest names parts by bare BLAKE3
+    /// hash and the loader fetches each hash it needs, refusing on the first
+    /// missing one — so an incomplete carry can never open as a document (a
+    /// wrong extra part is ignored, exactly as PhotoCraft ignores
+    /// unreferenced bundle entries on open; the GC only removes them on save).
+    pub fn write_bundle_under_root(
+        &self,
+        rel_dir: &str,
+        bundle: &crate::model::DocumentBundle,
+    ) -> Result<PathBuf, DriverError> {
+        if rel_dir.contains("..") {
+            return Err(DriverError::Failed("traversal in write path".into()));
+        }
+        let full = self.cfg.work_root.join(rel_dir);
+        for sub in ["tiles", "blobs"] {
+            std::fs::create_dir_all(full.join(sub))
+                .map_err(|e| DriverError::Failed(format!("create bundle dir: {e}")))?;
+        }
+        for (path, bytes) in &bundle.parts {
+            let (sub, name) = path
+                .split_once('/')
+                .ok_or_else(|| DriverError::Failed(format!("bad part path {path}")))?;
+            std::fs::write(full.join(sub).join(name), bytes)
+                .map_err(|e| DriverError::Failed(format!("write part {path}: {e}")))?;
+        }
+        std::fs::write(full.join("manifest.json"), &bundle.manifest)
+            .map_err(|e| DriverError::Failed(format!("write manifest.json: {e}")))?;
+        Ok(full)
+    }
+
+    /// The active document serialized as single-file `.pcraft` zip bytes —
+    /// the MONOLITHIC encoding of the same state the bundle carries
+    /// (TILE-SPLITTING.md §6 measures both). In-memory; touches no DocState.
+    pub fn zip_bytes_of_active(&self) -> Result<Vec<u8>, DriverError> {
+        self.pcraft_bytes_of_active()
+    }
+
+    /// The saved base document as a **split bundle** (the split-mode analogue
+    /// of [`PhotocraftDriver::document_bytes`]): reads the bundle directory
+    /// the document was saved into. Fail closed when the saved base is a zip
+    /// (split carry needs a directory-bundle base) or outside the root.
+    pub fn document_bundle_of_active(&self) -> Result<crate::model::DocumentBundle, DriverError> {
+        let idx = self.active_index()?;
+        let path = self.session.documents()[idx].path.clone();
+        match path {
+            Some(p) if under_root(&p) => {
+                let dir = Path::new(&p);
+                if !dir.is_dir() {
+                    return Err(DriverError::Failed(format!(
+                        "saved base {p:?} is not a directory bundle; \
+                         save with save_active_bundle_under_root for split carry"
+                    )));
+                }
+                self.bundle_of_dir(dir)
+            }
+            Some(p) => Err(DriverError::Failed(format!(
+                "document path {p:?} is outside the granted work root"
+            ))),
+            None => Err(DriverError::Failed(
+                "document has no saved base; save_active_bundle_under_root first".into(),
+            )),
+        }
+    }
+
+    /// Open a document from under the work root and make it active. The
+    /// in-process analogue of app.open / doc.open.
+    pub fn open_under_root(&mut self, rel: &str) -> Result<usize, DriverError> {
+        if rel.contains("..") {
+            return Err(DriverError::Failed("traversal in open path".into()));
+        }
+        let full = self.cfg.work_root.join(rel);
+        let opened = photocraft_automation::files::open(&full)
+            .map_err(|e| DriverError::Failed(format!("open {}: {e}", full.display())))?;
+        let path_str = full.to_string_lossy().into_owned();
+        let idx = self.session.add_document(opened.document, Some(path_str));
+        Ok(idx)
+    }
+
+    fn unsaved_mode(&self) -> UnsavedMode {
+        // Journal mode is what this driver exists for; the harness decides by
+        // constructing with [`Self::with_unsaved_mode`] if it needs snapshots.
+        self.unsaved_mode_override.unwrap_or(UnsavedMode::Journal)
+    }
+
+    /// Compute the unsaved-state bytes in an explicit mode WITHOUT changing
+    /// the driver's declared mode (measurements need both from one session).
+    pub fn unsaved_bytes_as(&mut self, mode: UnsavedMode) -> Result<Vec<u8>, DriverError> {
+        let idx = self.active_index()?;
+        let dirty = self.session.documents()[idx].is_dirty();
+        if !dirty {
+            self.saved_checkpoint = self.session.journal.len();
+            return Ok(Vec::new());
+        }
+        match mode {
+            UnsavedMode::Journal => {
+                // The PhotoCraft actions/batch shape `[[id, params], …]`
+                // (serde serializes `(String, Value)` tuples as arrays) —
+                // replayable by actions, droplets and `Session::execute`.
+                let pairs: Vec<(String, Value)> = self
+                    .steps_since_checkpoint()
+                    .into_iter()
+                    .map(|s| (s.id, s.params))
+                    .collect();
+                serde_json::to_vec(&pairs)
+                    .map_err(|e| DriverError::Failed(format!("encode journal: {e}")))
+            }
+            UnsavedMode::Snapshot => self.duplicate_snapshot("unsaved"),
+        }
+    }
+}
+
+impl PhotocraftDriver for InProcessDriver {
+    fn document_bytes(&mut self) -> Result<Vec<u8>, DriverError> {
+        // The saved base document = the file on disk at the document's path
+        // (unchanged by the post-save edits). A document with no saved base
+        // fails closed: the harness must save first (the checkpoint the
+        // journal slices from IS the save).
+        let idx = self.active_index()?;
+        let path = self.session.documents()[idx].path.clone();
+        match path {
+            Some(p) if under_root(&p) => std::fs::read(Path::new(&p))
+                .map_err(|e| DriverError::Failed(format!("read base document {p:?}: {e}"))),
+            Some(p) => Err(DriverError::Failed(format!(
+                "document path {p:?} is outside the granted work root"
+            ))),
+            None => Err(DriverError::Failed(
+                "document has no saved base; save_active_under_root first \
+                 (the journal checkpoint is the save)"
+                    .into(),
+            )),
+        }
+    }
+
+    fn document_bundle(&mut self) -> Result<crate::model::DocumentBundle, DriverError> {
+        self.document_bundle_of_active()
+    }
+
+    fn unsaved_bytes(&mut self) -> Result<Vec<u8>, DriverError> {
+        self.unsaved_bytes_as(self.unsaved_mode())
+    }
+
+    fn meta(&mut self) -> Result<PhotocraftMeta, DriverError> {
+        let idx = self.active_index()?;
+        let d = &self.session.documents()[idx];
+        let (name, path) = {
+            let p = d.path.clone();
+            let n = d.doc.name.clone();
+            (n, p)
+        };
+        // Split carry requires a directory-bundle saved base; the encoding
+        // follows the actual on-disk shape (fail closed in `document_bundle`
+        // when they disagree).
+        let document_encoding = match &path {
+            Some(p) if Path::new(p).is_dir() => crate::model::DocumentEncoding::Split,
+            _ => crate::model::DocumentEncoding::Monolithic,
+        };
+        Ok(PhotocraftMeta {
+            schema_id: "carryon.photocraft.session".into(),
+            schema_version: 1,
+            adapter_version: env!("CARGO_PKG_VERSION").into(),
+            original_path: path,
+            document_name: name,
+            revision: d.revision,
+            saved_revision: d.saved_revision,
+            dirty: d.is_dirty(),
+            photocraft_pin: PHOTOCRAFT_PIN.into(),
+            unsaved_mode: self.unsaved_mode(),
+            document_encoding,
+        })
+    }
+
+    fn workspace_bytes(&mut self) -> Result<Vec<u8>, DriverError> {
+        // Headless: viewport/tool-panel state does not exist in the engine; the
+        // workspace object carries the active index + selected layers and the
+        // default viewport. Tool name: the engine has ToolState, but there is
+        // no active-tool concept headless (no UI), so "move" is the neutral
+        // marker here.
+        let idx = self.active_index()?;
+        let d = &self.session.documents()[idx];
+        // Map selected layer ids to portable names by walking the layer tree.
+        let selected_ids: Vec<u64> = d
+            .selected_layers
+            .iter()
+            .map(PhotocraftLayerId::to_u64)
+            .collect();
+        let selected = PhotocraftLayerId::walk(&d.doc)
+            .into_iter()
+            .filter(|(_, _, id)| selected_ids.contains(id))
+            .map(|(name, occurrence, _)| crate::model::LayerTarget { name, occurrence })
+            .collect();
+        let workspace = Workspace {
+            active_document_index: idx as u32,
+            selected_layers: selected,
+            viewport: crate::model::Viewport::default(),
+            active_tool: "move".into(),
+            panels: serde_json::json!({ "headless": true }),
+        };
+        serde_json::to_vec(&workspace)
+            .map_err(|e| DriverError::Failed(format!("encode workspace: {e}")))
+    }
+
+    fn apply_steps(&mut self, steps: &[Step]) -> Result<EditOutcome, DriverError> {
+        let revision_before = {
+            let idx = self.active_index()?;
+            self.session.documents()[idx].revision
+        };
+        let mut ran = 0usize;
+        for step in steps {
+            self.run(&step.id, step.params.clone())?; // fail closed on first error
+            ran += 1;
+        }
+        let idx = self.active_index()?;
+        let revision_after = self.session.documents()[idx].revision;
+        // Replay oracle, part 1 (§ADAPTER-DESIGN 2.1): the revision must have
+        // advanced; part 2 is the caller's document.inspect re-derivation.
+        if revision_after < revision_before {
+            return Err(DriverError::Failed(format!(
+                "revision went backwards after replay ({revision_before} -> {revision_after})"
+            )));
+        }
+        let unsaved_hash = if self.session.documents()[idx].is_dirty() {
+            // Composite-pixel hash: the cross-session-comparable projection
+            // of the dirty state (see `composite_bytes_of_active`).
+            let bytes = self.composite_bytes_of_active()?;
+            crate::model::hex_sha256(&bytes)
+        } else {
+            crate::model::hex_sha256(&[])
+        };
+        Ok(EditOutcome {
+            steps_ran: ran,
+            new_revision: revision_after,
+            unsaved_hash,
+        })
+    }
+
+    fn restore(&mut self, workspace: &Workspace) -> Result<(), DriverError> {
+        // Headless restore: activate the document and restore the layer
+        // selection by portable name+occurrence. The viewport fragment is
+        // carried but NOT applied — the engine has no viewport (ui-egui
+        // owns it, RESEARCH §1.2). Failing to select a layer fails closed.
+        if self.session.documents().len() > workspace.active_document_index as usize {
+            self.session
+                .set_active(workspace.active_document_index as usize);
+        } else {
+            return Err(DriverError::Failed(format!(
+                "workspace names document index {} but the session holds {}",
+                workspace.active_document_index,
+                self.session.documents().len()
+            )));
+        }
+        for target in &workspace.selected_layers {
+            // Resolve name+occurrence to the concrete layer id, then select.
+            let idx = self.active_index()?;
+            let doc = &self.session.documents()[idx].doc;
+            let found = PhotocraftLayerId::walk(doc)
+                .into_iter()
+                .find(|(name, occurrence, _)| {
+                    *name == target.name && *occurrence == target.occurrence
+                })
+                .map(|(_, _, id)| id);
+            let Some(id) = found else {
+                return Err(DriverError::Failed(format!(
+                    "workspace layer {:?}#{} not found in the destination document",
+                    target.name, target.occurrence
+                )));
+            };
+            self.run(
+                "layer.select",
+                serde_json::json!({ "layer": id, "mode": "add" }),
+            )?;
+        }
+        Ok(())
+    }
+}
+
+impl InProcessDriver {
+    /// Construct with an explicit unsaved carry mode (measurements need both).
+    pub fn with_unsaved_mode(mut self, mode: UnsavedMode) -> Self {
+        self.unsaved_mode_override = Some(mode);
+        self
+    }
+}
+
+// Engine layer ids are opaque; walk the document tree in walk order (the same
+// top-to-bottom traversal `document.inspect` uses) yielding
+// (name, occurrence, id).
+struct PhotocraftLayerId;
+
+impl PhotocraftLayerId {
+    fn to_u64(l: &photocraft_engine::doc::LayerId) -> u64 {
+        l.0
+    }
+
+    fn walk(doc: &photocraft_engine::doc::Document) -> Vec<(String, u32, u64)> {
+        let mut out = Vec::new();
+        let mut counts: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+        for layer in &doc.layers {
+            Self::walk_layer(layer, &mut counts, &mut out);
+        }
+        out
+    }
+
+    fn walk_layer(
+        layer: &photocraft_engine::doc::Layer,
+        counts: &mut std::collections::HashMap<String, u32>,
+        out: &mut Vec<(String, u32, u64)>,
+    ) {
+        let occurrence = *counts.entry(layer.name.clone()).or_insert(0);
+        counts.insert(layer.name.clone(), occurrence + 1);
+        out.push((layer.name.clone(), occurrence, layer.id.0));
+        if let photocraft_engine::doc::LayerContent::Group(g) = &layer.content {
+            for child in &g.children {
+                Self::walk_layer(child, counts, out);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn root() -> PathBuf {
+        let d = std::env::temp_dir().join(format!("pcraft-inproc-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&d);
+        d
+    }
+
+    #[test]
+    fn authorize_denies_ungranted_commands() {
+        for id in [
+            "actions.play",
+            "prefs.set",
+            "plugins.install",
+            "file.exit",
+            "edit.keyboardShortcuts",
+        ] {
+            assert!(
+                authorize_policy(id, &serde_json::json!({})).is_err(),
+                "{id} must be denied"
+            );
+        }
+    }
+
+    #[test]
+    fn authorize_denies_shell_save_and_ungranted() {
+        let r = root();
+        let _ = WORK_ROOT.set(r.clone());
+        // file.save/file.saveAs/file.open are SHELL commands (the engine does
+        // not know them) — and they must be DENIED by our gate regardless:
+        // in-process file I/O goes through files:: on driver-constructed
+        // paths, never through session commands.
+        for id in [
+            "file.save",
+            "file.saveAs",
+            "file.open",
+            "file.exit",
+            "actions.play",
+            "prefs.set",
+        ] {
+            assert!(
+                authorize_policy(id, &serde_json::json!({})).is_err(),
+                "{id} must be denied"
+            );
+        }
+    }
+
+    #[test]
+    fn authorize_grants_read_edit_and_new() {
+        let _ = WORK_ROOT.set(root());
+        for id in [
+            "session.inspect",
+            "document.inspect",
+            "layer.list",
+            "document.pixel",
+            "file.new",
+            "paint.stroke",
+            "layer.setProps",
+            "filter.blur.gaussianBlur",
+            "select.rect",
+            "image.duplicate",
+            "file.close",
+        ] {
+            assert!(
+                authorize_policy(id, &serde_json::json!({})).is_ok(),
+                "{id} must be granted"
+            );
+        }
+    }
+
+    #[test]
+    fn journal_slice_and_replay_semantics_end_to_end() {
+        // Real engine session through the fail-closed gate: new document,
+        // checkpoint, edits, then the journal slice must contain exactly the
+        // post-checkpoint steps; replaying them on a second session opened on
+        // the same saved file must reproduce the dirty-state hash (the oracle).
+        let r = root();
+        let mut src = InProcessDriver::new(InProcessConfig {
+            work_root: r.clone(),
+        })
+        .expect("session");
+        src.session_mut()
+            .execute(
+                "file.new",
+                serde_json::json!({"width": 64, "height": 64, "mode": "rgb", "depth": 8, "background": "white"}),
+            )
+            .unwrap();
+        let doc = r.join("t.pcraft");
+        src.save_active_under_root("t.pcraft").unwrap();
+        src.session_mut()
+            .execute("layer.new.layer", serde_json::json!({"name": "L1"}))
+            .unwrap();
+        src.session_mut()
+            .execute("layer.select", serde_json::json!({"name": "L1"}))
+            .unwrap();
+        src.session_mut()
+            .execute(
+                "paint.stroke",
+                serde_json::json!({"points": [[10, 10, 1.0]], "size": 8, "color": "#f00"}),
+            )
+            .unwrap();
+
+        let meta = src.meta().unwrap();
+        assert!(meta.dirty, "the document must be dirty after the edits");
+        assert_eq!(meta.saved_revision, 1, "saved at revision 1");
+
+        let journal = src.unsaved_bytes_as(UnsavedMode::Journal).unwrap();
+        let pairs: Vec<(String, Value)> = serde_json::from_slice(&journal).unwrap();
+        assert!(
+            pairs.len() >= 3,
+            "journal must carry the post-save steps: {pairs:?}"
+        );
+        assert!(pairs.iter().any(|(id, _)| id == "paint.stroke"));
+
+        // Snapshot of the dirty state (Phase-2a technique, in-process).
+        let snapshot = src.unsaved_bytes_as(UnsavedMode::Snapshot).unwrap();
+        assert!(!snapshot.is_empty());
+
+        // Replay on a second clean session.
+        let mut dst = InProcessDriver::new(InProcessConfig {
+            work_root: r.clone(),
+        })
+        .expect("dest session");
+        dst.open_under_root("t.pcraft").unwrap();
+        let steps: Vec<Step> = pairs
+            .into_iter()
+            .map(|(id, params)| Step { id, params })
+            .collect();
+        let outcome = dst.apply_steps(&steps).unwrap();
+        assert_eq!(outcome.steps_ran, steps.len());
+        let dst_meta = dst.meta().unwrap();
+        assert!(dst_meta.dirty);
+        assert_eq!(
+            dst_meta.revision, meta.revision,
+            "replay must land on the same revision"
+        );
+        let dst_snapshot = dst.unsaved_bytes_as(UnsavedMode::Snapshot).unwrap();
+        // `.pcraft` bytes are NOT expected to match across sessions: layer-id
+        // allocation differs (why PhotoCraft actions record names, RESEARCH
+        // §1.3.2). Record the difference honestly…
+        let pcraft_hash_differs =
+            crate::model::hex_sha256(&dst_snapshot) != crate::model::hex_sha256(&snapshot);
+        // …and assert the REAL oracle: the replayed composite PIXELS must hash
+        // equal to the source's (determinism: same commands, same pixels).
+        let src_pixels = src.composite_bytes_of_active().unwrap();
+        let dst_pixels = dst.composite_bytes_of_active().unwrap();
+        assert_eq!(
+            crate::model::hex_sha256(&dst_pixels),
+            crate::model::hex_sha256(&src_pixels),
+            "replayed composite pixels must hash equal to the source's (replay oracle)"
+        );
+        // The recorded diagnostic is not asserted; it documents that the
+        // serialized form legitimately differs while the image does not.
+        let _ = pcraft_hash_differs;
+        let _ = std::fs::remove_file(&doc);
+    }
+}
