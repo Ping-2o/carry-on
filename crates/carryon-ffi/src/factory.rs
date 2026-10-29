@@ -175,10 +175,7 @@ pub fn build_adapter(adapter_id: &str, params: &Value) -> Result<Box<dyn Adapter
                 .get("article_path")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| bad("kiwix adapter needs 'article_path'"))?;
-            let scroll = params
-                .get("scroll_y")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0);
+            let scroll = params.get("scroll_y").and_then(|v| v.as_u64()).unwrap_or(0);
             let strategy = match params.get("strategy").and_then(|v| v.as_str()) {
                 None | Some("D") | Some("progressive") => Strategy::Progressive,
                 Some("A") | Some("full") => Strategy::FullUpFront,
