@@ -48,6 +48,19 @@ with the scope).
 
 ### Phase 4 — SDK + flagship integrations · `TARGET` (Phase 1 done on both flagship branches — unmerged; Phase 2 dispatched)
 
+> **App wrapper pilots (branch `apps/native-wrappers`):** both native app
+> wrappers now exist — macOS (SwiftUI; `swift build` clean, full L3 loopback
+> demo through the C ABI `swift run carryon-demo-smoke` exit 0, `CarryOn.app`
+> assembled + ad-hoc codesigned) and Android (Gradle Kotlin-DSL + Compose;
+> build-ready `TARGET` — not compiled on the authoring machine, no Android SDK
+> present; NDK syntax check of the JNI shim exit 0, 49/49 Kotlin↔C JNI symbols
+> cross-checked, real aarch64 `libcarryon_ffi.so` fetched). All demo evidence is
+> OBSERVED (LOCAL) — one device, loopback TLS 1.3; no platform is "supported"
+> (§30 unrun). The Swift binding and the Kotlin/JNI shim are the **first
+> slices** of the two SDK checkboxes below — the checkboxes stay unchecked until
+> these ship as full SDKs. Claim table: `apps/README.md`. Everything else in
+> this phase is unchanged.
+
 - [ ] Swift Package over the C ABI (macOS/iOS).
 - [ ] Kotlin/JNI bindings (Android).
 - [ ] `carryon-adapter-photocraft`:
@@ -118,3 +131,4 @@ massive content, mass audience).
 | 2026-10-29 | Kiwix fmt fix on branch (`1138079`): workspace-wide `cargo fmt` — `factory.rs` formatting was missed by per-crate checks (the agent edited ffi outside its crate). Branch pushed; PR #2 updates. |
 | 2026-10-29 | **ArtCraft Phase 4 complete** (`artcraft-bridge`, agent gate 69 suites green): tile-splitting in core (cumulative+progressive §6.8 budget admission — a **pre-existing core budget hole found and fixed**; `ImportOutcome::PartialBudget`; ABI minor 0→1), real-photo split carry (5.93 MB vs 6.87 MB monolith; re-carry dedup 222,413 B wire vs 5.9 MB), and **PHYSICAL L4 — the flagship proof on hardware**: live app → split cut → Galaxy A04 (50,391 B), §21.2 ownership on device, mac source-off + read-only refusal, device fresh-process continuation. |
 | 2026-10-29 | **M1 CLOSED — both flagship bridges merged to main.** #2 (kiwix, `74a3afd`) then #3 (artcraft, `7cd1690`, rebased cleanly 20/20). Merged-tree gate: **202 tests / 0 failures, fmt clean, clippy -D warnings clean** on an isolated target dir. main now carries: both L3/L4 flagship adapters, tile-splitting core (cumulative §6.8 budgets + `ImportOutcome::PartialBudget`, ABI minor 1), physical L4 on hardware for both flagships, all evidence bundles. Next frontier: discovery → APK/signing → §30 × 2 (macOS + Android; iOS dropped by owner). |
+| 2026-11-05 | **App wrapper pilots landed** (branch `apps/native-wrappers`, unmerged): macOS SwiftUI app drives the full L3 demo pipeline through the C ABI (OBSERVED, LOCAL — one device, loopback TLS 1.3); Android Compose app build-ready `TARGET` (no SDK on the authoring machine; JNI shim NDK-syntax-checked, 49/49 Kotlin↔C symbols cross-checked, engine `.so` fetched). First slices of the Phase-4 SDK items — the SDK checkboxes remain unchecked. See `apps/README.md`. |
