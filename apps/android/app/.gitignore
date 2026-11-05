@@ -1,0 +1,7 @@
+# :app build outputs.
+build/
+
+# The cross-compiled engine binary is FETCHED (Scripts/fetch_engine_lib.sh), never
+# committed — it is a build artifact of crates/carryon-ffi, kept in sync with the
+# checkout. The placeholder below is tracked; the .so files are not.
+src/main/jniLibs/**/*.so

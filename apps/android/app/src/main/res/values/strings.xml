@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Claim label law (spec §2): the app name is a product label only; every
+         feature claim is stated inside the UI, never in the label. -->
+    <string name="app_name">Carry-On</string>
+</resources>
