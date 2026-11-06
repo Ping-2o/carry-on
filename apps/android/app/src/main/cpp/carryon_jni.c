@@ -18,15 +18,21 @@
  *   - Out-buffers:  cert/key DER, last_error, read_object use the ABI's *len
  *                     query protocol verbatim: buf=NULL queries the required
  *                     size, CARRYON_ERR_BUFFER_TOO_SMALL reports it via *len.
+ *                     The shim pre-checks every caller-declared cap against
+ *                     GetArrayLength (len_precheck) — the engine trusts cap,
+ *                     so a mismatched (buf, len) pair must die HERE, not as a
+ *                     native out-of-bounds write.
  *   - Errors:       every fallible call returns the ABI i32 (0 = CARRYON_OK;
  *                     negative = FFI-local; positive = family_base + ordinal).
  *                     The shim NEVER throws; Kotlin maps codes to names
  *                     (com.carryon.app.ffi.Err, mirror of errors.rs).
  *
  * Secrets (§22.3, EVD-006): identityCertDer/identityKeyDer exist to mirror the
- * ABI and for future secure-storage persistence. They are declared `internal` on
- * the Kotlin side and the app-level API exposes ONLY the SHA-256 pin hex — the
- * key DER is never logged, displayed, or exported (see CarryonCore.kt).
+ * ABI and for future secure-storage persistence. They are public-but-uncalled
+ * on the Kotlin side (JNI binding is by name, so visibility cannot restrict it
+ * without an `internal` name-mangle); the app-level API exposes ONLY the
+ * SHA-256 pin hex — the key DER is never logged, displayed, or exported
+ * (see CarryonCore.kt).
  *
  * No entry point here runs foreign code: registerAdapter selects a compiled-in
  * adapter by id + JSON params (data, never behavior — spec §3.8).
@@ -72,6 +78,30 @@ static void put_bool(JNIEnv *env, jbooleanArray out, jboolean v) {
     if (out) (*env)->SetBooleanArrayRegion(env, out, 0, 1, &v);
 }
 
+/** *len-query pre-check (MEMORY SAFETY). The engine honors the ABI contract
+ *  ("buf has *len bytes", see carryon.h) and copies exactly `required` bytes
+ *  once cap >= required, so the SHIM must tie the caller-declared cap to the
+ *  real JVM array length — this is the only place it is visible. Rejects:
+ *  NULL len, a len array shorter than 1 element, a negative cap, and a cap
+ *  larger than the real buf length. Returns CARRYON_OK with the validated cap
+ *  in *cap_out; otherwise an ABI error code and NOTHING is written (a
+ *  mismatched (buf, len) pair would otherwise be a native out-of-bounds
+ *  write past the JVM array backing store, not a catchable exception). */
+static jint len_precheck(JNIEnv *env, jbyteArray buf, jlongArray len,
+                         jlong *cap_out) {
+    if (!len) return CARRYON_ERR_NULL_ARG;
+    if ((*env)->GetArrayLength(env, len) < 1) return CARRYON_ERR_NULL_ARG;
+    jlong *l = (*env)->GetLongArrayElements(env, len, NULL);
+    if (!l) return CARRYON_ERR_NULL_ARG;
+    jlong v = l[0];
+    (*env)->ReleaseLongArrayElements(env, len, l, JNI_ABORT);
+    if (v < 0) return CARRYON_ERR_BUFFER_TOO_SMALL;
+    if (buf && v > (jlong)(*env)->GetArrayLength(env, buf))
+        return CARRYON_ERR_BUFFER_TOO_SMALL;
+    *cap_out = v;
+    return CARRYON_OK;
+}
+
 /* ---- ABI / lifetime ----------------------------------------------------- */
 
 /* carryon_abi_version(&major, &minor) -> jintArray(major, minor). */
@@ -91,10 +121,12 @@ JNIEXPORT jint JNICALL
 Java_com_carryon_app_ffi_CarryOnFfi_lastError(JNIEnv *env, jobject thiz,
                                               jbyteArray buf, jlongArray len) {
     (void)thiz;
-    if (!len) return CARRYON_ERR_NULL_ARG;
+    jlong cap_in = 0;
+    jint prc = len_precheck(env, buf, len, &cap_in);
+    if (prc != CARRYON_OK) return prc;
     jlong *l = (*env)->GetLongArrayElements(env, len, NULL);
     if (!l) return CARRYON_ERR_NULL_ARG;
-    size_t cap = (size_t)l[0];
+    size_t cap = (size_t)cap_in;
     uint8_t *bp = NULL;
     jbyte *be = NULL;
     if (buf) {
@@ -311,10 +343,12 @@ Java_com_carryon_app_ffi_CarryOnFfi_identityCertDer(JNIEnv *env, jobject thiz,
                                                     jlong id, jbyteArray buf,
                                                     jlongArray len) {
     (void)thiz;
-    if (!len) return CARRYON_ERR_NULL_ARG;
+    jlong cap_in = 0;
+    jint prc = len_precheck(env, buf, len, &cap_in);
+    if (prc != CARRYON_OK) return prc;
     jlong *l = (*env)->GetLongArrayElements(env, len, NULL);
     if (!l) return CARRYON_ERR_NULL_ARG;
-    size_t cap = (size_t)l[0];
+    size_t cap = (size_t)cap_in;
     jbyte *be = buf ? (*env)->GetByteArrayElements(env, buf, NULL) : NULL;
     jint rc = carryon_identity_cert_der((const CarryonIdentity *)h2p(id),
                                         (uint8_t *)be, &cap);
@@ -329,10 +363,12 @@ Java_com_carryon_app_ffi_CarryOnFfi_identityKeyDer(JNIEnv *env, jobject thiz,
                                                    jlong id, jbyteArray buf,
                                                    jlongArray len) {
     (void)thiz;
-    if (!len) return CARRYON_ERR_NULL_ARG;
+    jlong cap_in = 0;
+    jint prc = len_precheck(env, buf, len, &cap_in);
+    if (prc != CARRYON_OK) return prc;
     jlong *l = (*env)->GetLongArrayElements(env, len, NULL);
     if (!l) return CARRYON_ERR_NULL_ARG;
-    size_t cap = (size_t)l[0];
+    size_t cap = (size_t)cap_in;
     jbyte *be = buf ? (*env)->GetByteArrayElements(env, buf, NULL) : NULL;
     jint rc = carryon_identity_key_der((const CarryonIdentity *)h2p(id),
                                        (uint8_t *)be, &cap);
@@ -589,7 +625,9 @@ Java_com_carryon_app_ffi_CarryOnFfi_readObject(JNIEnv *env, jobject thiz,
                                                jlong core, jstring content_hash,
                                                jbyteArray buf, jlongArray len) {
     (void)thiz;
-    if (!len) return CARRYON_ERR_NULL_ARG;
+    jlong cap_in = 0;
+    jint prc = len_precheck(env, buf, len, &cap_in);
+    if (prc != CARRYON_OK) return prc;
     const char *hash = borrow_utf(env, content_hash);
     if (!hash) return CARRYON_ERR_NULL_ARG;
     jlong *l = (*env)->GetLongArrayElements(env, len, NULL);
@@ -597,7 +635,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_readObject(JNIEnv *env, jobject thiz,
         release_utf(env, content_hash, hash);
         return CARRYON_ERR_NULL_ARG;
     }
-    size_t cap = (size_t)l[0];
+    size_t cap = (size_t)cap_in;
     jbyte *be = buf ? (*env)->GetByteArrayElements(env, buf, NULL) : NULL;
     jint rc = carryon_read_object((const CarryonCore *)h2p(core), hash,
                                   (uint8_t *)be, &cap);
@@ -614,6 +652,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_sessionBytes(JNIEnv *env, jobject thiz,
                                                  jlong session, jlongArray out) {
     (void)thiz;
     if (!out) return CARRYON_ERR_NULL_ARG;
+    if ((*env)->GetArrayLength(env, out) < 2) return CARRYON_ERR_BUFFER_TOO_SMALL;
     jlong *o = (*env)->GetLongArrayElements(env, out, NULL);
     if (!o) return CARRYON_ERR_NULL_ARG;
     uint64_t sent = 0, recv = 0;
@@ -679,6 +718,10 @@ Java_com_carryon_app_ffi_CarryOnFfi_recoverAuthority(JNIEnv *env, jobject thiz,
     if (!sid || !out) {
         release_utf(env, session_id, sid);
         return CARRYON_ERR_NULL_ARG;
+    }
+    if ((*env)->GetArrayLength(env, out) < 1) {
+        release_utf(env, session_id, sid);
+        return CARRYON_ERR_BUFFER_TOO_SMALL;
     }
     jlong *o = (*env)->GetLongArrayElements(env, out, NULL);
     if (!o) {

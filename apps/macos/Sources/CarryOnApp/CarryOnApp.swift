@@ -58,6 +58,7 @@ struct CarryOnApp: App {
                     app.newSession()
                 }
                 .keyboardShortcut("n", modifiers: .command)
+                .disabled(app.demo.running)
             }
         }
     }

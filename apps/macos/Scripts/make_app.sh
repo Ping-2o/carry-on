@@ -42,6 +42,22 @@ cp "Vendor/libcarryon_ffi.dylib" "$bundle/Contents/Frameworks/libcarryon_ffi.dyl
 install_name_tool -add_rpath @executable_path/../Frameworks \
     "$bundle/Contents/MacOS/CarryOn"
 
+# The link-time absolute Vendor rpath is STALE in the sealed bundle: dyld searches
+# LC_RPATH entries in listed order and -add_rpath appends, so the mutable,
+# gitignored Vendor/ copy would win over the signed Contents/Frameworks copy.
+# Delete it from the bundled copy only (the dev binary in .build/ is untouched).
+# -delete_rpath fails if the rpath string is absent — fail-closed under set -eu.
+install_name_tool -delete_rpath "$app_dir/Vendor" \
+    "$bundle/Contents/MacOS/CarryOn"
+
+# Regression gate: the sealed executable must carry no rpath pointing at the
+# mutable out-of-bundle Vendor dir (toolchain rpaths like /usr/lib/swift stay).
+if otool -l "$bundle/Contents/MacOS/CarryOn" | grep -A2 LC_RPATH \
+        | grep -F "$app_dir/Vendor" >/dev/null 2>&1; then
+    echo "error: sealed bundle still carries the absolute Vendor rpath" >&2
+    exit 1
+fi
+
 cat > "$bundle/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -92,12 +108,16 @@ codesign -v --strict "$bundle"
 codesign -dv "$bundle" 2>&1 | sed 's/^/  /' | head -6
 
 echo "make_app: headless launch check (bundle binary, --smoke-exit)"
-if "$bundle/Contents/MacOS/CarryOn" --smoke-exit >/tmp/carryon-app-smoke.log 2>&1; then
-    echo "make_app: bundle smoke-exit PASSED (log: /tmp/carryon-app-smoke.log)"
+# Per-run private log (mktemp): a fixed /tmp path is pre-plantable by another
+# local user on a shared machine (sticky /tmp, symlink-following truncate).
+smoke_log="$(mktemp "${TMPDIR:-/tmp}/carryon-app-smoke.XXXXXX")"
+trap 'rm -f "$smoke_log"' EXIT
+if "$bundle/Contents/MacOS/CarryOn" --smoke-exit >"$smoke_log" 2>&1; then
+    echo "make_app: bundle smoke-exit PASSED (log: $smoke_log)"
 else
     rc=$?
     echo "error: bundle smoke-exit FAILED (rc=$rc); tail of log:" >&2
-    tail -20 /tmp/carryon-app-smoke.log >&2
+    tail -20 "$smoke_log" >&2
     exit 1
 fi
 
