@@ -36,6 +36,9 @@ android {
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
+        // Instrumented smoke test (FFI load on a real device — regression for
+        // the 2026-11-07 DT_NEEDED device crash; run: connectedDebugAndroidTest).
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake {
                 cppFlags += ""
@@ -116,4 +119,13 @@ dependencies {
     // JVM unit tests (the zombie-isolation guard test; runs via
     // gradlew :app:testDebugUnitTest in CI).
     testImplementation("junit:junit:4.13.2")
+    // Real org.json for JVM unit tests: the android.jar org.json classes are
+    // stubbed in local unit tests and throw "not mocked" (the JSON-parse
+    // regression tests need a working JSONObject/JSONArray).
+    testImplementation("org.json:json:20250517")
+
+    // Instrumented tests (device only; the FFI smoke test loads the real engine).
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("junit:junit:4.13.2")
 }
