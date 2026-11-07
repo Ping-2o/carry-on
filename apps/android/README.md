@@ -13,7 +13,7 @@ StateFlow MVVM.
 
 | Claim | Label | Why |
 |---|---|---|
-| This Android project builds (`./gradlew assembleDebug`) | `TARGET` — build-ready | **Not compiled on the authoring machine** (no Android SDK present). Compiles with Android Studio / `gradlew assembleDebug` where the SDK + JDK 17 exist. Kotlin sources were hand-reviewed, never compiled. |
+| This Android project builds (`./gradlew assembleDebug`) | `IMPLEMENTED` (CI compile) — never run on a device | First compile: CI `android-app` job, 2026-11-07 (run 42365800510) — the real engine `.so` cross-compiled with NDK r27c, Kotlin compiled, JNI shim built via CMake, debug APK artifact. The first-ever compile surfaced 3 latent resolution errors (phantom imports + a typo'd `Err` constant), fixed in 77bd3ec. The pipeline's runtime behavior is hand-reviewed until a device run. |
 | JNI shim (`app/src/main/cpp/carryon_jni.c`) | verified | Syntax-checked clean with the NDK r27c clang (`aarch64-linux-android29-clang -fsyntax-only -Wall -Wextra`) against the real `carryon.h`. |
 | Engine binary (`libcarryon_ffi.so`, arm64-v8a) | `OBSERVED` | Cross-compiled by `Scripts/fetch_engine_lib.sh` from this checkout (cargo, aarch64-linux-android). Fetched artifact — gitignored, never committed. |
 | Demo Mode (two cores, loopback TLS 1.3, full 8-stage pipeline) | `OBSERVED (LOCAL)` — **once run on a device** | One device, loopback TLS, two in-app cores. NOT physical cross-device evidence (spec §2/§30). The UI shows the verbatim disclosure footer on every run. |
