@@ -55,8 +55,10 @@ jobs:
     timeout-minutes: 60
     env:
       # CI storage, NOT the authoring machine's external-volume default in
-      # Scripts/build_engine.sh (overridable by design).
-      CARGO_TARGET_DIR: ${{ runner.temp }}/carryon-target
+      # Scripts/build_engine.sh (overridable by design). Job-level env cannot
+      # use the `runner` context (it exists only inside steps), so this is the
+      # workspace path, not $RUNNER_TEMP.
+      CARGO_TARGET_DIR: ${{ github.workspace }}/carryon-target
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
