@@ -164,9 +164,9 @@ jobs:
         env:
           NDK: /usr/local/lib/android/sdk/ndk/${{ env.NDK_VERSION }}
           WORK: ${{ github.workspace }}
-      - name: gradlew assembleDebug (Kotlin compile + JNI shim via CMake)
+      - name: gradlew unit tests + assembleDebug (Kotlin compile + JNI shim via CMake)
         working-directory: apps/android
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew :app:testDebugUnitTest assembleDebug --no-daemon
       - name: Upload the debug APK
         uses: actions/upload-artifact@v5
         with:
