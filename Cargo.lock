@@ -2437,7 +2437,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 [[package]]
 name = "photocraft-affinity"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "crc32fast",
  "flate2",
@@ -2447,7 +2447,7 @@ dependencies = [
 [[package]]
 name = "photocraft-algo"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "photocraft-color",
  "photocraft-geom",
@@ -2460,7 +2460,7 @@ dependencies = [
 [[package]]
 name = "photocraft-automation"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "base64 0.23.1",
  "cap-std",
@@ -2484,7 +2484,7 @@ dependencies = [
 [[package]]
 name = "photocraft-cms"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "rayon",
 ]
@@ -2492,7 +2492,7 @@ dependencies = [
 [[package]]
 name = "photocraft-codecs"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "craft-jpeg",
  "exr",
@@ -2513,7 +2513,7 @@ dependencies = [
 [[package]]
 name = "photocraft-color"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "photocraft-cms",
  "serde",
@@ -2522,7 +2522,7 @@ dependencies = [
 [[package]]
 name = "photocraft-compose"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "photocraft-color",
  "photocraft-doc",
@@ -2535,7 +2535,7 @@ dependencies = [
 [[package]]
 name = "photocraft-doc"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "photocraft-color",
  "photocraft-geom",
@@ -2547,7 +2547,7 @@ dependencies = [
 [[package]]
 name = "photocraft-engine"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "blake3",
  "chrono",
@@ -2584,7 +2584,7 @@ dependencies = [
 [[package]]
 name = "photocraft-format"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "blake3",
  "crc32fast",
@@ -2607,7 +2607,7 @@ dependencies = [
 [[package]]
 name = "photocraft-geom"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "serde",
 ]
@@ -2615,7 +2615,7 @@ dependencies = [
 [[package]]
 name = "photocraft-io"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "blake3",
  "craft-docpath",
@@ -2644,12 +2644,12 @@ dependencies = [
 [[package]]
 name = "photocraft-ipp"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 
 [[package]]
 name = "photocraft-ops"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "photocraft-doc",
 ]
@@ -2657,7 +2657,7 @@ dependencies = [
 [[package]]
 name = "photocraft-paint"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "photocraft-color",
  "photocraft-geom",
@@ -2669,7 +2669,7 @@ dependencies = [
 [[package]]
 name = "photocraft-plugins"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "photocraft-color",
  "photocraft-geom",
@@ -2685,7 +2685,7 @@ dependencies = [
 [[package]]
 name = "photocraft-psd"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "flate2",
  "thiserror 2.0.21",
@@ -2694,7 +2694,7 @@ dependencies = [
 [[package]]
 name = "photocraft-raster"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "photocraft-color",
  "photocraft-geom",
@@ -2705,7 +2705,7 @@ dependencies = [
 [[package]]
 name = "photocraft-raw"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "flate2",
  "jxl-oxide",
@@ -2717,7 +2717,7 @@ dependencies = [
 [[package]]
 name = "photocraft-text"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "flate2",
  "parley",
@@ -2733,7 +2733,7 @@ dependencies = [
 [[package]]
 name = "photocraft-vector"
 version = "0.16.0"
-source = "git+file:///Volumes/ADATA%20ELITE%20SE880/compilation/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
+source = "git+https://github.com/storytold/photocraft?rev=1f7fc0f53696e54da79b95015abb37d7c22cdd1a#1f7fc0f53696e54da79b95015abb37d7c22cdd1a"
 dependencies = [
  "photocraft-color",
  "photocraft-doc",
@@ -4146,7 +4146,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
