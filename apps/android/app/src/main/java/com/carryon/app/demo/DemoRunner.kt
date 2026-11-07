@@ -46,15 +46,19 @@
  * deliberately LEAKED (freeing under a blocked call is use-after-free); they die
  * with the process and each run uses fresh temp dirs.
  *
- * Timeout honesty (review finding): withTimeout(DEMO_TIMEOUT_MS) bounds only
- * the COROUTINE — a blocked JNI call cannot be interrupted by coroutine
- * cancellation, the C ABI has no cancellation-safe abort entry, and freeing a
- * handle under a blocked call is a use-after-free. So on timeout (or any
- * failure while a native call blocks — e.g. the serve loop parked in accept
- * with no peer left) the run is marked failed, but blocked calls/leaked
- * handles drain only when the peer disconnects, or die with the process.
- * A wedged run therefore cannot be unwedged in-place: restart the app. Do not
- * promise more than that anywhere in the UI copy.
+ * Timeout honesty (review finding): the timeout watchdog bounds the UI STATE
+ * MACHINE, not the native calls. A blocked JNI call cannot be interrupted by
+ * coroutine cancellation, the C ABI has no cancellation-safe abort entry
+ * (freeing a handle under a blocked call is use-after-free), and structured
+ * concurrency means the OLD withTimeout{runPipeline()} could hang inside its
+ * own catch/finally — coroutineScope waits for the serveLoop child parked in
+ * accept(), so the timeout might never even transition the run to FAILED.
+ * The watchdog (runDemo) instead: cancels the pipeline BEST-EFFORT on
+ * timeout, marks the run FAILED immediately, and releases the UI (mutex +
+ * running flag). The wedged coroutine + its handles LEAK and drain with the
+ * process; a fresh run uses fresh temp dirs, so a leaked wedge does not
+ * poison it. Restarting the app remains the only way to clear the wedge
+ * itself. Do not promise more than that anywhere in the UI copy.
  *
  * Counter discipline (review finding: the old pollJob sampled session_bytes
  * concurrently with import_cut and cancel() was not joined before close()):
@@ -91,7 +95,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -245,29 +249,51 @@ class DemoRunner(
                         verifyReportJson = null,
                     )
                 }
-                try {
-                    withTimeout(DEMO_TIMEOUT_MS) { runPipeline() }
-                    _state.update {
-                        it.copy(runElapsedMs = (System.nanoTime() - started) / 1_000_000)
+                // Timeout watchdog (review finding: the OLD
+                // withTimeout { runPipeline() } could hang INSIDE its own
+                // catch/finally — runPipeline's coroutineScope waits for the
+                // serveLoop child parked in a blocking JNI accept(), the
+                // cancellation never surfaces, and the run never even reached
+                // FAILED). The watchdog therefore bounds the UI STATE MACHINE,
+                // not the native calls:
+                //  - runPipeline runs as a child job; on timeout it is
+                //    cancelled BEST-EFFORT (a blocked JNI call is interrupted
+                //    only at its next suspension point — often never).
+                //  - the run is marked FAILED IMMEDIATELY and the mutex +
+                //    `running` flag are released, so the app stays usable.
+                //  - the wedged coroutine + its handles LEAK (freeing under a
+                //    blocked call is use-after-free) and drain with the
+                //    process; a leaked wedge cannot poison the next run
+                //    (fresh temp dirs + fresh listener). Restarting the app
+                //    remains the only way to clear the leaked wedge itself.
+                val pipeline = launch {
+                    try {
+                        runPipeline()
+                    } catch (e: CoreException) {
+                        failCurrentStage("engine error ${Err.name(e.code)}: ${e.message}")
+                    } catch (e: Exception) {
+                        failCurrentStage("unexpected error: ${e.message}")
                     }
-                } catch (e: CancellationException) {
-                    if (e is kotlinx.coroutines.TimeoutCancellationException) {
-                        // Honest wording (see file header): the coroutine timed
-                        // out, but a blocked native call (if any) cannot be
-                        // interrupted — leaked handles drain with the process.
-                        // A wedged run needs an app restart to clear.
+                }
+                try {
+                    val finished = withTimeoutOrNull(DEMO_TIMEOUT_MS) { pipeline.join() }
+                    if (finished == null) {
+                        pipeline.cancel() // best-effort — see the watchdog note above
                         failCurrentStage(
                             "demo timed out after ${DEMO_TIMEOUT_MS / 1000}s " +
-                                "(coroutine-level timeout; any blocked engine call drains with the process — restart the app to clear a wedged run)"
+                                "(best-effort timeout: any blocked engine call was NOT interrupted — it leaks with the process; the run is marked failed, a fresh run uses fresh temp dirs)"
                         )
                     } else {
-                        failCurrentStage("cancelled")
-                        throw e
+                        _state.update {
+                            it.copy(runElapsedMs = (System.nanoTime() - started) / 1_000_000)
+                        }
                     }
-                } catch (e: CoreException) {
-                    failCurrentStage("engine error ${Err.name(e.code)}: ${e.message}")
-                } catch (e: Exception) {
-                    failCurrentStage("unexpected error: ${e.message}")
+                } catch (e: CancellationException) {
+                    // scope/user cancellation — not our watchdog (the watchdog
+                    // surfaces as withTimeoutOrNull returning null).
+                    pipeline.cancel()
+                    failCurrentStage("cancelled")
+                    throw e
                 } finally {
                     _state.update { it.copy(running = false) }
                 }
