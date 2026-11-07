@@ -44,8 +44,17 @@
  * accept, the authority RPCs) runs on Dispatchers.IO. JNI calls are NOT
  * interruptible: if the pipeline fails, the handles in use by blocked calls are
  * deliberately LEAKED (freeing under a blocked call is use-after-free); they die
- * with the process and each run uses fresh temp dirs. The whole pipeline is
- * bounded by DEMO_TIMEOUT_MS so the UI cannot hang forever.
+ * with the process and each run uses fresh temp dirs.
+ *
+ * Timeout honesty (review finding): withTimeout(DEMO_TIMEOUT_MS) bounds only
+ * the COROUTINE — a blocked JNI call cannot be interrupted by coroutine
+ * cancellation, the C ABI has no cancellation-safe abort entry, and freeing a
+ * handle under a blocked call is a use-after-free. So on timeout (or any
+ * failure while a native call blocks — e.g. the serve loop parked in accept
+ * with no peer left) the run is marked failed, but blocked calls/leaked
+ * handles drain only when the peer disconnects, or die with the process.
+ * A wedged run therefore cannot be unwedged in-place: restart the app. Do not
+ * promise more than that anywhere in the UI copy.
  *
  * Counter discipline (review finding: the old pollJob sampled session_bytes
  * concurrently with import_cut and cancel() was not joined before close()):
@@ -245,7 +254,14 @@ class DemoRunner(
                     }
                 } catch (e: CancellationException) {
                     if (e is kotlinx.coroutines.TimeoutCancellationException) {
-                        failCurrentStage("demo timed out after ${DEMO_TIMEOUT_MS / 1000}s (blocked engine call)")
+                        // Honest wording (see file header): the coroutine timed
+                        // out, but a blocked native call (if any) cannot be
+                        // interrupted — leaked handles drain with the process.
+                        // A wedged run needs an app restart to clear.
+                        failCurrentStage(
+                            "demo timed out after ${DEMO_TIMEOUT_MS / 1000}s " +
+                                "(coroutine-level timeout; any blocked engine call drains with the process — restart the app to clear a wedged run)"
+                        )
                     } else {
                         failCurrentStage("cancelled")
                         throw e
@@ -320,6 +336,11 @@ class DemoRunner(
         // Accumulated MEASURED wire counters across (possibly several) connections.
         val totalSent = AtomicLong(0)
         val totalRecv = AtomicLong(0)
+        // Destination-side RECV bytes up to action-ready (review P2: the total
+        // above sums BOTH peers' counters — the source's serve-side recv is not
+        // "bytes the destination needed to reach ready"). Each dest wire is
+        // added exactly once: at its round-close, or at import completion.
+        val destRecvReady = AtomicLong(0)
 
         try {
             // coroutineScope: the serve loop is a STRUCTURED child — a
@@ -517,8 +538,10 @@ class DemoRunner(
                         // session is its own handle). Displayed WITHOUT
                         // tallying into the totals — the full wire (import +
                         // authority, or import for GRAPH) is tallied once at
-                        // its close below.
+                        // its close below. The dest recv of THIS wire counts
+                        // toward action-ready (this is the state boundary).
                         val (bs, br) = sess.bytes()
+                        destRecvReady.addAndGet(br)
                         _state.update {
                             it.copy(
                                 bytesSent = totalSent.get() + bs,
@@ -555,6 +578,7 @@ class DemoRunner(
                     val (bs, br) = sess.bytes()
                     totalSent.addAndGet(bs)
                     totalRecv.addAndGet(br)
+                    destRecvReady.addAndGet(br) // dest-side bytes on this wire count toward ready
                     _state.update {
                         it.copy(bytesSent = totalSent.get(), bytesRecv = totalRecv.get())
                     }
@@ -580,7 +604,11 @@ class DemoRunner(
                 put("number", cut.number)
             }
             // Read-only oracle first: the SAME logical session restored (l3 flow).
+            // restore_latency_ms is the MEASURED duration of session.restore
+            // itself (review P2: it used to reuse timeToActionReady — the
+            // import duration, not the restore op). 0.0 when the op never runs.
             var restoreAgreed = false
+            var restoreLatencyMs = 0.0
             if (scenario == Scenario.EDITOR_L3) {
                 val tRestore0 = System.nanoTime()
                 val restore = withContext(Dispatchers.IO) {
@@ -592,10 +620,11 @@ class DemoRunner(
                 }
                 restoreAgreed = JSONObject(restore)
                     .optJSONObject("oracle")?.optBoolean("agreed") ?: false
+                restoreLatencyMs = (System.nanoTime() - tRestore0) / 1e6
                 log(
                     "session.restore",
                     "oracle agreed=$restoreAgreed " +
-                        "(${String.format(Locale.US, "%.1f ms", (System.nanoTime() - tRestore0) / 1e6)})"
+                        "(${String.format(Locale.US, "%.1f ms", restoreLatencyMs)})"
                 )
             }
             val authSess = wire ?: throw CoreException(Err.E_BAD_HANDLE, "import wire closed")
@@ -729,9 +758,14 @@ class DemoRunner(
                 put("source_session_id", sessionId)
                 put("bytes_transferred_sent", totalSent.get())
                 put("bytes_transferred_recv", totalRecv.get())
-                put("bytes_recv_to_action_ready", totalRecv.get())
+                // Destination-side recv only, up to action-ready (review P2:
+                // was totalRecv, which also sums the source's serve-side
+                // counters).
+                put("bytes_recv_to_action_ready", destRecvReady.get())
                 put("time_to_action_ready_ms", ttaMs)
-                put("restore_latency_ms", if (scenario == Scenario.EDITOR_L3) ttaMs else 0.0)
+                // MEASURED session.restore duration (review P2: was
+                // timeToActionReadyMs — the import duration, not the op).
+                put("restore_latency_ms", restoreLatencyMs)
                 // EDITOR: the authority-transfer duration; GRAPH: no authority
                 // moved, so the dest's own edit duration is the independence
                 // measure (same choice as DemoPipeline.swift).

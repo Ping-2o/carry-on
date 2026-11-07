@@ -19,6 +19,11 @@ android {
     namespace = "com.carryon.app"
     compileSdk = 35
 
+    // The NDK the prebuilt engine was cross-compiled with (r27c; proven by
+    // Scripts/fetch_engine_lib.sh). Pinned explicitly so CI/AGP resolve exactly
+    // this NDK instead of a silently different AGP default.
+    ndkVersion = "27.2.12479018"
+
     defaultConfig {
         applicationId = "com.carryon.app"
         minSdk = 29          // spec §9: Android 10 floor for the frontier target

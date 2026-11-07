@@ -564,16 +564,22 @@ public actor DemoPipeline {
             emit(.sessionState(side: .destination, session: mirrorSession, state: .actionReady))
 
             // Prove the SAME logical session restored (editor scenario, per carryon_l3.c).
+            // restore_latency_ms is the MEASURED duration of session.restore itself
+            // (review P2: it used to reuse timeToActionReady — the import
+            // duration, not the restore op). 0.0 when the op never runs.
             var restoreAgreed = false
+            var restoreLatencyMs: Double = 0
             if config.scenario == .editorL3 {
+                let tRestoreStart = nowMs()
                 let restore = try await det("session.restore") {
                     try destEngine.executeActionAs(
                         cut: CutRef(session: mirrorSession, number: mirrorCut),
                         class: "session.restore", params: .object([:]),
                         adapterID: DemoScenario.editorL3.adapterID)
                 }
+                restoreLatencyMs = nowMs() - tRestoreStart
                 restoreAgreed = restore.oracleAgreed
-                log("session.restore", "oracle agreed=\(restoreAgreed)")
+                log("session.restore", "oracle agreed=\(restoreAgreed)  (\(String(format: "%.1f", restoreLatencyMs)) ms)")
             }
             emit(.stageFinished(.transfer, .ok))
 
@@ -697,7 +703,7 @@ public actor DemoPipeline {
                 "bytes_transferred_recv": .number(Double(finalBytes.recv)),
                 "bytes_recv_to_action_ready": .number(Double(bytesAfterImport.recv)),
                 "time_to_action_ready_ms": .number(timeToActionReadyMs),
-                "restore_latency_ms": .number(timeToActionReadyMs),
+                "restore_latency_ms": .number(restoreLatencyMs),
                 "source_independence_ms": .number(editMs),
                 "independent_edit_ms": .number(editMs),
                 "authoritative_objects": .array(config.scenario == .editorL3
