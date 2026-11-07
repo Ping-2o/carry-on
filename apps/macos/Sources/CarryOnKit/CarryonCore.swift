@@ -291,6 +291,15 @@ public final class Engine: @unchecked Sendable {
         }
     }
 
+    /// Deterministic mirror session id for an imported session (§16) — usable
+    /// as the destination-side key before the import completes (the Kotlin
+    /// binding's `mirrorSessionId` mirror).
+    public func mirrorSessionID(remoteSession: String) throws -> String {
+        try outString("carryon_mirror_session_id") { out in
+            remoteSession.withCString { carryon_mirror_session_id($0, out) }
+        }
+    }
+
     // ---- Transfer (handoff, §18.6) ------------------------------------------
 
     /// Serve a sealed cut's bytes until the destination reports ImportComplete

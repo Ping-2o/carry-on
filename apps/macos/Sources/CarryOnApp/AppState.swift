@@ -140,6 +140,154 @@ final class DemoModel {
     }
 }
 
+/// The L0/L1 "Carry File" model (manual-IP mode, pre-discovery): the chosen
+/// file, the hand-entered receiver address (cached), a pre-armed source
+/// identity (so the receiver can pin this Mac BEFORE the serve starts), and
+/// the live handoff state applied from pipeline events on the main actor.
+@MainActor
+@Observable
+final class CarryModel {
+    var running = false
+    var consoleLines: [ConsoleLine] = []
+    var ladderStates: [HandoffLadderStep: StageOutcome] = [:]
+    var sessionState: SessionState?
+    var bytesSent: UInt64 = 0
+    var bytesRecv: UInt64 = 0
+    var lastResult: FileHandoffResult?
+    var lastError: String?
+    var evidenceClass: String?
+
+    // ---- hand-made configuration (persisted where the task asks for caching)
+    var fileURL: URL? {
+        didSet { UserDefaults.standard.set(fileURL?.path, forKey: "carryon.handoff.lastFile") }
+    }
+    /// Last receiver address typed by hand (cached; discovery is stage 4).
+    var receiverAddr: String {
+        didSet { UserDefaults.standard.set(receiverAddr, forKey: "carryon.handoff.lastAddr") }
+    }
+    /// The receiver's 64-hex pin (typed/pasted from its Receive screen).
+    var receiverPin = ""
+    /// Integrity negative test toggle (declares a tampered hash; the receiver
+    /// MUST refuse — the visible-failure counterpart of the §6.8 showcase).
+    var integrityNegative = false
+    /// Pre-armed identity: created once so its pin exists before serving.
+    private(set) var sourceIdentity: DeviceIdentity?
+    private(set) var sourcePinHex = ""
+    private(set) var sourcePinTruncated = ""
+
+    private var runToken = UUID()
+
+    init() {
+        let d = UserDefaults.standard
+        if let p = d.string(forKey: "carryon.handoff.lastFile"), !p.isEmpty,
+           FileManager.default.fileExists(atPath: p) {
+            fileURL = URL(fileURLWithPath: p)
+        }
+        receiverAddr = d.string(forKey: "carryon.handoff.lastAddr") ?? ""
+        Task { await makeIdentity() }
+    }
+
+    /// A fresh identity per arm (honest: pins are per-handoff fingerprints;
+    /// long-lived device identities + revocation are stage-5 pairing).
+    func rearmIdentity() {
+        Task { await makeIdentity() }
+    }
+
+    private func makeIdentity() async {
+        do {
+            let id = try DeviceIdentity.generate(name: "carryon-mac-carry")
+            sourceIdentity = id
+            sourcePinHex = try id.pinHex()
+            sourcePinTruncated = String(sourcePinHex.prefix(12)) + "…"
+        } catch {
+            sourcePinHex = ""
+            sourcePinTruncated = ""
+        }
+    }
+
+    var configValid: Bool {
+        guard let file = fileURL,
+              HandoffValidation.isValidReceiverAddr(receiverAddr),
+              HandoffValidation.isValidPinHex(receiverPin) else { return false }
+        return FileManager.default.fileExists(atPath: file.path)
+    }
+
+    var addrValid: Bool { HandoffValidation.isValidReceiverAddr(receiverAddr) }
+    var pinValid: Bool { HandoffValidation.isValidPinHex(receiverPin) }
+
+    func reset() {
+        guard !running else { return }
+        consoleLines = []
+        ladderStates = [:]
+        sessionState = nil
+        bytesSent = 0
+        bytesRecv = 0
+        lastResult = nil // per-run state: a failed handoff must not inherit a prior result (§2/EVD-003)
+        lastError = nil
+        evidenceClass = nil
+    }
+
+    /// Serve the chosen file to the manually-entered receiver. Blocking FFI
+    /// is inside the pipeline (Task.detached); events are marshaled here.
+    func run() async {
+        guard !running, configValid, let file = fileURL, let identity = sourceIdentity else { return }
+        reset()
+        running = true
+        let token = UUID()
+        runToken = token
+        defer { if runToken == token { running = false } }
+        let config = FileHandoffConfig(
+            fileURL: file, receiverAddr: receiverAddr, receiverPin: receiverPin,
+            identity: identity, integrityNegative: integrityNegative)
+        do {
+            let result = try await FileHandoffPipeline().run(config) { [weak self] event in
+                let s = self
+                let t = token
+                Task { @MainActor in
+                    s?.apply(event, token: t)
+                }
+            }
+            guard runToken == token else { return }
+            lastResult = result
+            evidenceClass = result.evidenceClass
+        } catch is CancellationError {
+            guard runToken == token else { return }
+            lastError = "handoff cancelled"
+        } catch {
+            guard runToken == token else { return }
+            lastError = error.localizedDescription
+            // Mark the first not-yet-settled ladder step failed (honest UI).
+            if let step = HandoffLadderStep.allCases.first(where: { ladderStates[$0] == nil }) {
+                ladderStates[step] = .failed(error.localizedDescription)
+            } else {
+                ladderStates[.l0Carry] = .failed(error.localizedDescription)
+            }
+        }
+    }
+
+    private func apply(_ event: HandoffEvent, token: UUID) {
+        guard token == runToken else { return } // drop superseded runs' events
+        switch event {
+        case .console(let line):
+            consoleLines.append(line)
+        case .sourcePin:
+            break // the pre-armed identity's pin is already in sourcePinHex
+        case .ladder(let step, let outcome):
+            ladderStates[step] = outcome
+        case .state(let s):
+            sessionState = s
+        case .counters(let sent, let recv):
+            bytesSent = sent
+            bytesRecv = recv
+        case .finished(let result):
+            lastResult = result
+            evidenceClass = result.evidenceClass
+        case .failed(let why):
+            lastError = why
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class TopologyModel {
@@ -229,6 +377,7 @@ final class AppState {
     var pane: Pane = .demo
     var demo = DemoModel()
     var topology = TopologyModel()
+    var carry = CarryModel()
     /// The last evidence bundle text (from a run or a loaded file) for the viewer.
     var evidenceJSON: String?
 
@@ -257,6 +406,7 @@ final class AppState {
 
     enum Pane: String, CaseIterable, Identifiable, Hashable {
         case demo = "Demo"
+        case carry = "Carry File"
         case topology = "Topology"
         case sessions = "Sessions"
         case evidence = "Evidence"
@@ -265,6 +415,7 @@ final class AppState {
         var symbol: String {
             switch self {
             case .demo: return "play.rectangle"
+            case .carry: return "paperplane"
             case .topology: return "point.3.connected.trianglepath.dotted"
             case .sessions: return "rectangle.stack"
             case .evidence: return "checkmark.seal"

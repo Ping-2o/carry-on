@@ -25,9 +25,11 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.carryon.app.demo.DemoRunner
 import com.carryon.app.discovery.NsdDiscovery
+import com.carryon.app.handoff.ReceiveRunner
 import com.carryon.app.ui.screens.DemoScreen
 import com.carryon.app.ui.screens.EvidenceScreen
 import com.carryon.app.ui.screens.OnboardingScreen
+import com.carryon.app.ui.screens.ReceiveScreen
 import com.carryon.app.ui.screens.SessionsScreen
 import com.carryon.app.ui.screens.TopologyScreen
 
@@ -47,6 +49,8 @@ object AppGraph {
 
     lateinit var demoRunner: DemoRunner
         private set
+    lateinit var receiveRunner: ReceiveRunner
+        private set
     lateinit var discovery: NsdDiscovery
         private set
     lateinit var topology: TopologyStore
@@ -59,6 +63,11 @@ object AppGraph {
             val appContext = context.applicationContext
             demoRunner = DemoRunner(
                 scope = kotlinx.coroutines.MainScope(),
+                baseDir = appContext.cacheDir,
+            )
+            receiveRunner = ReceiveRunner(
+                scope = kotlinx.coroutines.MainScope(),
+                context = appContext,
                 baseDir = appContext.cacheDir,
             )
             discovery = NsdDiscovery(appContext)
@@ -94,6 +103,12 @@ fun CarryOnApp() {
                             onClick = { navController.navigateTab("demo") },
                             icon = { Text("▶", style = androidx.compose.material3.MaterialTheme.typography.titleMedium) },
                             label = { Text("Demo") },
+                        )
+                        NavigationBarItem(
+                            selected = route == "receive",
+                            onClick = { navController.navigateTab("receive") },
+                            icon = { Text("▣", style = androidx.compose.material3.MaterialTheme.typography.titleMedium) },
+                            label = { Text("Receive") },
                         )
                         NavigationBarItem(
                             selected = route == "topology",
@@ -134,6 +149,7 @@ fun CarryOnApp() {
                     )
                 }
                 composable("demo") { DemoScreen() }
+                composable("receive") { ReceiveScreen() }
                 composable("topology") { TopologyScreen() }
                 composable("sessions") { SessionsScreen() }
                 composable("evidence") { EvidenceScreen() }
