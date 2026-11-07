@@ -46,6 +46,12 @@ object CarryOnFfi {
     /** *len query protocol; message bytes are NUL-terminated UTF-8. */
     external fun lastError(buf: ByteArray?, len: LongArray): Int
 
+    /** Engine rc of the last out-string call on THIS thread (shim thread-local;
+     *  read immediately after a jbyteArray wrapper returned null — the JNI
+     *  signature itself cannot carry the code). Same-thread discipline as
+     *  lastError. */
+    external fun lastOutRc(): Int
+
     // ---- Core ---------------------------------------------------------------
 
     external fun coreOpen(dataDir: String): Long

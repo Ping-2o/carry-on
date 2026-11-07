@@ -25,7 +25,12 @@
  *   - Errors:       every fallible call returns the ABI i32 (0 = CARRYON_OK;
  *                     negative = FFI-local; positive = family_base + ordinal).
  *                     The shim NEVER throws; Kotlin maps codes to names
- *                     (com.carryon.app.ffi.Err, mirror of errors.rs).
+ *                     (com.carryon.app.ffi.Err, mirror of errors.rs). The
+ *                     jbyteArray out-string wrappers cannot RETURN the i32
+ *                     (null on error), so they record it thread-locally
+ *                     (out_string_result + the pthread-key rc, read back via
+ *                     lastOutRc on the SAME thread — device-run bug
+ *                     2026-11-07: the code used to be lost as UNKNOWN).
  *
  * Secrets (§22.3, EVD-006): identityCertDer/identityKeyDer exist to mirror the
  * ABI and for future secure-storage persistence. They are public-but-uncalled
@@ -39,6 +44,7 @@
  */
 
 #include <jni.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -71,6 +77,48 @@ static jbyteArray out_bytes(JNIEnv *env, char *s) {
         (*env)->SetByteArrayRegion(env, arr, 0, n, (const jbyte *)s);
     carryon_string_free(s);
     return arr;
+}
+
+/** Thread-local rc of the last out-string engine call (device-run bug
+ *  2026-11-07). The JNI signature for out-string wrappers returns
+ *  jbyteArray — NULL on error — which CANNOT carry the engine's i32 error
+ *  code; the Kotlin fallback used to fabricate Err.UNKNOWN (INT_MIN), so a
+ *  typed outcome like the §6.8 E_BUDGET_NETWORK refusal (500) could not be
+ *  matched and the graph+budget run wedged until the watchdog.
+ *
+ *  Implemented with a pthread key, NOT a __thread variable — belt and braces
+ *  after the 2026-11-07 device crash (SIGSEGV stack overflow with the bionic
+ *  TLSDESC resolver in the loop; a shared shim under dlopen with
+ *  ANDROID_STL=none has no reason to ride the TLSDESC path at all).
+ *  Same-thread discipline as the engine's own thread-local
+ *  carryon_last_error: set by every out-string wrapper below, read by Kotlin
+ *  IMMEDIATELY after the failing call on the SAME thread (requireOut does). */
+static pthread_key_t g_out_rc_key;
+static pthread_once_t g_out_rc_once = PTHREAD_ONCE_INIT;
+
+static void out_rc_key_init(void) {
+    pthread_key_create(&g_out_rc_key, NULL);
+}
+
+static void set_out_rc(jint rc) {
+    pthread_once(&g_out_rc_once, out_rc_key_init);
+    /* rc == 0 stores NULL (cleared) — fine: the value is only read on the
+     * error path, where the rc is never 0. */
+    pthread_setspecific(g_out_rc_key, (void *)(intptr_t)rc);
+}
+
+static jint get_out_rc(void) {
+    pthread_once(&g_out_rc_once, out_rc_key_init);
+    void *v = pthread_getspecific(g_out_rc_key);
+    return v ? (jint)(intptr_t)v : CARRYON_OK;
+}
+
+/** Out-string wrapper tail: record the engine rc thread-locally, then hand
+ *  back the copied bytes (NULL on error). */
+static jbyteArray out_string_result(JNIEnv *env, jint rc, char *out) {
+    set_out_rc(rc);
+    if (rc != CARRYON_OK) return NULL;
+    return out_bytes(env, out);
 }
 
 /** Write one engine-produced bool into a Kotlin BooleanArray(1) slot. */
@@ -140,6 +188,15 @@ Java_com_carryon_app_ffi_CarryOnFfi_lastError(JNIEnv *env, jobject thiz,
     return rc;
 }
 
+/* The engine rc of the last out-string call ON THIS THREAD (see
+ * out_string_result). Kotlin reads it immediately after a jbyteArray wrapper
+ * returned NULL — the signature itself cannot carry the code. */
+JNIEXPORT jint JNICALL
+Java_com_carryon_app_ffi_CarryOnFfi_lastOutRc(JNIEnv *env, jobject thiz) {
+    (void)env; (void)thiz;
+    return get_out_rc();
+}
+
 /* Out-strings are translated shim-side (out_bytes), so carryon_string_free never
  * crosses to Kotlin. Mirrored here as a no-op guard only if ever needed. */
 
@@ -166,9 +223,8 @@ Java_com_carryon_app_ffi_CarryOnFfi_coreRecoveryReportJson(JNIEnv *env, jobject 
                                                            jlong core) {
     (void)thiz;
     char *out = NULL;
-    if (carryon_core_recovery_report_json((CarryonCore *)h2p(core), &out) != CARRYON_OK)
-        return NULL;
-    return out_bytes(env, out);
+    jint rc = carryon_core_recovery_report_json((CarryonCore *)h2p(core), &out);
+    return out_string_result(env, rc, out);
 }
 
 JNIEXPORT jint JNICALL
@@ -218,8 +274,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_registerAdapter(JNIEnv *env, jobject thiz,
         : CARRYON_ERR_NULL_ARG;
     release_utf(env, adapter_id, aid);
     release_utf(env, params_json, pj);
-    if (rc != CARRYON_OK) return NULL;
-    return out_bytes(env, out);
+    return out_string_result(env, rc, out);
 }
 
 JNIEXPORT jbyteArray JNICALL
@@ -233,8 +288,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_createSession(JNIEnv *env, jobject thiz,
         ? carryon_create_session((CarryonCore *)h2p(core), req, &out)
         : CARRYON_ERR_NULL_ARG;
     release_utf(env, create_req_json, req);
-    if (rc != CARRYON_OK) return NULL;
-    return out_bytes(env, out);
+    return out_string_result(env, rc, out);
 }
 
 /* ---- Prepare / carry ---------------------------------------------------- */
@@ -249,8 +303,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_createCut(JNIEnv *env, jobject thiz,
         ? carryon_create_cut((CarryonCore *)h2p(core), sid, &out)
         : CARRYON_ERR_NULL_ARG;
     release_utf(env, session_id, sid);
-    if (rc != CARRYON_OK) return NULL;
-    return out_bytes(env, out);
+    return out_string_result(env, rc, out);
 }
 
 JNIEXPORT jbyteArray JNICALL
@@ -267,8 +320,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_listAvailableActions(JNIEnv *env, jobject th
         : CARRYON_ERR_NULL_ARG;
     release_utf(env, cut_json, cut);
     release_utf(env, classes_json, classes);
-    if (rc != CARRYON_OK) return NULL;
-    return out_bytes(env, out);
+    return out_string_result(env, rc, out);
 }
 
 JNIEXPORT jbyteArray JNICALL
@@ -287,8 +339,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_executeActionAs(JNIEnv *env, jobject thiz,
     release_utf(env, cut_json, cut);
     release_utf(env, action_req_json, req);
     release_utf(env, adapter_id, aid);
-    if (rc != CARRYON_OK) return NULL;
-    return out_bytes(env, out);
+    return out_string_result(env, rc, out);
 }
 
 JNIEXPORT jbyteArray JNICALL
@@ -304,8 +355,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_executeAction(JNIEnv *env, jobject thiz,
         : CARRYON_ERR_NULL_ARG;
     release_utf(env, cut_json, cut);
     release_utf(env, action_req_json, req);
-    if (rc != CARRYON_OK) return NULL;
-    return out_bytes(env, out);
+    return out_string_result(env, rc, out);
 }
 
 JNIEXPORT jint JNICALL
@@ -383,9 +433,8 @@ Java_com_carryon_app_ffi_CarryOnFfi_identityPinHex(JNIEnv *env, jobject thiz,
                                                    jlong id) {
     (void)thiz;
     char *out = NULL;
-    if (carryon_identity_pin_hex((const CarryonIdentity *)h2p(id), &out) != CARRYON_OK)
-        return NULL;
-    return out_bytes(env, out);
+    jint rc = carryon_identity_pin_hex((const CarryonIdentity *)h2p(id), &out);
+    return out_string_result(env, rc, out);
 }
 
 JNIEXPORT void JNICALL
@@ -406,8 +455,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_pairDevices(JNIEnv *env, jobject thiz,
                                (const CarryonIdentity *)h2p(b), u, &out)
         : CARRYON_ERR_NULL_ARG;
     release_utf(env, utc, u);
-    if (rc != CARRYON_OK) return NULL;
-    return out_bytes(env, out);
+    return out_string_result(env, rc, out);
 }
 
 JNIEXPORT jlong JNICALL
@@ -425,9 +473,8 @@ Java_com_carryon_app_ffi_CarryOnFfi_trustToJson(JNIEnv *env, jobject thiz,
                                                 jlong trust) {
     (void)thiz;
     char *out = NULL;
-    if (carryon_trust_to_json((const CarryonTrust *)h2p(trust), &out) != CARRYON_OK)
-        return NULL;
-    return out_bytes(env, out);
+    jint rc = carryon_trust_to_json((const CarryonTrust *)h2p(trust), &out);
+    return out_string_result(env, rc, out);
 }
 
 JNIEXPORT jint JNICALL
@@ -500,9 +547,8 @@ Java_com_carryon_app_ffi_CarryOnFfi_listenerAddr(JNIEnv *env, jobject thiz,
                                                  jlong listener) {
     (void)thiz;
     char *out = NULL;
-    if (carryon_listener_addr((const CarryonListener *)h2p(listener), &out) != CARRYON_OK)
-        return NULL;
-    return out_bytes(env, out);
+    jint rc = carryon_listener_addr((const CarryonListener *)h2p(listener), &out);
+    return out_string_result(env, rc, out);
 }
 
 JNIEXPORT void JNICALL
@@ -548,8 +594,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_sessionClientNegotiate(JNIEnv *env, jobject 
         ? carryon_session_client_negotiate((CarryonSession *)h2p(session), f, &out)
         : CARRYON_ERR_NULL_ARG;
     release_utf(env, features_json, f);
-    if (rc != CARRYON_OK) return NULL;
-    return out_bytes(env, out);
+    return out_string_result(env, rc, out);
 }
 
 JNIEXPORT jbyteArray JNICALL
@@ -563,8 +608,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_sessionServerNegotiate(JNIEnv *env, jobject 
         ? carryon_session_server_negotiate((CarryonSession *)h2p(session), f, &out)
         : CARRYON_ERR_NULL_ARG;
     release_utf(env, features_json, f);
-    if (rc != CARRYON_OK) return NULL;
-    return out_bytes(env, out);
+    return out_string_result(env, rc, out);
 }
 
 JNIEXPORT void JNICALL
@@ -598,8 +642,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_importCut(JNIEnv *env, jobject thiz,
                              rs, (uint64_t)remote_cut, &out)
         : CARRYON_ERR_NULL_ARG;
     release_utf(env, remote_session, rs);
-    if (rc != CARRYON_OK) return NULL;
-    return out_bytes(env, out);
+    return out_string_result(env, rc, out);
 }
 
 JNIEXPORT jbyteArray JNICALL
@@ -614,8 +657,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_resumeImport(JNIEnv *env, jobject thiz,
                                 tok, &out)
         : CARRYON_ERR_NULL_ARG;
     release_utf(env, resume_token_json, tok);
-    if (rc != CARRYON_OK) return NULL;
-    return out_bytes(env, out);
+    return out_string_result(env, rc, out);
 }
 
 /* Object read via the *len query protocol; bytes verified against the declared
@@ -683,8 +725,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_serveAuthorityTransfer(JNIEnv *env, jobject 
                                            (uint64_t)cut_number, &out)
         : CARRYON_ERR_NULL_ARG;
     release_utf(env, session_id, sid);
-    if (rc != CARRYON_OK) return NULL;
-    return out_bytes(env, out);
+    return out_string_result(env, rc, out);
 }
 
 JNIEXPORT jbyteArray JNICALL
@@ -703,8 +744,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_requestAuthorityTransfer(JNIEnv *env, jobjec
         : CARRYON_ERR_NULL_ARG;
     release_utf(env, mirror_session_id, msid);
     release_utf(env, adapter_id, aid);
-    if (rc != CARRYON_OK) return NULL;
-    return out_bytes(env, out);
+    return out_string_result(env, rc, out);
 }
 
 /* -> LongArray(1): fresh epoch (§21.3 recovery). */
@@ -761,8 +801,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_mirrorSessionId(JNIEnv *env, jobject thiz,
         ? carryon_mirror_session_id(rs, &out)
         : CARRYON_ERR_NULL_ARG;
     release_utf(env, remote_session, rs);
-    if (rc != CARRYON_OK) return NULL;
-    return out_bytes(env, out);
+    return out_string_result(env, rc, out);
 }
 
 /* ---- Evidence ------------------------------------------------------------ */
@@ -777,8 +816,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_exportEvidence(JNIEnv *env, jobject thiz,
         ? carryon_export_evidence((CarryonCore *)h2p(core), sid, &out)
         : CARRYON_ERR_NULL_ARG;
     release_utf(env, session_id, sid);
-    if (rc != CARRYON_OK) return NULL;
-    return out_bytes(env, out);
+    return out_string_result(env, rc, out);
 }
 
 JNIEXPORT jbyteArray JNICALL
@@ -795,8 +833,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_exportEvidenceWith(JNIEnv *env, jobject thiz
         : CARRYON_ERR_NULL_ARG;
     release_utf(env, session_id, sid);
     release_utf(env, extra_metrics_json, extra);
-    if (rc != CARRYON_OK) return NULL;
-    return out_bytes(env, out);
+    return out_string_result(env, rc, out);
 }
 
 /* Verifies a bundle FROM DISK path; bundle content is parsed, never executed
@@ -811,6 +848,5 @@ Java_com_carryon_app_ffi_CarryOnFfi_verifyEvidence(JNIEnv *env, jobject thiz,
         ? carryon_verify_evidence((const CarryonCore *)h2p(core), path, &out)
         : CARRYON_ERR_NULL_ARG;
     release_utf(env, bundle_path, path);
-    if (rc != CARRYON_OK) return NULL;
-    return out_bytes(env, out);
+    return out_string_result(env, rc, out);
 }

@@ -34,11 +34,28 @@
  *     serve_cut; on the FINAL round the same session also carries
  *     serve_authority_transfer (l3 flow). A suspended/partial round closes the
  *     wire and the dest reconnects fresh (round_trip.rs suspend/resume flow).
- *   - Suspend toggle: request_suspend BEFORE the first chunk so round 1 always
- *     suspends; resume_import on a fresh connection completes.
- *   - Budget toggle: tiny net budget -> typed E_BUDGET refusal (or the ABI 1.1
- *     `partial_budget` shape) — a NORMAL visible outcome (§6.8); replenish and
- *     retry on a fresh connection (dedup skips published objects).
+ *   - EXACT ROUND ORDER (device-run bug 2026-11-07: with suspend+budget BOTH
+ *     on, the source expected 3 rounds but the dest completed in 2 — the armed
+ *     suspend preempts the budget refusal (§11.2 fires before §6.8 moves any
+ *     bytes), the replenish at the suspend round's close then removed the
+ *     budget round entirely, while the source's serve loop ALSO died at the
+ *     first mid-serve wire close (E_PROTO_FRAMING "connection closed" —
+ *     round_trip.rs IGNORES the serve_cut result for exactly this reason)
+ *     and round 2 hung in accept until the watchdog). Deterministic order,
+ *     one wire per showcase:
+ *       round 1: budget refusal ONLY (§6.8; suspend deliberately NOT armed
+ *                yet — it would preempt the refusal); replenish at close;
+ *       round 2: suspend (§11.2, armed before its import's first chunk),
+ *                resume_token issued, wire closed; resume reconnects fresh;
+ *       round 3 (final): resume_import completes; EDITOR_L3 authority moves
+ *                on this same wire. GRAPH: cut serve alone (honest skip).
+ *     Each toggle contributes exactly one extra wire, so the source's
+ *     expectedRounds = 1 + suspend + budget matches the dest's actual flow.
+ *   - The serve loop TOLERATES a mid-serve wire close on NON-final rounds:
+ *     that close IS the §11.2 suspend / §6.8 refusal signal (the reference
+ *     server ignores serve_cut errors and just accepts the next connection).
+ *     A mid-serve close on the FINAL round, or an accept/negotiate failure,
+ *     remains fatal.
  *
  * Threading + lifetime: every blocking engine call (serve_cut, import_cut,
  * accept, the authority RPCs) runs on Dispatchers.IO. JNI calls are NOT
@@ -419,6 +436,10 @@ class DemoRunner(
         // added exactly once: at its round-close, or at import completion.
         val destRecvReady = AtomicLong(0)
 
+        // For fail-fast cleanup (see the catch below): the wire address of the
+        // listener, hoisted out of the coroutineScope body.
+        var drainAddr: String? = null
+
         try {
             // coroutineScope: the serve loop is a STRUCTURED child — a
             // pipeline failure/timeout cancels it (its blocked JNI threads
@@ -438,21 +459,28 @@ class DemoRunner(
             coreDst.setForeground(true)
             ui.log("foreground", "true on both cores (§20.2 admission)")
             if (toggles.chunkSize > 0) {
-                coreSrc.setChunkSize(toggles.chunkSize)
-                coreDst.setChunkSize(toggles.chunkSize)
-                ui.log("chunk_size", "${toggles.chunkSize} B (progressive transfer visible)")
+                // The engine admits chunk sizes in [4096, 8388608] (§18.6);
+                // clamp the demo knob into the admitted range instead of
+                // failing the run (device-run bug 2026-11-07: the old 256 B
+                // toggle died at OPEN with E_TRANSFER_QUOTA "chunk size 256
+                // outside [4096, 8388608]"). Parity with DemoPipeline.swift's
+                // clamp.
+                val chunk = clampChunkSize(toggles.chunkSize)
+                coreSrc.setChunkSize(chunk)
+                coreDst.setChunkSize(chunk)
+                ui.log("chunk_size", "$chunk B (progressive transfer visible)")
             }
             if (toggles.budgetRejection) {
                 coreDst.setBudget(TINY_BUDGET_JSON)
-                ui.log("budget.dst", "TINY net budget set (§6.8 rejection expected, then replenished)")
+                ui.log("budget.dst", "TINY net budget set (§6.8 partial/refusal expected, then replenished)")
             }
             if (toggles.recoveryReport) {
                 listOf("src" to coreSrc, "dst" to coreDst).forEach { (name, core) ->
                     val r = withContext(Dispatchers.IO) { core.recoveryReport() }
                     ui.log(
                         "recovery.$name",
-                        "interrupted=${r.interruptedTransfers} hidden=${r.hiddenIncompleteObjects}" +
-                            " ambiguous=${r.ambiguousSessions} trunc=${r.journalTruncated} clean=${r.clean}"
+                        "interrupted=${r.interruptedTransfers.size} hidden=${r.hiddenIncompleteObjects.size}" +
+                            " ambiguous=${r.ambiguousSessions.size} trunc=${r.journalTruncated} clean=${r.clean}"
                     )
                 }
             }
@@ -521,6 +549,7 @@ class DemoRunner(
             val lis = withContext(Dispatchers.IO) { Listener.bind("127.0.0.1:0") }
             listener = lis
             val addr = withContext(Dispatchers.IO) { lis.addr() }
+            drainAddr = addr
             ui.log("listener", "bound $addr (TLS 1.3 loopback)")
             ui.update { it.copy(listenerAddr = addr) }
 
@@ -540,8 +569,25 @@ class DemoRunner(
                     for (round in 1..expectedRounds) {
                         val sess = Session.accept(lis, idSrc, trustSrc)
                         sess.serverNegotiate()
-                        coreSrc.serveCut(sess)
-                        ui.log("serve.round$round", "cut served")
+                        try {
+                            coreSrc.serveCut(sess)
+                            ui.log("serve.round$round", "cut served")
+                        } catch (e: CoreException) {
+                            // Device-run bug 2026-11-07: a mid-serve wire close
+                            // on a NON-final round is the EXPECTED §11.2
+                            // suspend / §6.8 refusal signal — the dest
+                            // disconnects and reconnects fresh (the reference
+                            // server, round_trip.rs, IGNORES serve_cut's
+                            // result entirely and accepts the next round).
+                            // Fatal only on the FINAL round (the completed
+                            // import / authority wire) and on
+                            // accept/negotiate failures, as before.
+                            if (round == expectedRounds) throw e
+                            ui.log(
+                                "serve.round$round",
+                                "wire closed mid-serve (${Err.name(e.code)}) — expected for suspend/§6.8 rounds; awaiting reconnect"
+                            )
+                        }
                         if (round == expectedRounds && scenario == Scenario.EDITOR_L3) {
                             coreSrc.serveAuthorityTransfer(sess, sessionId, cut.number)
                             ui.log("serve.authority", "relinquished; source read-only (§21.2)")
@@ -582,12 +628,19 @@ class DemoRunner(
                 // not aliased during the borrow (carryon.h). Counters are
                 // sampled only after each wire operation completes, below.
 
-                if (toggles.suspendResume && !suspendRequested) {
-                    // BEFORE the first chunk so round 1 always suspends
-                    // (deterministic; see round_trip.rs).
+                // Arm the §11.2 suspend so it fires before the FIRST chunk of
+                // the import attempt it belongs to — but NOT when the §6.8
+                // budget-refusal round is still ahead: an armed suspend
+                // preempts the budget refusal (suspend hits before any bytes
+                // move), which collapses the two showcases into one wire and
+                // breaks the deterministic round accounting (device-run bug
+                // 2026-11-07; see the file header's EXACT ROUND ORDER).
+                if (toggles.suspendResume && !suspendRequested &&
+                    !(toggles.budgetRejection && !budgetReplenished)
+                ) {
                     withContext(Dispatchers.IO) { coreDst.requestSuspend() }
                     suspendRequested = true
-                    ui.log("suspend", "requested before first chunk (§11.2)")
+                    ui.log("suspend", "armed before the import's first chunk (§11.2)")
                 }
 
                 outcome = if (resumeToken != null) {
@@ -887,6 +940,31 @@ class DemoRunner(
             runCatching { srcCore?.close() }
             runCatching { dstCore?.close() }
             }
+        } catch (t: Throwable) {
+            // Fail fast instead of burning the 120 s watchdog (device-run
+            // finding 2026-11-07): a dest-side exception unwinds
+            // coroutineScope, whose implicit join WAITS for the structured
+            // serve-loop child — but that child is parked in a BLOCKING
+            // accept() it cannot be cancelled out of (freeing the listener
+            // under a blocked call is use-after-free), so every such failure
+            // surfaced only as a watchdog timeout, hiding the real error.
+            // One throwaway connection makes the parked accept() return; its
+            // negotiate then fails against the closed wire and the serve loop
+            // exits, draining the thread. Handles are still leaked per the
+            // documented rules — this only un-wedges the FAILING run's
+            // unwind so the true error reaches the UI immediately.
+            val addr = drainAddr
+            val identity = dstId
+            val trust = dstTrust
+            if (addr != null && identity != null && trust != null && t !is CancellationException) {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        val spare = Session.connect(addr, identity, trust)
+                        spare.close()
+                    }
+                }
+            }
+            throw t
         } finally {
             // Failure path: handles held by blocked JNI calls are deliberately
             // leaked (freeing under a blocked call is use-after-free). Temp dirs
@@ -901,10 +979,29 @@ class DemoRunner(
         private const val DEMO_TIMEOUT_MS = 120_000L
         private const val MAX_WIRE_ATTEMPTS = 5
 
-        /** §6.8 budget JSON (model/budget.rs serde shape) — tiny net allowance so
-         *  the import is refused/partial: a NORMAL, visible outcome. */
-        private const val TINY_BUDGET_JSON =
-            "{\"total_net_bytes\":256,\"avg_net_rate\":256,\"burst_bytes\":256," +
+        /** §18.6: the engine admits chunk sizes in [4096, 8388608] (see
+         *  carryon-core MIN/MAX_CHUNK_SIZE). The UI knob is clamped into the
+         *  admitted range instead of failing the run — device-run bug
+         *  2026-11-07: a 256 B toggle died at OPEN with E_TRANSFER_QUOTA
+         *  "chunk size 256 outside [4096, 8388608]". Mirrors DemoPipeline.swift. */
+        const val CHUNK_MIN_BYTES = 4096L
+        const val CHUNK_MAX_BYTES = 8_388_608L
+
+        /** Clamp the demo's chunk-size knob into the engine's admitted range. */
+        fun clampChunkSize(requested: Long): Long =
+            requested.coerceIn(CHUNK_MIN_BYTES, CHUNK_MAX_BYTES)
+
+        /** §6.8 budget JSON (model/budget.rs serde shape) — macOS-parity tiny
+         *  budget (DemoPipeline.swift: total_net_bytes=128). Device-run bug
+         *  2026-11-07: this used to be 256, which is ABOVE the editor L3
+         *  authoritative closure (59+55+83 = 197 B), so the import sailed
+         *  through with NO refusal/partial — the §6.8 showcase silently did
+         *  nothing and the dest's round accounting desynced from the source's
+         *  serve loop (120 s watchdog hang). 128 sits between the two-object
+         *  prefix (59+55=114 fits) and the full closure → a VISIBLE
+         *  partial_budget (§6.8: budget rejection SHALL be visible). */
+        const val TINY_BUDGET_JSON =
+            "{\"total_net_bytes\":128,\"avg_net_rate\":65536,\"burst_bytes\":1024," +
                 "\"total_cpu_ms\":60000,\"cpu_duty\":1.0,\"peak_prep_mem\":536870912," +
                 "\"storage_quota\":1099511627776,\"battery_thermal\":\"Unrestricted\"," +
                 "\"elapsed_opportunity_ms\":60000,\"max_nonpreemptible_ms\":5000}"

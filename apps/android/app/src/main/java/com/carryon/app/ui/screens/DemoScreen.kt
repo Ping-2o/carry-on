@@ -95,13 +95,15 @@ fun DemoScreen(runner: DemoRunner = AppGraph.demoRunner) {
         // ---- advanced showcase toggles ----
         Text("Advanced", style = MaterialTheme.typography.titleSmall)
         ToggleRow(
-            title = "Chunk size 256 B",
-            subtitle = "progressive transfer (core_set_chunk_size)",
+            title = "Chunk size 4 KiB",
+            subtitle = "progressive transfer (core_set_chunk_size, §18.6; engine admits [4096 B, 8 MiB])",
             checked = state.toggles.chunkSize > 0,
             enabled = !state.running,
             onChange = {
                 runner.setToggles(
-                    state.toggles.copy(chunkSize = if (it) 256L else 0L)
+                    // 4096 = the engine's minimum admitted chunk (§18.6); the
+                    // runner clamps whatever lands here into [4096, 8388608].
+                    state.toggles.copy(chunkSize = if (it) 4096L else 0L)
                 )
             },
         )

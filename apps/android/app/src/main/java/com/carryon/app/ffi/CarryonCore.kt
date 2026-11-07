@@ -156,10 +156,17 @@ fun lastErrorMessage(): String {
 }
 
 /** Out-string ABI result: the shim hands back a UTF-8 copy and already freed the
- *  engine buffer. Null means the call failed -> surface code+message. */
+ *  engine buffer. Null means the call failed -> surface the ENGINE's error code
+ *  (device-run bug 2026-11-07: this fabricated Err.UNKNOWN (INT_MIN) — the
+ *  DemoRunner could not match typed outcomes like the §6.8 E_BUDGET_NETWORK
+ *  refusal (500) and the graph+budget run wedged until the watchdog; the shim
+ *  now records the real rc thread-locally, read here on the SAME thread). */
 internal fun requireOut(bytes: ByteArray?): String =
     bytes?.toString(Charsets.UTF_8)
-        ?: throw CoreException(Err.UNKNOWN, "engine call failed: ${lastErrorMessage()}")
+        ?: throw CoreException(
+            CarryOnFfi.lastOutRc().takeIf { it != Err.OK } ?: Err.UNKNOWN,
+            "engine call failed: ${lastErrorMessage()}",
+        )
 
 /** The *len query protocol (carryon.h): call once with buf=null for the required
  *  size, allocate, call again. Used by cert/key DER, last_error, read_object. */
@@ -212,7 +219,11 @@ sealed class ImportOutcome {
                     o.getString("remote_session"),
                     o.getLong("remote_cut"),
                     o.getJSONArray("published").length(),
-                    o.getInt("deferred"),
+                    // Device-run bug 2026-11-07: `deferred` is a JSON ARRAY of
+                    // object ids in the engine's write_outcome shape
+                    // (abi_transfer.rs serializes Vec<String>) — getInt on it
+                    // threw and the run died at the first partial admission.
+                    o.getJSONArray("deferred").length(),
                     o.getLong("deferred_bytes"),
                 )
                 else -> throw CoreException(Err.ERR_BAD_JSON, "import outcome: $json")
@@ -221,21 +232,32 @@ sealed class ImportOutcome {
     }
 }
 
-/** Recovery report fields (abi_core.rs; §19.3). Interrupted ≠ success (§19.3.9). */
+/** Recovery report fields (abi_core.rs carryon_core_recovery_report_json;
+ * §19.3). The three list fields carry the offending ids in the JSON ARRAYS
+ * (device-run bug 2026-11-07: this used to call getInt on them —
+ * "Value [] at interrupted_transfers of type org.json.JSONArray cannot be
+ * converted to int" — and aborted the whole run at OPEN; the shape matches
+ * the Rust RecoveryReport and the macOS CarryonCore.swift decode).
+ * Interrupted ≠ success (§19.3.9). */
 data class RecoveryReport(
-    val interruptedTransfers: Int,
-    val hiddenIncompleteObjects: Int,
-    val ambiguousSessions: Int,
+    val interruptedTransfers: List<String>,
+    val hiddenIncompleteObjects: List<String>,
+    val ambiguousSessions: List<String>,
     val journalTruncated: Boolean,
     val clean: Boolean,
 ) {
     companion object {
         fun parse(json: String): RecoveryReport {
             val o = JSONObject(json)
+            // JSON arrays of ids (empty = none found; counts are the sizes).
+            fun ids(key: String): List<String> {
+                val a = o.getJSONArray(key)
+                return List(a.length()) { a.getString(it) }
+            }
             return RecoveryReport(
-                o.getInt("interrupted_transfers"),
-                o.getInt("hidden_incomplete_objects"),
-                o.getInt("ambiguous_sessions"),
+                ids("interrupted_transfers"),
+                ids("hidden_incomplete_objects"),
+                ids("ambiguous_sessions"),
                 o.getBoolean("journal_truncated"),
                 o.getBoolean("clean"),
             )

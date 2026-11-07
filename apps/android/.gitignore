@@ -6,3 +6,6 @@ local.properties
 *.iml
 .DS_Store
 /capture/
+# AGP machine-local build state (CMake obj dirs, Kotlin session data).
+.kotlin/
+app/.cxx/
