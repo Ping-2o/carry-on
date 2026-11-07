@@ -26,6 +26,11 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # The NDK the engine .so is cross-compiled with and the app builds against
+  # (r27c, source.properties on the authoring machine). Pinned here so the
+  # cache key and the sdkmanager install stay in lockstep with ndkVersion in
+  # apps/android/app/build.gradle.kts.
+  NDK_VERSION: "27.2.12479018"
 
 jobs:
   rust:
@@ -37,6 +42,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      # Dependency caching (Swatinem/rust-cache): target dir + crates.io
+      # registry + the photocraft git db (~/.cargo/git/db), keyed on
+      # Cargo.lock — cold runs clone it once, warm runs skip the network.
       - uses: Swatinem/rust-cache@v2
       - name: rustfmt
         run: cargo fmt --all -- --check
@@ -62,6 +70,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # Dependency caching (Swatinem/rust-cache): target dir + crates.io
+      # registry + the photocraft git db (~/.cargo/git/db), keyed on
+      # Cargo.lock — cold runs clone it once, warm runs skip the network.
       - uses: Swatinem/rust-cache@v2
       - name: Build + vendor the engine dylib (ad-hoc signed, LOCAL-ONLY)
         run: apps/macos/Scripts/build_engine.sh
@@ -80,3 +91,56 @@ jobs:
           swift run -q carryon-demo-smoke editor --chunk 4096
           swift run -q carryon-demo-smoke editor --budget
           swift run -q carryon-demo-smoke editor --suspend
+
+  android-app:
+    name: Android app build (assembleDebug)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      # Default target dir → the aarch64-linux-android cross-build artifacts
+      # land where Swatinem's cache looks for them.
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      # Gradle dependency + wrapper caching (AGP, Kotlin, Compose BOM pulls).
+      - uses: gradle/actions/setup-gradle@v4
+      # NOTE: the literal SDK path (not ${{ env.ANDROID_HOME }} — the expression
+      # `env` context only sees workflow-declared vars, not image-provisioned
+      # ones). $ANDROID_HOME still works inside step shells.
+      - name: NDK cache (r27c is ~2 GB installed; keyed by version)
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk/ndk
+          key: android-ndk-${{ env.NDK_VERSION }}
+      - name: Install NDK + SDK components (skipped when the cache hit)
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          if [ -d "$ANDROID_HOME/ndk/$NDK_VERSION" ]; then
+            echo "NDK restored from cache"
+          else
+            yes | sdkmanager --install "ndk;$NDK_VERSION" > /dev/null
+          fi
+          # AGP needs these; licenses are pre-accepted on the runner image.
+          yes | sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" > /dev/null
+      - name: Cross-compile + fetch the engine .so (NDK r27c, arm64-v8a)
+        run: apps/android/Scripts/fetch_engine_lib.sh
+        env:
+          NDK: /usr/local/lib/android/sdk/ndk/${{ env.NDK_VERSION }}
+          WORK: ${{ github.workspace }}
+      - name: gradlew assembleDebug (Kotlin compile + JNI shim via CMake)
+        working-directory: apps/android
+        run: ./gradlew assembleDebug --no-daemon
+      - name: Upload the debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: carryon-debug-apk
+          path: apps/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
