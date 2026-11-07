@@ -73,10 +73,8 @@ import com.carryon.app.ffi.Session
 import com.carryon.app.ffi.Trust
 import com.carryon.app.ffi.abiVersion
 import com.carryon.app.ffi.importCut
-import com.carryon.app.ffi.mayMutate
 import com.carryon.app.ffi.mirrorSessionId
 import com.carryon.app.ffi.pairDevices
-import com.carryon.app.ffi.recoveryReport
 import com.carryon.app.ffi.requestAuthorityTransfer
 import com.carryon.app.ffi.resumeImport
 import com.carryon.app.ffi.serveAuthorityTransfer
@@ -627,7 +625,8 @@ class DemoRunner(
                         "(${String.format(Locale.US, "%.1f ms", restoreLatencyMs)})"
                 )
             }
-            val authSess = wire ?: throw CoreException(Err.E_BAD_HANDLE, "import wire closed")
+            // Err.ERR_BAD_HANDLE (-5): FFI-local — the import wire is gone.
+            val authSess = wire ?: throw CoreException(Err.ERR_BAD_HANDLE, "import wire closed")
             var srcIndependentMs = 0.0
             if (scenario == Scenario.EDITOR_L3) {
                 val preMutate = withContext(Dispatchers.IO) { coreDst.mayMutate(mirror) }
