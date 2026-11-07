@@ -257,8 +257,9 @@ public final class NetListener: @unchecked Sendable {
 /// (handle.rs as_mut contract: "not aliased elsewhere for the duration of the
 /// borrow"). All short handle access here (negotiate, counters, teardown) is
 /// serialized by `lock`; long wire calls (import/serve/authority) are confined
-/// to one flow by the pipeline, and the demo's byte-counter poller is JOINED
-/// (cancel + await) before any teardown free (see DemoPipeline.retirePoller).
+/// to one flow by the pipeline. Counter reads happen ONLY between completed
+/// wire operations (see DemoPipeline.sampleCounters) — never concurrently with
+/// a blocking call on the same session, and never from a background poller.
 public final class NetSession: @unchecked Sendable {
     private let lock = NSLock()
     var handle: OpaquePointer?
@@ -337,6 +338,9 @@ public final class NetSession: @unchecked Sendable {
     }
 
     /// Measured wire-byte counters (length prefix + body; real, not estimates).
+    /// Call only while NO blocking wire op (serve/import/resume/authority) is
+    /// in flight on this session — a CarryonSession handle must never be
+    /// aliased (carryon.h documents no thread-safety).
     public func byteCounters() throws -> (sent: UInt64, recv: UInt64) {
         lock.lock()
         defer { lock.unlock() }

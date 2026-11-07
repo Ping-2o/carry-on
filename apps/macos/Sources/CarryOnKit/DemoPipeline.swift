@@ -8,8 +8,10 @@
  *
  * Every blocking FFI call (serve_cut, import_cut, serve/request_authority_transfer,
  * TLS accept/connect, negotiation) runs on Task.detached off the caller — the
- * pipeline actor never blocks. `carryon_session_bytes` is polled by a detached
- * poller and emitted live.
+ * pipeline actor never blocks. `carryon_session_bytes` is NEVER read while a
+ * blocking wire op is in flight on the same session: the C ABI guarantees no
+ * thread-safety for a CarryonSession, so counters are sampled only BETWEEN
+ * completed operations (sampleCounters below).
  */
 
 import CCarryon
@@ -458,27 +460,17 @@ public actor DemoPipeline {
             log("suspend", "request_suspend armed (§11.2; cleared on resume)")
         }
 
-        // Live byte counters while a transfer runs (measured, not estimated).
-        func startPoller(_ session: NetSession) -> Task<Void, Never> {
-            Task.detached(priority: .utility) {
-                while !Task.isCancelled {
-                    if let (s, r) = try? session.byteCounters() {
-                        emit(.counters(sent: s, recv: r))
-                    }
-                    try? await Task.sleep(nanoseconds: 100_000_000)
-                }
+        // Counter discipline (review P1): a CarryonSession is NOT thread-safe
+        // (handle.rs as_mut contract: "not aliased elsewhere for the duration of
+        // the borrow"). A detached poller's in-flight byteCounters would race the
+        // blocking wire call itself (concurrent aliasing), and a cancelled-but-
+        // executing read against a freed handle would be a use-after-free. So
+        // there is NO poller: counters are sampled only BETWEEN completed wire
+        // operations, when the actor is provably the sole toucher of the handle.
+        func sampleCounters() {
+            if let (s, r) = try? destSession.byteCounters() {
+                emit(.counters(sent: s, recv: r))
             }
-        }
-        var poller = startPoller(destSession)
-        // JOIN the poller before any session free: cancel() is cooperative and
-        // never interrupts an in-flight FFI call — the C ABI documents NO
-        // thread-safety for a CarryonSession (handle.rs: "not aliased
-        // elsewhere for the duration of the borrow"), so a cancelled-but-
-        // executing byteCounters on a freed handle is a use-after-free.
-        func retirePoller() async {
-            poller.cancel()
-            let retired = poller
-            _ = await retired.value
         }
         do {
             emit(.sessionState(side: .destination, session: mirrorSession, state: .importing))
@@ -489,6 +481,7 @@ public actor DemoPipeline {
 
             let tImportStart = nowMs()
             var outcome = try await attemptImport(destSession)
+            sampleCounters() // between ops only — never during a blocking call
             var attempts = 1
 
             // Completion loop: suspended → resume (§11.2); partial budget →
@@ -525,6 +518,7 @@ public actor DemoPipeline {
                         try destEngine.resumeImport(session: ds, resumeTokenJSON: token)
                     }
                     outcome = ImportOutcome.parse(resumeJSON)
+                    sampleCounters()
                     attempts += 1
                     continue
                 case .budgetRefused(let e):
@@ -532,6 +526,7 @@ public actor DemoPipeline {
                     log("budget", "replenished → retry (same connection; published nothing yet)")
                     try destEngine.setBudget(json: generousBudgetJSON)
                     outcome = try await attemptImport(destSession)
+                    sampleCounters()
                     attempts += 1
                     continue
                 case .partialBudget:
@@ -543,14 +538,13 @@ public actor DemoPipeline {
                     // The wire closed with BUDGET_PARTIAL Abort: absorb the source's
                     // serve_cut result, then open a fresh TLS hop for the retry.
                     _ = try? await serveTask.value
-                    await retirePoller() // join: the retired poller must be out of the engine before its session can be freed at stage 7
                     (_, srcSession, destSession) = try await openTransport()
-                    poller = startPoller(destSession)
                     let serveSrcN = srcSession // snapshot for the detached call
                     serveTask = Task.detached(priority: .userInitiated) {
                         try sourceEngine.serveCut(session: serveSrcN)
                     }
                     outcome = try await attemptImport(destSession)
+                    sampleCounters()
                     attempts += 1
                     continue
                 case .other(let raw):
@@ -652,13 +646,19 @@ public actor DemoPipeline {
             // Disconnect the transport before the continuation edit (source-off, as
             // carryon_l3.c does): receipts are durable; the edit runs store-local.
             let finalBytes = try destSession.byteCounters()
-            await retirePoller() // JOIN before any teardown free (see retirePoller)
             let hops = allSessions // snapshot: detached tasks capture lets, not vars
             try await det("session_teardown") {
                 for s in hops { s.teardown() } // every hop, including retries
             }
             log("transport", "disconnected (source-off continuation)")
             emit(.counters(sent: finalBytes.sent, recv: finalBytes.recv))
+            // Source-off means the SOURCE ENGINE closes too, not just the
+            // transport: authority has moved (editor) or the handoff is complete
+            // (graph), the receipts are durable, and the destination continues
+            // alone. Leaving the engine context alive would make "source-off"
+            // a half-truth (review finding: engine outlived the disconnect).
+            try await det("core_free_source") { sourceEngine.close() }
+            log("source_engine", "closed — destination continues alone")
 
             let tEditStart = nowMs()
             let edit = try await det("execute_action_as") {
@@ -769,8 +769,8 @@ public actor DemoPipeline {
             return result
         } catch {
             // Failure paths never free sessions (handles leak per the macOS
-            // convention), but no detached poller may outlive the run either.
-            await retirePoller()
+            // convention). Nothing to join: no detached task touches a session
+            // concurrently — counters are sampled between operations only.
             throw error
         }
     }

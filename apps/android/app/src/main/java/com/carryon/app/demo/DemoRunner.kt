@@ -15,9 +15,14 @@
  *   4 SESSION   register_adapter (compiled-in adapter by id+JSON, §3.8),
  *               create_session, create_cut
  *   5 TRANSFER  listener_bind("127.0.0.1:0") -> accept/connect -> negotiate ->
- *               serve_cut <=> import_cut with live session_bytes counters
+ *               serve_cut <=> import_cut; session_bytes sampled only BETWEEN
+ *               completed wire ops (a CarryonSession is NOT thread-safe —
+ *               never read while a blocking JNI call is in flight on it)
  *   6 AUTHORITY may_mutate(false on mirror) -> request/serve_authority_transfer
- *               (SAME wire as the completed import, the carryon_l3.c flow) ->
+ *               (SAME wire as the completed import, the carryon_l3.c flow;
+ *               EDITOR_L3 only — org.carryon.graph declares
+ *               supports_authority_transfer:false, so GRAPH skips honestly,
+ *               mirroring DemoPipeline.swift) ->
  *               receipt (new_epoch) -> may_mutate flips: dest true, src false
  *   7 EDIT      dest execute_action_as source-off (single-writer L4, §21.2);
  *               oracle `agreed` shown
@@ -41,6 +46,11 @@
  * deliberately LEAKED (freeing under a blocked call is use-after-free); they die
  * with the process and each run uses fresh temp dirs. The whole pipeline is
  * bounded by DEMO_TIMEOUT_MS so the UI cannot hang forever.
+ *
+ * Counter discipline (review finding: the old pollJob sampled session_bytes
+ * concurrently with import_cut and cancel() was not joined before close()):
+ * a CarryonSession handle is NOT thread-safe (carryon.h), so counters are read
+ * ONLY between completed wire operations — never during, never from a poller.
  */
 package com.carryon.app.demo
 
@@ -66,13 +76,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -315,8 +322,8 @@ class DemoRunner(
         val totalRecv = AtomicLong(0)
 
         try {
-            // coroutineScope: the serve loop + poll jobs are STRUCTURED children —
-            // a pipeline failure/timeout cancels them (their blocked JNI threads
+            // coroutineScope: the serve loop is a STRUCTURED child — a
+            // pipeline failure/timeout cancels it (its blocked JNI threads
             // drain when the peer disconnects; handles stay leaked per the rules).
             coroutineScope {
             /* ---- 1 OPEN ---- */
@@ -376,7 +383,11 @@ class DemoRunner(
 
             /* ---- 3 PAIR ---- */
             beginStage(Stage.PAIR)
-            val utc = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
+            // True UTC (review finding: the old SimpleDateFormat appended a
+            // literal 'Z' to LOCAL wall-clock time — the pairing record was
+            // mislabeled as UTC). minSdk 29 → java.time is available.
+            val utc = java.time.format.DateTimeFormatter.ISO_INSTANT
+                .format(java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS))
             val pairing = withContext(Dispatchers.IO) { pairDevices(idSrc, idDst, utc) }
             val trustSrc = withContext(Dispatchers.IO) { Trust.fromJson(pairing.localTrustJson) }
             srcTrust = trustSrc
@@ -423,7 +434,9 @@ class DemoRunner(
 
             // SOURCE: bounded serve loop. Final round: serve_cut, then the same
             // session carries serve_authority_transfer (l3 flow; the dest's
-            // request below pairs with it).
+            // request below pairs with it). EDITOR_L3 only: org.carryon.graph
+            // declares supports_authority_transfer:false — for GRAPH the final
+            // round is serve_cut alone (mirrors DemoPipeline.swift).
             val serveLoop = launch(Dispatchers.IO) {
                 try {
                     for (round in 1..expectedRounds) {
@@ -431,7 +444,7 @@ class DemoRunner(
                         sess.serverNegotiate()
                         coreSrc.serveCut(sess)
                         log("serve.round$round", "cut served")
-                        if (round == expectedRounds) {
+                        if (round == expectedRounds && scenario == Scenario.EDITOR_L3) {
                             coreSrc.serveAuthorityTransfer(sess, sessionId, cut.number)
                             log("serve.authority", "relinquished; source read-only (§21.2)")
                         }
@@ -451,7 +464,6 @@ class DemoRunner(
             // DESTINATION: connect -> negotiate -> import, honoring the toggles.
             val tImport0 = System.nanoTime()
             var wire: Session? = null
-            var pollJob: Job? = null
             var outcome: ImportOutcome? = null
             var resumeToken: String? = null
             var suspendRequested = false
@@ -467,26 +479,10 @@ class DemoRunner(
                 wire = sess
                 withContext(Dispatchers.IO) { sess.clientNegotiate() }
 
-                // Live MEASURED counters for the UI while this connection moves data.
-                pollJob?.cancel()
-                pollJob = launch {
-                    while (isActive) {
-                        try {
-                            val (bs, br) = sess.bytes()
-                            _state.update {
-                                it.copy(
-                                    bytesSent = totalSent.get() + bs,
-                                    bytesRecv = totalRecv.get() + br,
-                                )
-                            }
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (_: Exception) {
-                            // session closed mid-poll — counters stop
-                        }
-                        delay(BYTE_POLL_MS)
-                    }
-                }
+                // Counter discipline (see file header): NO live polling of
+                // session_bytes while a blocking JNI call runs — the handle is
+                // not aliased during the borrow (carryon.h). Counters are
+                // sampled only after each wire operation completes, below.
 
                 if (toggles.suspendResume && !suspendRequested) {
                     // BEFORE the first chunk so round 1 always suspends
@@ -516,6 +512,19 @@ class DemoRunner(
 
                 when (val o = outcome) {
                     is ImportOutcome.Completed -> {
+                        // Sample between ops only: import_cut returned, no
+                        // other coroutine touches this handle (the source's
+                        // session is its own handle). Displayed WITHOUT
+                        // tallying into the totals — the full wire (import +
+                        // authority, or import for GRAPH) is tallied once at
+                        // its close below.
+                        val (bs, br) = sess.bytes()
+                        _state.update {
+                            it.copy(
+                                bytesSent = totalSent.get() + bs,
+                                bytesRecv = totalRecv.get() + br,
+                            )
+                        }
                         log("import", "completed (mirror_cut=${o.mirrorCut})")
                     }
                     is ImportOutcome.Suspended -> {
@@ -540,11 +549,9 @@ class DemoRunner(
                 }
 
                 if (outcome == null) {
-                    // This round's wire is done: tally, cancel the poll, close.
+                    // This round's wire is done: tally, close.
                     // (Suspended/partial/refused wires are closed by protocol;
                     // the resume/retry reconnects fresh.)
-                    pollJob?.cancel()
-                    pollJob = null
                     val (bs, br) = sess.bytes()
                     totalSent.addAndGet(bs)
                     totalRecv.addAndGet(br)
@@ -591,53 +598,87 @@ class DemoRunner(
                         "(${String.format(Locale.US, "%.1f ms", (System.nanoTime() - tRestore0) / 1e6)})"
                 )
             }
-            val preMutate = withContext(Dispatchers.IO) { coreDst.mayMutate(mirror) }
-            log("may_mutate.dst.pre", preMutate.toString())
-            if (preMutate) {
-                throw CoreException(Err.E_AUTH_BASE + 2, "mirror must not start authoritative")
-            }
-
             val authSess = wire ?: throw CoreException(Err.E_BAD_HANDLE, "import wire closed")
-            val tAuth0 = System.nanoTime()
-            // The source is inside serve_authority_transfer (final serve round);
-            // this request drives it. Durable receipts BEFORE the epoch moves
-            // (AUTH-004).
-            val receipt = withContext(Dispatchers.IO) {
-                coreDst.requestAuthorityTransfer(authSess, mirror, scenario.adapterId)
-            }
-            val epoch = JSONObject(receipt).optLong("new_epoch", -1)
-            val srcIndependentMs = (System.nanoTime() - tAuth0) / 1e6
-            log("authority", "receipt epoch=$epoch")
-            _state.update { it.copy(authorityEpoch = epoch) }
+            var srcIndependentMs = 0.0
+            if (scenario == Scenario.EDITOR_L3) {
+                val preMutate = withContext(Dispatchers.IO) { coreDst.mayMutate(mirror) }
+                log("may_mutate.dst.pre", preMutate.toString())
+                if (preMutate) {
+                    throw CoreException(Err.E_AUTH_BASE + 2, "mirror must not start authoritative")
+                }
 
-            // Close the wire; the source's serve_authority_transfer returns,
-            // tallies its counters and exits the serve loop.
-            pollJob?.cancel()
-            pollJob = null
-            val (finalSent, finalRecv) = authSess.bytes()
-            totalSent.addAndGet(finalSent)
-            totalRecv.addAndGet(finalRecv)
-            authSess.close()
-            wire = null
-            _state.update {
-                it.copy(bytesSent = totalSent.get(), bytesRecv = totalRecv.get())
-            }
-            serveLoop.join()
-            serveLoopError?.let { throw it }
-            log("bytes", "sent=${totalSent.get()} recv=${totalRecv.get()} (MEASURED, §5.6)")
-            log("time_to_action_ready", String.format(Locale.US, "%.1f ms", ttaMs))
+                val tAuth0 = System.nanoTime()
+                // The source is inside serve_authority_transfer (final serve round);
+                // this request drives it. Durable receipts BEFORE the epoch moves
+                // (AUTH-004).
+                val receipt = withContext(Dispatchers.IO) {
+                    coreDst.requestAuthorityTransfer(authSess, mirror, scenario.adapterId)
+                }
+                val epoch = JSONObject(receipt).optLong("new_epoch", -1)
+                srcIndependentMs = (System.nanoTime() - tAuth0) / 1e6
+                log("authority", "receipt epoch=$epoch")
+                _state.update { it.copy(authorityEpoch = epoch) }
 
-            val postDst = withContext(Dispatchers.IO) { coreDst.mayMutate(mirror) }
-            val postSrc = withContext(Dispatchers.IO) { coreSrc.mayMutate(sessionId) }
-            log("may_mutate.dst.post", postDst.toString())
-            log("may_mutate.src.post", postSrc.toString())
-            if (!postDst || postSrc) {
-                throw CoreException(Err.E_AUTH_BASE, "single-writer flip violated (§21.2)")
+                // Close the wire; the source's serve_authority_transfer returns,
+                // tallies its counters and exits the serve loop.
+                val (finalSent, finalRecv) = authSess.bytes()
+                totalSent.addAndGet(finalSent)
+                totalRecv.addAndGet(finalRecv)
+                authSess.close()
+                wire = null
+                _state.update {
+                    it.copy(bytesSent = totalSent.get(), bytesRecv = totalRecv.get())
+                }
+                serveLoop.join()
+                serveLoopError?.let { throw it }
+                log("bytes", "sent=${totalSent.get()} recv=${totalRecv.get()} (MEASURED, §5.6)")
+                log("time_to_action_ready", String.format(Locale.US, "%.1f ms", ttaMs))
+
+                val postDst = withContext(Dispatchers.IO) { coreDst.mayMutate(mirror) }
+                val postSrc = withContext(Dispatchers.IO) { coreSrc.mayMutate(sessionId) }
+                log("may_mutate.dst.post", postDst.toString())
+                log("may_mutate.src.post", postSrc.toString())
+                if (!postDst || postSrc) {
+                    throw CoreException(Err.E_AUTH_BASE, "single-writer flip violated (§21.2)")
+                }
+                _state.update {
+                    it.copy(destMayMutate = postDst, sourceMayMutate = postSrc)
+                }
+                endStage(Stage.AUTHORITY, "epoch=$epoch · dest owner · src read-only")
+            } else {
+                // Honest skip (review finding: this used to call
+                // requestAuthorityTransfer unconditionally, but
+                // org.carryon.graph declares supports_authority_transfer:false —
+                // the engine would refuse; the graph demo died at stage 6).
+                // Mirrors DemoPipeline.swift's honest graph skip.
+                val (finalSent, finalRecv) = authSess.bytes()
+                totalSent.addAndGet(finalSent)
+                totalRecv.addAndGet(finalRecv)
+                authSess.close()
+                wire = null
+                _state.update {
+                    it.copy(bytesSent = totalSent.get(), bytesRecv = totalRecv.get())
+                }
+                serveLoop.join()
+                serveLoopError?.let { throw it }
+                log("authority", "skipped — org.carryon.graph declares supports_authority_transfer:false (L4 is the editor flagship)")
+                log("bytes", "sent=${totalSent.get()} recv=${totalRecv.get()} (MEASURED, §5.6)")
+                log("time_to_action_ready", String.format(Locale.US, "%.1f ms", ttaMs))
+                // No authority moved: the dest stays a read-only mirror for its
+                // read-only computation (graph.shortest_path).
+                _state.update {
+                    it.copy(destMayMutate = false, sourceMayMutate = true)
+                }
+                endStage(Stage.AUTHORITY, "skipped (adapter capability: no authority transfer)")
             }
-            _state.update {
-                it.copy(destMayMutate = postDst, sourceMayMutate = postSrc)
-            }
-            endStage(Stage.AUTHORITY, "epoch=$epoch · dest owner · src read-only")
+
+            // Source-off = the SOURCE ENGINE closes too, not just the transport
+            // (review finding: the engine context used to outlive the
+            // disconnect until evidence export). Receipts are durable (§21.2);
+            // the destination continues alone below.
+            runCatching { srcCore?.close() }
+            srcCore = null
+            log("core.src", "closed — source-off (dest continues alone)")
 
             /* ---- 7 EDIT (source-off independent continuation) ---- */
             beginStage(Stage.EDIT)
@@ -691,7 +732,10 @@ class DemoRunner(
                 put("bytes_recv_to_action_ready", totalRecv.get())
                 put("time_to_action_ready_ms", ttaMs)
                 put("restore_latency_ms", if (scenario == Scenario.EDITOR_L3) ttaMs else 0.0)
-                put("source_independence_ms", srcIndependentMs)
+                // EDITOR: the authority-transfer duration; GRAPH: no authority
+                // moved, so the dest's own edit duration is the independence
+                // measure (same choice as DemoPipeline.swift).
+                put("source_independence_ms", if (scenario == Scenario.EDITOR_L3) srcIndependentMs else editMs)
                 put("independent_edit_ms", editMs)
                 put("authoritative_objects", JSONArray(scenario.authoritativeObjects))
                 put("optional_objects", JSONArray(scenario.optionalObjects))
@@ -742,7 +786,6 @@ class DemoRunner(
 
     companion object {
         private const val MAX_CONSOLE_LINES = 400
-        private const val BYTE_POLL_MS = 150L
         private const val DEMO_TIMEOUT_MS = 120_000L
         private const val MAX_WIRE_ATTEMPTS = 5
 
