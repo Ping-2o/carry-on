@@ -122,14 +122,27 @@ jobs:
           key: android-ndk-${{ env.NDK_VERSION }}
       - name: Install NDK + SDK components (skipped when the cache hit)
         run: |
+          set -e
           echo "ANDROID_HOME=$ANDROID_HOME"
+          # ubuntu-24.04 runner images do not put cmdline-tools on PATH (and
+          # may not ship them) — resolve the binary, install it if missing.
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKM" ]; then
+            echo "cmdline-tools missing — installing"
+            cd "$RUNNER_TEMP"
+            curl -sS -o cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            unzip -q cmdtools.zip -d cmdtools-tmp
+            mkdir -p "$ANDROID_HOME/cmdline-tools"
+            mv cmdtools-tmp/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
+            cd "$GITHUB_WORKSPACE"
+          fi
           if [ -d "$ANDROID_HOME/ndk/$NDK_VERSION" ]; then
             echo "NDK restored from cache"
           else
-            yes | sdkmanager --install "ndk;$NDK_VERSION" > /dev/null
+            yes | "$SDKM" --install "ndk;$NDK_VERSION" > /dev/null
           fi
           # AGP needs these; licenses are pre-accepted on the runner image.
-          yes | sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" > /dev/null
+          yes | "$SDKM" --install "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" > /dev/null
       - name: Cross-compile + fetch the engine .so (NDK r27c, arm64-v8a)
         run: apps/android/Scripts/fetch_engine_lib.sh
         env:
