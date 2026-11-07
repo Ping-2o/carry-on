@@ -179,11 +179,14 @@ class NsdDiscovery(private val context: Context) {
             fun txt(key: String): String =
                 attrs[key]?.let { String(it, Charsets.US_ASCII) } ?: ""
             // Only the §18.3 minimal keys are read; everything else is ignored.
+            // `pr` accepts both encodings: the Android pilot advertises "1",
+            // the macOS pilot "true"/"false" — a strict "== \"1\"" read made
+            // macOS peers look pairing-NOT-required here (review finding).
             val peer = DiscoveredPeer(
                 serviceName = info.serviceName,
                 instanceId = txt("id"),
                 protocolMajor = txt("pm").toIntOrNull() ?: 0,
-                pairingRequired = txt("pr") == "1",
+                pairingRequired = txt("pr") == "1" || txt("pr") == "true",
                 deviceClass = txt("dc").ifBlank { "unknown" },
                 connectionHint = txt("ch"),
             )

@@ -511,7 +511,10 @@ class Session private constructor(internal val handle: Long) : Closeable {
     fun serverNegotiate(featuresJson: String = "[]"): String =
         requireOut(CarryOnFfi.sessionServerNegotiate(handle, featuresJson))
 
-    /** -> (sent, recv) wire counters; polled live during transfers (§5.6). */
+    /** -> (sent, recv) wire counters. Sampled ONLY between completed wire
+     *  operations: a CarryonSession is NOT thread-safe (carryon.h — the handle
+     *  must not be aliased during a blocking call); never poll it while
+     *  import/serve/authority is in flight on the same session. */
     fun bytes(): Pair<Long, Long> {
         val out = longArrayOf(0, 0)
         check(CarryOnFfi.sessionBytes(handle, out))

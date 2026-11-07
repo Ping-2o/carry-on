@@ -1,0 +1,175 @@
+# CI — the AGENTS.md green gate, run on every push and pull request.
+#
+# Labels law (spec §2): a green run is LOCAL, automated evidence that the
+# workspace builds, the tests pass, and clippy/fmt stay clean. It upgrades no
+# platform claim (§30 acceptance is unrun) and the macOS smoke job is one-device
+# loopback evidence only.
+#
+# Why carryon-adapter-kiwix is excluded from the workspace job: its default
+# `zim-backend` feature links the locally built libzim on the authoring
+# machine's external-storage prefix (see its build.rs and
+# docs/kiwix-bridge/BUILD-EVIDENCE.md), which CI runners do not have. CI checks
+# the crate's pure-Rust lib without that feature instead (its tests/examples
+# are for the real backend and stay owner-machine runs).
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # The NDK the engine .so is cross-compiled with and the app builds against
+  # (r27c, source.properties on the authoring machine). Pinned here so the
+  # cache key and the sdkmanager install stay in lockstep with ndkVersion in
+  # apps/android/app/build.gradle.kts.
+  NDK_VERSION: "27.2.12479018"
+
+jobs:
+  rust:
+    name: Rust green gate (fmt + clippy + tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      # Dependency caching (Swatinem/rust-cache): target dir + crates.io
+      # registry + the photocraft git db (~/.cargo/git/db), keyed on
+      # Cargo.lock — cold runs clone it once, warm runs skip the network.
+      - uses: Swatinem/rust-cache@v2
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+      - name: clippy -D warnings (workspace, kiwix excluded — no libzim on runners)
+        run: cargo clippy --workspace --all-targets --features carryon-ffi/test-panic --exclude carryon-adapter-kiwix -- -D warnings
+      - name: tests (workspace, kiwix excluded)
+        run: cargo test --workspace --features carryon-ffi/test-panic --exclude carryon-adapter-kiwix
+      - name: kiwix adapter — pure-Rust lib (no-default-features)
+        run: |
+          cargo clippy -p carryon-adapter-kiwix --no-default-features --lib -- -D warnings
+          cargo test -p carryon-adapter-kiwix --no-default-features --lib
+
+  macos-app:
+    name: macOS app build + demo smoke (loopback)
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      # CI storage, NOT the authoring machine's external-volume default in
+      # Scripts/build_engine.sh (overridable by design). Job-level env cannot
+      # use the `runner` context (it exists only inside steps), so this is the
+      # workspace path, not $RUNNER_TEMP.
+      CARGO_TARGET_DIR: ${{ github.workspace }}/carryon-target
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      # Dependency caching (Swatinem/rust-cache): target dir + crates.io
+      # registry + the photocraft git db (~/.cargo/git/db), keyed on
+      # Cargo.lock — cold runs clone it once, warm runs skip the network.
+      - uses: Swatinem/rust-cache@v2
+      - name: Build + vendor the engine dylib (ad-hoc signed, LOCAL-ONLY)
+        run: apps/macos/Scripts/build_engine.sh
+      - name: swift build
+        working-directory: apps/macos
+        run: swift build
+      - name: Demo smoke — L3 editor scenario
+        working-directory: apps/macos
+        run: swift run -q carryon-demo-smoke editor
+      - name: Demo smoke — graph scenario
+        working-directory: apps/macos
+        run: swift run -q carryon-demo-smoke graph
+      - name: Demo smoke — toggles (chunk / tiny budget / suspend-resume)
+        working-directory: apps/macos
+        run: |
+          swift run -q carryon-demo-smoke editor --chunk 4096
+          swift run -q carryon-demo-smoke editor --budget
+          swift run -q carryon-demo-smoke editor --suspend
+
+  android-app:
+    name: Android app build (assembleDebug)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      # Default target dir → the aarch64-linux-android cross-build artifacts
+      # land where Swatinem's cache looks for them.
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      # Gradle dependency + wrapper caching (AGP, Kotlin, Compose BOM pulls).
+      # cache-read-only is false so PR-branch runs SAVE the dependency cache
+      # too (by default the action only writes on the default branch, which
+      # left every PR run at "0 entries restored / 0 saved").
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: false
+      # NOTE: the literal SDK path (not ${{ env.ANDROID_HOME }} — the expression
+      # `env` context only sees workflow-declared vars, not image-provisioned
+      # ones). $ANDROID_HOME still works inside step shells.
+      #
+      # The NDK is cached as a single TARBALL, not the raw installed dir:
+      # restoring the 2 GB tree in place failed with "/usr/bin/tar ... exit
+      # code 2" (actions/cache#1420-style extraction quirks over a live SDK
+      # path). We control both ends of the tar pipeline instead.
+      - name: NDK cache (r27c is ~2 GB installed; keyed by version)
+        uses: actions/cache@v5
+        with:
+          path: ~/ndk-cache.tgz
+          key: android-ndk-${{ env.NDK_VERSION }}
+      - name: Install NDK + SDK components (tarball from cache, else sdkmanager)
+        run: |
+          set -e
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          # ubuntu runner images do not put cmdline-tools on PATH (and may
+          # not ship them) — resolve the binary, install it if missing.
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKM" ]; then
+            echo "cmdline-tools missing — installing"
+            cd "$RUNNER_TEMP"
+            curl -sS -o cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            unzip -q cmdtools.zip -d cmdtools-tmp
+            mkdir -p "$ANDROID_HOME/cmdline-tools"
+            mv cmdtools-tmp/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
+            cd "$GITHUB_WORKSPACE"
+          fi
+          if [ -f "$HOME/ndk-cache.tgz" ]; then
+            echo "NDK restored from cache tarball"
+            mkdir -p "$ANDROID_HOME/ndk"
+            tar -xzf "$HOME/ndk-cache.tgz" -C "$ANDROID_HOME/ndk"
+          elif [ -d "$ANDROID_HOME/ndk/$NDK_VERSION" ]; then
+            echo "NDK already present on the image"
+            tar -czf "$HOME/ndk-cache.tgz" -C "$ANDROID_HOME/ndk" "$NDK_VERSION"
+          else
+            yes | "$SDKM" --install "ndk;$NDK_VERSION" > /dev/null
+            tar -czf "$HOME/ndk-cache.tgz" -C "$ANDROID_HOME/ndk" "$NDK_VERSION"
+          fi
+          # AGP needs these; licenses are pre-accepted on the runner image.
+          yes | "$SDKM" --install "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" > /dev/null
+      - name: Cross-compile + fetch the engine .so (NDK r27c, arm64-v8a)
+        run: apps/android/Scripts/fetch_engine_lib.sh
+        env:
+          NDK: /usr/local/lib/android/sdk/ndk/${{ env.NDK_VERSION }}
+          WORK: ${{ github.workspace }}
+      - name: gradlew unit tests + assembleDebug (Kotlin compile + JNI shim via CMake)
+        working-directory: apps/android
+        run: ./gradlew :app:testDebugUnitTest assembleDebug --no-daemon
+      - name: Upload the debug APK
+        uses: actions/upload-artifact@v5
+        with:
+          name: carryon-debug-apk
+          path: apps/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7

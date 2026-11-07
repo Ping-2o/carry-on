@@ -18,7 +18,7 @@ ASCII art + animations that honor Reduce Motion.
 | Claim | Label | Evidence |
 |---|---|---|
 | macOS app builds + runs the full L3 loopback demo through the C ABI | `IMPLEMENTED` / `OBSERVED (LOCAL)` | `swift build` clean; `swift run carryon-demo-smoke` exit 0; `dist/CarryOn.app` assembled, `codesign --verify` OK (ad-hoc) |
-| Android project build-ready (Gradle Kotlin-DSL / Compose / JNI) | `TARGET` — **not compiled** (no Android SDK on the authoring machine) | NDK r27c clang syntax check of the JNI shim exit 0; 49/49 Kotlin↔C JNI symbols cross-checked; real aarch64 `libcarryon_ffi.so` fetched by `Scripts/fetch_engine_lib.sh` |
+| Android app builds (`./gradlew assembleDebug`: Kotlin compile, JNI shim via CMake against the cross-compiled engine `.so`) | `IMPLEMENTED` (CI compile) — **never run on a device** | First compile ever: CI `android-app` job green (2026-11-07, run 42365800510, ubuntu-latest; NDK r27c 27.2.12479018) — debug APK built and uploaded. The first compile surfaced 3 latent resolution errors, fixed in 77bd3ec. The Demo Mode pipeline remains hand-reviewed logic until run on a device |
 | One-device demo = physical cross-device | **NO — `OBSERVED (LOCAL)` only** | Loopback TLS 1.3 on one machine, two in-process cores (spec §2/§30) |
 | Any platform "supported" | **NO** | §30 acceptance never run on real hardware |
 | Signed APK / distribution signing | `UNSUPPORTED` here | PLAT-006 out of scope; macOS ad-hoc codesign is LOCAL-ONLY |
@@ -62,8 +62,11 @@ engine pipeline, NOT physical cross-device transfer or a supported platform (spe
   either app exercises a physical network path or a second NIC.
 - The macOS app is ad-hoc signed (`codesign --sign -`) — LOCAL-ONLY, explicitly
   not PLAT-006 distribution signing.
-- The Android app has never been compiled: no Android SDK exists on the
-  authoring machine. The Kotlin sources are hand-reviewed, not built.
+- The Android app was compiled for the first time in CI (2026-11-07, run
+  42365800510): `assembleDebug` green, debug APK built (debug build only — no
+  signing, PLAT-006 unchanged). It has still **never run on a device**: the
+  Android Demo Mode pipeline's runtime behavior remains hand-reviewed logic
+  until someone runs it on real hardware.
 - Engine-side discovery, signed packaging, and §30 platform acceptance are all
   still `TARGET` in [`docs/FRONTIER.md`](../docs/FRONTIER.md). These wrappers
   are pilots: the Swift binding and the Kotlin/JNI shim are the first slices of

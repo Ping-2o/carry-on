@@ -59,7 +59,10 @@ public struct EvidenceBundle: Codable, Sendable, Equatable {
     /// Parse a bundle JSON string (nil if malformed — never execute it).
     public static func parse(_ json: String) -> EvidenceBundle? {
         guard let data = json.data(using: .utf8) else { return nil }
-        return try? JSONDecoder().decode(EvidenceBundle.self, from: data)
+        let decoder = JSONDecoder()
+        // Depth cap in effect for the free-form AnyJSON sections (EVD-005).
+        decoder.userInfo[AnyJSONDepth.key] = AnyJSONDepth.Box()
+        return try? decoder.decode(EvidenceBundle.self, from: data)
     }
 
     /// Metric lookup for the viewer (`metrics` is a free-form object).

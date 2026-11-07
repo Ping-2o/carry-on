@@ -53,6 +53,15 @@ struct EvidenceView: View {
         guard case .success(let url) = result else { return }
         let secured = url.startAccessingSecurityScopedResource()
         defer { if secured { url.stopAccessingSecurityScopedResource() } }
+        // Bound the read BEFORE any whole-file allocation: the picked file is
+        // arbitrary input, so a multi-GiB "bundle" must be rejected, not loaded
+        // (heap exhaustion); real §23.3 bundles are tiny by comparison.
+        let maxBytes = 64 * 1024 * 1024
+        guard let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize,
+              size <= maxBytes else {
+            parseError = "file missing, empty, or too large (max \(maxBytes / (1024 * 1024)) MiB)"
+            return
+        }
         guard let text = try? String(contentsOf: url, encoding: .utf8) else {
             parseError = "unreadable file"
             return

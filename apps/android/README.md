@@ -13,7 +13,7 @@ StateFlow MVVM.
 
 | Claim | Label | Why |
 |---|---|---|
-| This Android project builds (`./gradlew assembleDebug`) | `TARGET` — build-ready | **Not compiled on the authoring machine** (no Android SDK present). Compiles with Android Studio / `gradlew assembleDebug` where the SDK + JDK 17 exist. Kotlin sources were hand-reviewed, never compiled. |
+| This Android project builds (`./gradlew assembleDebug`) | `IMPLEMENTED` (CI compile) — never run on a device | First compile: CI `android-app` job, 2026-11-07 (run 42365800510) — the real engine `.so` cross-compiled with NDK r27c, Kotlin compiled, JNI shim built via CMake, debug APK artifact. The first-ever compile surfaced 3 latent resolution errors (phantom imports + a typo'd `Err` constant), fixed in 77bd3ec. The pipeline's runtime behavior is hand-reviewed until a device run. |
 | JNI shim (`app/src/main/cpp/carryon_jni.c`) | verified | Syntax-checked clean with the NDK r27c clang (`aarch64-linux-android29-clang -fsyntax-only -Wall -Wextra`) against the real `carryon.h`. |
 | Engine binary (`libcarryon_ffi.so`, arm64-v8a) | `OBSERVED` | Cross-compiled by `Scripts/fetch_engine_lib.sh` from this checkout (cargo, aarch64-linux-android). Fetched artifact — gitignored, never committed. |
 | Demo Mode (two cores, loopback TLS 1.3, full 8-stage pipeline) | `OBSERVED (LOCAL)` — **once run on a device** | One device, loopback TLS, two in-app cores. NOT physical cross-device evidence (spec §2/§30). The UI shows the verbatim disclosure footer on every run. |
@@ -44,10 +44,21 @@ cd apps/android
 ./gradlew installDebug          # on a connected device/emulator
 ```
 
-The wrapper (`gradlew`, `gradle/wrapper/*`) was sourced from the local
-kiwix-android checkout; `distributionUrl` is pinned to Gradle 8.9 to match AGP
-8.7.3. If your environment lacks the wrapper jar, run `gradle wrapper
---gradle-version 8.9` once with any local Gradle 8.x.
+The wrapper (`gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`) is
+the verified stock Gradle 8.9 wrapper from
+`github.com/gradle/gradle` (tag `v8.9.0`); `distributionUrl` and
+`distributionSha256Sum` are pinned to the official Gradle 8.9 release
+(`gradle-8.9-bin.zip`, sha256 `d725d707bfabd4dfdc958c624003b3c80accc03f7037b5122c4b1d0ef15cecab`)
+to match AGP 8.7.3. Provenance hashes (apps/ security audit):
+
+- `gradlew`     sha256 `9cbbb4d68ff7fb5211c4d58f598ac9d8664c05fdcd1e5f59b7f2c3ac1ee00af0`
+- `gradlew.bat` sha256 `0f3ed8f03b50934cb8c48b15a470d5c20a30a5385825e48b55bcc8ea3d8f8e18`
+- `gradle-wrapper.jar` sha256 `498495120a03b9a6ab5d155f5de3c8f0d986a449153702fb80fc80e134484f17`
+
+(The previous wrapper copy — sourced from a local kiwix-android checkout and a
+different wrapper version than the pinned distribution — was replaced by the
+verified 8.9 artifacts.) If your environment lacks the wrapper jar, run
+`gradle wrapper --gradle-version 8.9` once with any local Gradle 8.x.
 
 Without the fetched `.so`, the app installs but any engine call fails on
 `UnsatisfiedLinkError` — the fetch step is part of the build recipe, not
@@ -88,7 +99,7 @@ optional.
 ```
 apps/android/
 ├── build.gradle.kts / settings.gradle.kts / gradle.properties   # Kotlin DSL
-├── gradlew, gradle/wrapper/                                     # wrapper (kiwix-sourced)
+├── gradlew, gradle/wrapper/                                     # wrapper (verified Gradle 8.9, hash-pinned)
 ├── Scripts/fetch_engine_lib.sh        # cross-compiles the engine -> jniLibs (gitignored)
 └── app/
     ├── build.gradle.kts               # minSdk 29, target/compile 35, CMake, Compose BOM

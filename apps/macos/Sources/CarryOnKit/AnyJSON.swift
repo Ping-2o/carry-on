@@ -7,6 +7,16 @@
 
 import Foundation
 
+/// Decode-depth cap (RESOURCE-EXHAUSTION defense): a small, deeply nested file
+/// (`[[[[…]]]]`) passes any byte-size cap, but `AnyJSON.init(from:)` recurses
+/// once per nesting level — the cap bounds decoder stack depth. The box is
+/// threaded through JSONDecoder userInfo so nested containers share one counter.
+public enum AnyJSONDepth {
+    public static let key = CodingUserInfoKey(rawValue: "carryon.anyjson.depth")!
+    public static let limit = 512
+    public final class Box { public var depth = 0 }
+}
+
 public enum AnyJSON: Codable, Equatable, Sendable {
     case null
     case bool(Bool)
@@ -17,6 +27,13 @@ public enum AnyJSON: Codable, Equatable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
+        let box = (decoder.userInfo[AnyJSONDepth.key] as? AnyJSONDepth.Box) ?? AnyJSONDepth.Box()
+        if box.depth >= AnyJSONDepth.limit {
+            throw DecodingError.dataCorruptedError(
+                in: container, debugDescription: "JSON nested deeper than \(AnyJSONDepth.limit)")
+        }
+        box.depth += 1
+        defer { box.depth -= 1 }
         if container.decodeNil() {
             self = .null
         } else if let b = try? container.decode(Bool.self) {
@@ -95,5 +112,7 @@ public enum AnyJSON: Codable, Equatable, Sendable {
 /// Parse a JSON string, returning nil on malformed input.
 public func parseAnyJSON(_ text: String) -> AnyJSON? {
     guard let data = text.data(using: .utf8) else { return nil }
-    return try? JSONDecoder().decode(AnyJSON.self, from: data)
+    let decoder = JSONDecoder()
+    decoder.userInfo[AnyJSONDepth.key] = AnyJSONDepth.Box()
+    return try? decoder.decode(AnyJSON.self, from: data)
 }

@@ -8,8 +8,10 @@
  *
  * Every blocking FFI call (serve_cut, import_cut, serve/request_authority_transfer,
  * TLS accept/connect, negotiation) runs on Task.detached off the caller — the
- * pipeline actor never blocks. `carryon_session_bytes` is polled by a detached
- * poller and emitted live.
+ * pipeline actor never blocks. `carryon_session_bytes` is NEVER read while a
+ * blocking wire op is in flight on the same session: the C ABI guarantees no
+ * thread-safety for a CarryonSession, so counters are sampled only BETWEEN
+ * completed operations (sampleCounters below).
  */
 
 import CCarryon
@@ -458,286 +460,325 @@ public actor DemoPipeline {
             log("suspend", "request_suspend armed (§11.2; cleared on resume)")
         }
 
-        // Live byte counters while a transfer runs (measured, not estimated).
-        func startPoller(_ session: NetSession) -> Task<Void, Never> {
-            Task.detached(priority: .utility) {
-                while !Task.isCancelled {
-                    if let (s, r) = try? session.byteCounters() {
-                        emit(.counters(sent: s, recv: r))
+        // Counter discipline (review P1): a CarryonSession is NOT thread-safe
+        // (handle.rs as_mut contract: "not aliased elsewhere for the duration of
+        // the borrow"). A detached poller's in-flight byteCounters would race the
+        // blocking wire call itself (concurrent aliasing), and a cancelled-but-
+        // executing read against a freed handle would be a use-after-free. So
+        // there is NO poller: counters are sampled only BETWEEN completed wire
+        // operations, when the actor is provably the sole toucher of the handle.
+        func sampleCounters() {
+            if let (s, r) = try? destSession.byteCounters() {
+                emit(.counters(sent: s, recv: r))
+            }
+        }
+        do {
+            emit(.sessionState(side: .destination, session: mirrorSession, state: .importing))
+            let serveSrc0 = srcSession // snapshot: detached tasks capture lets, not vars
+            var serveTask = Task.detached(priority: .userInitiated) {
+                try sourceEngine.serveCut(session: serveSrc0)
+            }
+
+            let tImportStart = nowMs()
+            var outcome = try await attemptImport(destSession)
+            sampleCounters() // between ops only — never during a blocking call
+            var attempts = 1
+
+            // Completion loop: suspended → resume (§11.2); partial budget →
+            // replenish + FRESH connection + retry (published objects bank via
+            // store dedup, §6.8/§6.6). The engine closes the wire with Abort on a
+            // partial, so the source's serve_cut has returned by then.
+            // An import attempt that is REFUSED by the budget before any bytes move
+            // (code 500, first object over budget) is also a NORMAL §6.8 outcome —
+            // shown, then the budget is replenished and the import retried on the
+            // SAME connection (the source's serve loop never stopped).
+            func attemptImport(_ session: NetSession) async throws -> ImportOutcome {
+                do {
+                    let json = try await det("import_cut") {
+                        try destEngine.importCut(session: session, remoteSession: sourceSession, remoteCut: cut.number)
                     }
-                    try? await Task.sleep(nanoseconds: 100_000_000)
+                    return ImportOutcome.parse(json)
+                } catch let e as CarryonError where e.code == 500 && config.budgetRejection {
+                    return .budgetRefused(e)
                 }
             }
-        }
-        var poller = startPoller(destSession)
-
-        emit(.sessionState(side: .destination, session: mirrorSession, state: .importing))
-        let serveSrc0 = srcSession // snapshot: detached tasks capture lets, not vars
-        var serveTask = Task.detached(priority: .userInitiated) {
-            try sourceEngine.serveCut(session: serveSrc0)
-        }
-
-        let tImportStart = nowMs()
-        var outcome = try await attemptImport(destSession)
-        var attempts = 1
-
-        // Completion loop: suspended → resume (§11.2); partial budget →
-        // replenish + FRESH connection + retry (published objects bank via
-        // store dedup, §6.8/§6.6). The engine closes the wire with Abort on a
-        // partial, so the source's serve_cut has returned by then.
-        // An import attempt that is REFUSED by the budget before any bytes move
-        // (code 500, first object over budget) is also a NORMAL §6.8 outcome —
-        // shown, then the budget is replenished and the import retried on the
-        // SAME connection (the source's serve loop never stopped).
-        func attemptImport(_ session: NetSession) async throws -> ImportOutcome {
-            do {
-                let json = try await det("import_cut") {
-                    try destEngine.importCut(session: session, remoteSession: sourceSession, remoteCut: cut.number)
+            importLoop: while true {
+                if attempts > 6 {
+                    throw CarryonError(code: 400, message: "import did not settle after \(attempts) attempts")
                 }
-                return ImportOutcome.parse(json)
-            } catch let e as CarryonError where e.code == 500 && config.budgetRejection {
-                return .budgetRefused(e)
-            }
-        }
-        importLoop: while true {
-            if attempts > 6 {
-                throw CarryonError(code: 400, message: "import did not settle after \(attempts) attempts")
-            }
-            switch outcome {
-            case .completed(let mirrorCut):
-                log("import_outcome", "{\"completed\":true,\"mirror_cut\":\(mirrorCut)}")
-                break importLoop
-            case .suspended(let token):
-                log("import_outcome", "{\"suspended\":true}  resume_token=\(token.prefix(72))…")
-                log("resume", "carryon_resume_import (attempt \(attempts + 1))")
-                let ds = destSession // snapshot for the detached call
-                let resumeJSON = try await det("resume_import") {
-                    try destEngine.resumeImport(session: ds, resumeTokenJSON: token)
+                switch outcome {
+                case .completed(let mirrorCut):
+                    log("import_outcome", "{\"completed\":true,\"mirror_cut\":\(mirrorCut)}")
+                    break importLoop
+                case .suspended(let token):
+                    log("import_outcome", "{\"suspended\":true}  resume_token=\(token.prefix(72))…")
+                    log("resume", "carryon_resume_import (attempt \(attempts + 1))")
+                    let ds = destSession // snapshot for the detached call
+                    let resumeJSON = try await det("resume_import") {
+                        try destEngine.resumeImport(session: ds, resumeTokenJSON: token)
+                    }
+                    outcome = ImportOutcome.parse(resumeJSON)
+                    sampleCounters()
+                    attempts += 1
+                    continue
+                case .budgetRefused(let e):
+                    log("import_outcome", "refused before any bytes: \(e.description)  (fail closed, §6.8)")
+                    log("budget", "replenished → retry (same connection; published nothing yet)")
+                    try destEngine.setBudget(json: generousBudgetJSON)
+                    outcome = try await attemptImport(destSession)
+                    sampleCounters()
+                    attempts += 1
+                    continue
+                case .partialBudget:
+                    // Budget rejection is a NORMAL, visible outcome (§6.8): fail closed —
+                    // nothing sealed until the closure completes; published objects keep.
+                    log("import_outcome", "partial_budget=true  (budget admission visible, §6.8; fail closed)")
+                    log("budget", "replenished → retry on a fresh connection (published objects skipped by dedup)")
+                    try destEngine.setBudget(json: generousBudgetJSON)
+                    // The wire closed with BUDGET_PARTIAL Abort: absorb the source's
+                    // serve_cut result, then open a fresh TLS hop for the retry.
+                    _ = try? await serveTask.value
+                    (_, srcSession, destSession) = try await openTransport()
+                    let serveSrcN = srcSession // snapshot for the detached call
+                    serveTask = Task.detached(priority: .userInitiated) {
+                        try sourceEngine.serveCut(session: serveSrcN)
+                    }
+                    outcome = try await attemptImport(destSession)
+                    sampleCounters()
+                    attempts += 1
+                    continue
+                case .other(let raw):
+                    throw CarryonError(code: 400, message: "unexpected import outcome: \(raw)")
                 }
-                outcome = ImportOutcome.parse(resumeJSON)
-                attempts += 1
-                continue
-            case .budgetRefused(let e):
-                log("import_outcome", "refused before any bytes: \(e.description)  (fail closed, §6.8)")
-                log("budget", "replenished → retry (same connection; published nothing yet)")
-                try destEngine.setBudget(json: generousBudgetJSON)
-                outcome = try await attemptImport(destSession)
-                attempts += 1
-                continue
-            case .partialBudget:
-                // Budget rejection is a NORMAL, visible outcome (§6.8): fail closed —
-                // nothing sealed until the closure completes; published objects keep.
-                log("import_outcome", "partial_budget=true  (budget admission visible, §6.8; fail closed)")
-                log("budget", "replenished → retry on a fresh connection (published objects skipped by dedup)")
-                try destEngine.setBudget(json: generousBudgetJSON)
-                // The wire closed with BUDGET_PARTIAL Abort: absorb the source's
-                // serve_cut result, then open a fresh TLS hop for the retry.
-                _ = try? await serveTask.value
-                poller.cancel()
-                (_, srcSession, destSession) = try await openTransport()
-                poller = startPoller(destSession)
-                let serveSrcN = srcSession // snapshot for the detached call
-                serveTask = Task.detached(priority: .userInitiated) {
-                    try sourceEngine.serveCut(session: serveSrcN)
-                }
-                outcome = try await attemptImport(destSession)
-                attempts += 1
-                continue
-            case .other(let raw):
-                throw CarryonError(code: 400, message: "unexpected import outcome: \(raw)")
             }
-        }
-        guard case .completed(let mirrorCut) = outcome else {
-            throw CarryonError(code: 400, message: "import never completed: \(outcome)")
-        }
-        _ = try await serveTask.value // serve_cut returns on ImportComplete
+            guard case .completed(let mirrorCut) = outcome else {
+                throw CarryonError(code: 400, message: "import never completed: \(outcome)")
+            }
+            _ = try await serveTask.value // serve_cut returns on ImportComplete
 
-        let bytesAfterImport = try destSession.byteCounters()
-        emit(.counters(sent: bytesAfterImport.sent, recv: bytesAfterImport.recv))
-        let timeToActionReadyMs = nowMs() - tImportStart
-        log("mirror_session", "\(mirrorSession)  mirror_cut=\(mirrorCut)")
-        log("bytes", "sent=\(bytesAfterImport.sent) recv=\(bytesAfterImport.recv)")
-        emit(.sessionState(side: .destination, session: mirrorSession, state: .actionReady))
+            let bytesAfterImport = try destSession.byteCounters()
+            emit(.counters(sent: bytesAfterImport.sent, recv: bytesAfterImport.recv))
+            let timeToActionReadyMs = nowMs() - tImportStart
+            log("mirror_session", "\(mirrorSession)  mirror_cut=\(mirrorCut)")
+            log("bytes", "sent=\(bytesAfterImport.sent) recv=\(bytesAfterImport.recv)")
+            emit(.sessionState(side: .destination, session: mirrorSession, state: .actionReady))
 
-        // Prove the SAME logical session restored (editor scenario, per carryon_l3.c).
-        var restoreAgreed = false
-        if config.scenario == .editorL3 {
-            let restore = try await det("session.restore") {
+            // Prove the SAME logical session restored (editor scenario, per carryon_l3.c).
+            // restore_latency_ms is the MEASURED duration of session.restore itself
+            // (review P2: it used to reuse timeToActionReady — the import
+            // duration, not the restore op). 0.0 when the op never runs.
+            var restoreAgreed = false
+            var restoreLatencyMs: Double = 0
+            if config.scenario == .editorL3 {
+                let tRestoreStart = nowMs()
+                let restore = try await det("session.restore") {
+                    try destEngine.executeActionAs(
+                        cut: CutRef(session: mirrorSession, number: mirrorCut),
+                        class: "session.restore", params: .object([:]),
+                        adapterID: DemoScenario.editorL3.adapterID)
+                }
+                restoreLatencyMs = nowMs() - tRestoreStart
+                restoreAgreed = restore.oracleAgreed
+                log("session.restore", "oracle agreed=\(restoreAgreed)  (\(String(format: "%.1f", restoreLatencyMs)) ms)")
+            }
+            emit(.stageFinished(.transfer, .ok))
+
+            // ---- 6. AUTHORITY -------------------------------------------------
+            emit(.stageStarted(.authority))
+            logPlain("stage 6/8:  AUTHORITY")
+            var newEpoch: UInt64?
+            var mayMutateDest = false
+            var mayMutateSource = true
+            var authorityOutcome = StageOutcome.ok
+            if config.scenario.supportsAuthorityTransfer {
+                let pre = try destEngine.mayMutate(sessionID: mirrorSession)
+                log("may_mutate(dest) pre-transfer", "\(pre)")
+                emit(.mutationFlipped(side: .destination, session: mirrorSession, may: pre))
+                if pre {
+                    // Mirror must not start authoritative (§21.2) — enforce, don't
+                    // just log (mirrors Android DemoRunner.kt:594-598, E_AUTH_BASE+2).
+                    throw CarryonError(code: CARRYON_E_AUTH_BASE + 2,
+                                       message: "mirror must not start authoritative")
+                }
+
+                // serve_authority_transfer (source) ⇄ request_authority_transfer
+                // (dest): both block, so they run as a pair on detached tasks.
+                // Snapshot the sessions: detached tasks capture lets, not vars.
+                let authSrc = srcSession
+                let authDst = destSession
+                async let serveReceipt: String = det("serve_authority_transfer") {
+                    try sourceEngine.serveAuthorityTransfer(session: authSrc,
+                                                            sessionID: sourceSession,
+                                                            cutNumber: cut.number)
+                }
+                let requestReceipt = try await det("request_authority_transfer") {
+                    try destEngine.requestAuthorityTransfer(session: authDst,
+                                                            mirrorSessionID: mirrorSession,
+                                                            adapterID: config.scenario.adapterID)
+                }
+                let servedReceipt = try await serveReceipt
+                log("receipt", requestReceipt)
+                log("receipt_source", servedReceipt)
+
+                mayMutateDest = try destEngine.mayMutate(sessionID: mirrorSession)
+                mayMutateSource = try sourceEngine.mayMutate(sessionID: sourceSession)
+                log("may_mutate(dest) post-transfer", "\(mayMutateDest)   (owner, new epoch)")
+                log("may_mutate(source) post-relinquishment", "\(mayMutateSource)   (read-only replica)")
+                emit(.mutationFlipped(side: .destination, session: mirrorSession, may: mayMutateDest))
+                emit(.mutationFlipped(side: .source, session: sourceSession, may: mayMutateSource))
+                emit(.sessionState(side: .source, session: sourceSession, state: .readOnlyActive))
+                if !(mayMutateDest && !mayMutateSource) {
+                    // Single-writer flip violated (§21.2) — mirrors DemoRunner.kt:630-636.
+                    throw CarryonError(code: CARRYON_E_AUTH_BASE,
+                                       message: "single-writer flip violated (§21.2)")
+                }
+                if let v = parseAnyJSON(requestReceipt), case .object(let o) = v,
+                   let epoch = o["new_epoch"]?.numberValue {
+                    newEpoch = UInt64(epoch)
+                }
+            } else {
+                // Honest skip: org.carryon.graph declares supports_authority_transfer:false.
+                let note = "org.carryon.graph declares supports_authority_transfer:false — L4 single-writer transfer is the editor flagship (§2 labels honest)"
+                log("skipped", note)
+                mayMutateDest = false
+                mayMutateSource = true
+                authorityOutcome = .skipped(note)
+            }
+            emit(.stageFinished(.authority, authorityOutcome))
+
+            // ---- 7. EDIT --------------------------------------------------------
+            emit(.stageStarted(.edit))
+            logPlain("stage 7/8:  EDIT")
+            // Disconnect the transport before the continuation edit (source-off, as
+            // carryon_l3.c does): receipts are durable; the edit runs store-local.
+            let finalBytes = try destSession.byteCounters()
+            let hops = allSessions // snapshot: detached tasks capture lets, not vars
+            try await det("session_teardown") {
+                for s in hops { s.teardown() } // every hop, including retries
+            }
+            log("transport", "disconnected (source-off continuation)")
+            emit(.counters(sent: finalBytes.sent, recv: finalBytes.recv))
+            // Source-off means the SOURCE ENGINE closes too, not just the
+            // transport: authority has moved (editor) or the handoff is complete
+            // (graph), the receipts are durable, and the destination continues
+            // alone. Leaving the engine context alive would make "source-off"
+            // a half-truth (review finding: engine outlived the disconnect).
+            try await det("core_free_source") { sourceEngine.close() }
+            log("source_engine", "closed — destination continues alone")
+
+            let tEditStart = nowMs()
+            let edit = try await det("execute_action_as") {
                 try destEngine.executeActionAs(
                     cut: CutRef(session: mirrorSession, number: mirrorCut),
-                    class: "session.restore", params: .object([:]),
-                    adapterID: DemoScenario.editorL3.adapterID)
+                    class: config.scenario.editClass, params: config.scenario.editParams,
+                    adapterID: config.scenario.adapterID)
             }
-            restoreAgreed = restore.oracleAgreed
-            log("session.restore", "oracle agreed=\(restoreAgreed)")
-        }
-        emit(.stageFinished(.transfer, .ok))
-
-        // ---- 6. AUTHORITY -------------------------------------------------
-        emit(.stageStarted(.authority))
-        logPlain("stage 6/8:  AUTHORITY")
-        var newEpoch: UInt64?
-        var mayMutateDest = false
-        var mayMutateSource = true
-        var authorityOutcome = StageOutcome.ok
-        if config.scenario.supportsAuthorityTransfer {
-            let pre = try destEngine.mayMutate(sessionID: mirrorSession)
-            log("may_mutate(dest) pre-transfer", "\(pre)")
-            emit(.mutationFlipped(side: .destination, session: mirrorSession, may: pre))
-
-            // serve_authority_transfer (source) ⇄ request_authority_transfer
-            // (dest): both block, so they run as a pair on detached tasks.
-            // Snapshot the sessions: detached tasks capture lets, not vars.
-            let authSrc = srcSession
-            let authDst = destSession
-            async let serveReceipt: String = det("serve_authority_transfer") {
-                try sourceEngine.serveAuthorityTransfer(session: authSrc,
-                                                        sessionID: sourceSession,
-                                                        cutNumber: cut.number)
+            let editMs = nowMs() - tEditStart
+            log("action", config.scenario.editClass)
+            log("output_hash", edit.output_hash)
+            log("oracle", "agreed=\(edit.oracleAgreed) checked=\(edit.oracle.checked)")
+            if !edit.oracleAgreed {
+                // Independent-edit oracle disagreed — mirrors DemoRunner.kt:666-675
+                // (E_ACTION_BASE+3). Safe for the graph scenario too: its oracle
+                // always reports checked:true, and a checked disagreement already
+                // fails in the core first (OracleFailure).
+                throw CarryonError(code: CARRYON_E_ACTION_BASE + 3,
+                                   message: "independent-edit oracle disagreed")
             }
-            let requestReceipt = try await det("request_authority_transfer") {
-                try destEngine.requestAuthorityTransfer(session: authDst,
-                                                        mirrorSessionID: mirrorSession,
-                                                        adapterID: config.scenario.adapterID)
+            if !config.scenario.supportsAuthorityTransfer {
+                log("note", "may_mutate stays false — \(config.scenario.editClass) is a read-only computation (no authority moved)")
             }
-            let servedReceipt = try await serveReceipt
-            log("receipt", requestReceipt)
-            log("receipt_source", servedReceipt)
+            emit(.stageFinished(.edit, .ok))
 
-            mayMutateDest = try destEngine.mayMutate(sessionID: mirrorSession)
-            mayMutateSource = try sourceEngine.mayMutate(sessionID: sourceSession)
-            log("may_mutate(dest) post-transfer", "\(mayMutateDest)   (owner, new epoch)")
-            log("may_mutate(source) post-relinquishment", "\(mayMutateSource)   (read-only replica)")
-            emit(.mutationFlipped(side: .destination, session: mirrorSession, may: mayMutateDest))
-            emit(.mutationFlipped(side: .source, session: sourceSession, may: mayMutateSource))
-            emit(.sessionState(side: .source, session: sourceSession, state: .readOnlyActive))
-            if let v = parseAnyJSON(requestReceipt), case .object(let o) = v,
-               let epoch = o["new_epoch"]?.numberValue {
-                newEpoch = UInt64(epoch)
+            // ---- 8. EVIDENCE ----------------------------------------------------
+            emit(.stageStarted(.evidence))
+            logPlain("stage 8/8:  EVIDENCE")
+            let level = config.scenario == .editorL3 ? "L3-structured-continuation" : "L2-graph-handoff"
+            let extra: AnyJSON = .object([
+                "level": .string(level),
+                "mirror_session_id": .string(mirrorSession),
+                "mirror_cut": .number(Double(mirrorCut)),
+                "source_session_id": .string(sourceSession),
+                "bytes_transferred_sent": .number(Double(finalBytes.sent)),
+                "bytes_transferred_recv": .number(Double(finalBytes.recv)),
+                "bytes_recv_to_action_ready": .number(Double(bytesAfterImport.recv)),
+                "time_to_action_ready_ms": .number(timeToActionReadyMs),
+                "restore_latency_ms": .number(restoreLatencyMs),
+                "source_independence_ms": .number(editMs),
+                "independent_edit_ms": .number(editMs),
+                "authoritative_objects": .array(config.scenario == .editorL3
+                    ? [.string("editor.document.v1"), .string("editor.unsaved_edits.v1"), .string("editor.meta.v1")]
+                    : [.string("graph.sample.v1")]),
+                "optional_objects": .array(config.scenario == .editorL3
+                    ? [.string("editor.navigation.v1")] : []),
+                "oracle_restore_agreed": .bool(restoreAgreed),
+                "oracle_independent_edit_agreed": .bool(edit.oracleAgreed),
+                "authority_transfer": .string(config.scenario.supportsAuthorityTransfer
+                    ? "single-writer; durable receipts before epoch move (§21.2)"
+                    : "skipped (adapter declares supports_authority_transfer:false)"),
+                "endpoint_changed_symbols_note": .string("separate symbol-distance metric (spec 5.6); not bytes/runtime; see mathview"),
+            ])
+            let bundleJSON = try await det("export_evidence_with") {
+                try destEngine.exportEvidence(sessionID: mirrorSession, extraMetricsJSON: extra.jsonEncoded)
             }
-        } else {
-            // Honest skip: org.carryon.graph declares supports_authority_transfer:false.
-            let note = "org.carryon.graph declares supports_authority_transfer:false — L4 single-writer transfer is the editor flagship (§2 labels honest)"
-            log("skipped", note)
-            mayMutateDest = false
-            mayMutateSource = true
-            authorityOutcome = .skipped(note)
-        }
-        emit(.stageFinished(.authority, authorityOutcome))
+            let evidencePath = dstDir + "/demo-evidence.json"
+            try bundleJSON.write(toFile: evidencePath, atomically: true, encoding: .utf8)
+            let verify = try await det("verify_evidence") {
+                try destEngine.verifyEvidence(atPath: evidencePath)
+            }
+            log("bundle", evidencePath)
+            log("metrics", "level=\(level) sent=\(finalBytes.sent) recv=\(finalBytes.recv) tta_ms=\(String(format: "%.1f", timeToActionReadyMs))")
+            log("verify", "{\"ok\":\(verify.ok),\"message\":\"\(verify.message)\"}")
+            emit(.stageFinished(.evidence, verify.ok ? .ok : .failed("verify ok:\(verify.ok)")))
 
-        // ---- 7. EDIT --------------------------------------------------------
-        emit(.stageStarted(.edit))
-        logPlain("stage 7/8:  EDIT")
-        // Disconnect the transport before the continuation edit (source-off, as
-        // carryon_l3.c does): receipts are durable; the edit runs store-local.
-        let finalBytes = try destSession.byteCounters()
-        poller.cancel()
-        let hops = allSessions // snapshot: detached tasks capture lets, not vars
-        try await det("session_teardown") {
-            for s in hops { s.teardown() } // every hop, including retries
-        }
-        log("transport", "disconnected (source-off continuation)")
-        emit(.counters(sent: finalBytes.sent, recv: finalBytes.recv))
+            let elapsed = nowMs() - t0
+            logBlank()
+            logPlain(String(format: "done:  8/8 stages in %.1f ms", elapsed))
+            logBlank()
 
-        let tEditStart = nowMs()
-        let edit = try await det("execute_action_as") {
-            try destEngine.executeActionAs(
-                cut: CutRef(session: mirrorSession, number: mirrorCut),
-                class: config.scenario.editClass, params: config.scenario.editParams,
-                adapterID: config.scenario.adapterID)
+            // Fixed footer, verbatim from plan.md, then the result.
+            for l in DemoResult.disclosureLines {
+                logPlain(l)
+            }
+            let result = DemoResult(
+                ok: verify.ok,
+                scenario: config.scenario,
+                workRoot: root,
+                evidencePath: evidencePath,
+                bundleJSON: bundleJSON,
+                bundle: EvidenceBundle.parse(bundleJSON),
+                verifyOK: verify.ok,
+                verifyMessage: verify.message,
+                sourceSessionID: sourceSession,
+                mirrorSessionID: mirrorSession,
+                mirrorCut: mirrorCut,
+                newEpoch: newEpoch,
+                sourcePin: sourcePin,
+                destPin: destPin,
+                bytesSent: finalBytes.sent,
+                bytesRecv: finalBytes.recv,
+                mayMutateDestination: mayMutateDest,
+                mayMutateSource: mayMutateSource,
+                localTrustJSON: pairing.localTrustJSON,
+                remoteTrustJSON: pairing.remoteTrustJSON,
+                sourceTimeline: [.preparing, .cutProposed, .cutSealed, .importing, .readOnlyActive],
+                destTimeline: [.preparing, .importing, .actionReady],
+                stageOutcomes: [
+                    .open: .ok, .identity: .ok, .pair: .ok, .session: .ok,
+                    .transfer: .ok, .authority: authorityOutcome, .edit: .ok,
+                    .evidence: verify.ok ? .ok : .failed("verify ok:\(verify.ok)"),
+                ],
+                console: lines,
+                elapsedMS: elapsed,
+                failure: nil)
+            emit(.finished(result))
+            return result
+        } catch {
+            // Failure paths never free sessions (handles leak per the macOS
+            // convention). Nothing to join: no detached task touches a session
+            // concurrently — counters are sampled between operations only.
+            throw error
         }
-        let editMs = nowMs() - tEditStart
-        log("action", config.scenario.editClass)
-        log("output_hash", edit.output_hash)
-        log("oracle", "agreed=\(edit.oracleAgreed) checked=\(edit.oracle.checked)")
-        if !config.scenario.supportsAuthorityTransfer {
-            log("note", "may_mutate stays false — \(config.scenario.editClass) is a read-only computation (no authority moved)")
-        }
-        emit(.stageFinished(.edit, .ok))
-
-        // ---- 8. EVIDENCE ----------------------------------------------------
-        emit(.stageStarted(.evidence))
-        logPlain("stage 8/8:  EVIDENCE")
-        let level = config.scenario == .editorL3 ? "L3-structured-continuation" : "L2-graph-handoff"
-        let extra: AnyJSON = .object([
-            "level": .string(level),
-            "mirror_session_id": .string(mirrorSession),
-            "mirror_cut": .number(Double(mirrorCut)),
-            "source_session_id": .string(sourceSession),
-            "bytes_transferred_sent": .number(Double(finalBytes.sent)),
-            "bytes_transferred_recv": .number(Double(finalBytes.recv)),
-            "bytes_recv_to_action_ready": .number(Double(bytesAfterImport.recv)),
-            "time_to_action_ready_ms": .number(timeToActionReadyMs),
-            "restore_latency_ms": .number(timeToActionReadyMs),
-            "source_independence_ms": .number(editMs),
-            "independent_edit_ms": .number(editMs),
-            "authoritative_objects": .array(config.scenario == .editorL3
-                ? [.string("editor.document.v1"), .string("editor.unsaved_edits.v1"), .string("editor.meta.v1")]
-                : [.string("graph.sample.v1")]),
-            "optional_objects": .array(config.scenario == .editorL3
-                ? [.string("editor.navigation.v1")] : []),
-            "oracle_restore_agreed": .bool(restoreAgreed),
-            "oracle_independent_edit_agreed": .bool(edit.oracleAgreed),
-            "authority_transfer": .string(config.scenario.supportsAuthorityTransfer
-                ? "single-writer; durable receipts before epoch move (§21.2)"
-                : "skipped (adapter declares supports_authority_transfer:false)"),
-            "endpoint_changed_symbols_note": .string("separate symbol-distance metric (spec 5.6); not bytes/runtime; see mathview"),
-        ])
-        let bundleJSON = try await det("export_evidence_with") {
-            try destEngine.exportEvidence(sessionID: mirrorSession, extraMetricsJSON: extra.jsonEncoded)
-        }
-        let evidencePath = dstDir + "/demo-evidence.json"
-        try bundleJSON.write(toFile: evidencePath, atomically: true, encoding: .utf8)
-        let verify = try await det("verify_evidence") {
-            try destEngine.verifyEvidence(atPath: evidencePath)
-        }
-        log("bundle", evidencePath)
-        log("metrics", "level=\(level) sent=\(finalBytes.sent) recv=\(finalBytes.recv) tta_ms=\(String(format: "%.1f", timeToActionReadyMs))")
-        log("verify", "{\"ok\":\(verify.ok),\"message\":\"\(verify.message)\"}")
-        emit(.stageFinished(.evidence, verify.ok ? .ok : .failed("verify ok:\(verify.ok)")))
-
-        let elapsed = nowMs() - t0
-        logBlank()
-        logPlain(String(format: "done:  8/8 stages in %.1f ms", elapsed))
-        logBlank()
-
-        // Fixed footer, verbatim from plan.md, then the result.
-        for l in DemoResult.disclosureLines {
-            logPlain(l)
-        }
-        let result = DemoResult(
-            ok: verify.ok,
-            scenario: config.scenario,
-            workRoot: root,
-            evidencePath: evidencePath,
-            bundleJSON: bundleJSON,
-            bundle: EvidenceBundle.parse(bundleJSON),
-            verifyOK: verify.ok,
-            verifyMessage: verify.message,
-            sourceSessionID: sourceSession,
-            mirrorSessionID: mirrorSession,
-            mirrorCut: mirrorCut,
-            newEpoch: newEpoch,
-            sourcePin: sourcePin,
-            destPin: destPin,
-            bytesSent: finalBytes.sent,
-            bytesRecv: finalBytes.recv,
-            mayMutateDestination: mayMutateDest,
-            mayMutateSource: mayMutateSource,
-            localTrustJSON: pairing.localTrustJSON,
-            remoteTrustJSON: pairing.remoteTrustJSON,
-            sourceTimeline: [.preparing, .cutProposed, .cutSealed, .importing, .readOnlyActive],
-            destTimeline: [.preparing, .importing, .actionReady],
-            stageOutcomes: [
-                .open: .ok, .identity: .ok, .pair: .ok, .session: .ok,
-                .transfer: .ok, .authority: authorityOutcome, .edit: .ok,
-                .evidence: verify.ok ? .ok : .failed("verify ok:\(verify.ok)"),
-            ],
-            console: lines,
-            elapsedMS: elapsed,
-            failure: nil)
-        emit(.finished(result))
-        return result
     }
 }
 

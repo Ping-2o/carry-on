@@ -252,10 +252,16 @@ public final class NetListener: @unchecked Sendable {
 
 /// A TLS 1.3 transport session (`CarryonSession` in C) with mutual cert pinning.
 ///
-/// @unchecked Sendable: raw C handle. The demo pipeline serializes wire calls
-/// per session (serve on source, import on destination, counters via the
-/// documented `carryon_session_bytes` read).
+/// @unchecked Sendable: raw C handle. The C ABI (carryon.h) guarantees NO
+/// thread-safety for a CarryonSession — it must not be aliased across threads
+/// (handle.rs as_mut contract: "not aliased elsewhere for the duration of the
+/// borrow"). All short handle access here (negotiate, counters, teardown) is
+/// serialized by `lock`; long wire calls (import/serve/authority) are confined
+/// to one flow by the pipeline. Counter reads happen ONLY between completed
+/// wire operations (see DemoPipeline.sampleCounters) — never concurrently with
+/// a blocking call on the same session, and never from a background poller.
 public final class NetSession: @unchecked Sendable {
+    private let lock = NSLock()
     var handle: OpaquePointer?
 
     /// Connect as client to `addr`, pinning the server against `trust` (§18.5).
@@ -281,6 +287,8 @@ public final class NetSession: @unchecked Sendable {
     }
 
     deinit {
+        lock.lock()
+        defer { lock.unlock() }
         if let handle { carryon_session_free(handle) }
     }
 
@@ -288,6 +296,8 @@ public final class NetSession: @unchecked Sendable {
     /// frees the underlying handle immediately; idempotent. The durable
     /// authority receipts are NOT affected (§21.2).
     public func teardown() {
+        lock.lock()
+        defer { lock.unlock() }
         if let handle {
             carryon_session_free(handle)
             self.handle = nil
@@ -298,14 +308,18 @@ public final class NetSession: @unchecked Sendable {
     /// peer's feature list.
     public func clientNegotiate(features: [String]) throws -> [String] {
         try negotiate(features: features) { f, out in
-            if let h = handle { carryon_session_client_negotiate(h, f, out) } else { -5 }
+            lock.lock(); defer { lock.unlock() }
+            if let h = handle { return carryon_session_client_negotiate(h, f, out) }
+            return -5
         }
     }
 
     /// Server negotiation: expect Hello, reply Welcome(features).
     public func serverNegotiate(features: [String]) throws -> [String] {
         try negotiate(features: features) { f, out in
-            if let h = handle { carryon_session_server_negotiate(h, f, out) } else { -5 }
+            lock.lock(); defer { lock.unlock() }
+            if let h = handle { return carryon_session_server_negotiate(h, f, out) }
+            return -5
         }
     }
 
@@ -324,7 +338,12 @@ public final class NetSession: @unchecked Sendable {
     }
 
     /// Measured wire-byte counters (length prefix + body; real, not estimates).
+    /// Call only while NO blocking wire op (serve/import/resume/authority) is
+    /// in flight on this session — a CarryonSession handle must never be
+    /// aliased (carryon.h documents no thread-safety).
     public func byteCounters() throws -> (sent: UInt64, recv: UInt64) {
+        lock.lock()
+        defer { lock.unlock() }
         guard let handle else { return (0, 0) }
         var sent: UInt64 = 0, recv: UInt64 = 0
         try CarryonError.check(carryon_session_bytes(handle, &sent, &recv), "carryon_session_bytes")

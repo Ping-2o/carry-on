@@ -90,7 +90,18 @@ public final class Engine: @unchecked Sendable {
         self.dataDir = dataDir
     }
 
-    deinit { carryon_core_free(handle) }
+    deinit { if !closed { carryon_core_free(handle) } }
+
+    /// Deterministic close (the "source-off" act): frees the core handle NOW so
+    /// the engine context is gone while the destination continues alone;
+    /// idempotent, and `deinit` never double-frees.
+    public func close() {
+        guard !closed else { return }
+        closed = true
+        carryon_core_free(handle)
+    }
+
+    private var closed = false
 
     /// Recovery report JSON (§19.3): interrupted transfers, hidden staged
     /// objects, ambiguous sessions, journal truncation, overall cleanliness.

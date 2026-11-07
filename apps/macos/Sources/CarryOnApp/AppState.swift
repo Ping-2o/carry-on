@@ -40,13 +40,24 @@ final class DemoModel {
     private(set) var mayMutateDest: Bool?
     private(set) var mayMutateSource: Bool?
 
+    /// Run identity: events and completion effects from a superseded pipeline
+    /// are dropped by token, so a stale run can never write the shared model
+    /// (single-run invariant, §2 label law — mirrors the Android DemoRunner's
+    /// whole-pipeline mutex).
+    private var runToken = UUID()
+
     func reset() {
+        // Never wipe state under a live run: `running` is the flag run()'s
+        // re-entrancy guard reads — clearing it here (⌘N mid-run) would admit
+        // a second concurrent pipeline. run() itself resets before starting.
+        guard !running else { return }
         running = false
         runningStage = nil
         stageStates = Dictionary(uniqueKeysWithValues: DemoStage.allCases.map { ($0, .pending) })
         consoleLines = []
         bytesSent = 0
         bytesRecv = 0
+        lastResult = nil // per-run state: a failed/absent run must not inherit a prior run's outcome (§2/EVD-003)
         lastError = nil
         sourceSessions = []
         destSessions = []
@@ -60,14 +71,18 @@ final class DemoModel {
         guard !running else { return }
         reset()
         running = true
-        defer { running = false }
+        let token = UUID()
+        runToken = token
+        defer { if runToken == token { running = false } }
         do {
             let result = try await DemoPipeline().run(config) { [weak self] event in
                 let s = self
+                let t = token
                 Task { @MainActor in
-                    s?.apply(event)
+                    s?.apply(event, token: t)
                 }
             }
+            guard runToken == token else { return }
             lastResult = result
             mayMutateDest = result.mayMutateDestination
             mayMutateSource = result.mayMutateSource
@@ -75,8 +90,10 @@ final class DemoModel {
                 stageStates[.evidence] = .finished(.ok)
             }
         } catch is CancellationError {
+            guard runToken == token else { return }
             lastError = "run cancelled"
         } catch {
+            guard runToken == token else { return }
             lastError = error.localizedDescription
             if let runningStage {
                 stageStates[runningStage] = .finished(.failed(error.localizedDescription))
@@ -84,7 +101,8 @@ final class DemoModel {
         }
     }
 
-    private func apply(_ event: DemoEvent) {
+    private func apply(_ event: DemoEvent, token: UUID) {
+        guard token == runToken else { return } // drop superseded runs' events
         switch event {
         case .console(let line):
             consoleLines.append(line)
@@ -163,17 +181,27 @@ final class TopologyModel {
     }
 
     /// Merge the paired trust stores produced by a demo run into the persisted one.
+    /// Merge INTO the persisted store: prior pins — including revoked records
+    /// (revoked=true + bumped trust_generation, the durable §18.4.9 carrier) —
+    /// survive every demo run. (Android sibling: TopologyStore.recordDemoPairing.)
     func absorbPairing(localJSON: String, remoteJSON: String) {
-        guard let merged = try? TrustStore.fromJSON(localJSON) else { return }
+        // Seed from the CURRENT persisted store, never from the fresh pairing
+        // halves — each half is a brand-new single-pin store (pairing.rs
+        // pair_devices), so seeding from it would replace the whole ledger.
+        let baseJSON = trustJSON.isEmpty ? "{\"peers\":{}}" : trustJSON
+        guard let merged = try? TrustStore.fromJSON(baseJSON) else { return }
+        // Snapshot the persisted records so revoked pins can be detected below.
+        let persisted = (try? merged.records()) ?? []
         // The peer record from the remote half is what THIS device keeps about
-        // the peer; pair both records into the persisted store by pin.
-        if let local = try? TrustStore.fromJSON(localJSON) {
-            for r in (try? local.records()) ?? [] where !r.pin_hex.isEmpty {
-                _ = try? merged.pair(name: r.device_name, pinHex: r.pin_hex, utc: r.paired_utc)
-            }
-        }
-        if let remote = try? TrustStore.fromJSON(remoteJSON) {
-            for r in (try? remote.records()) ?? [] where !r.pin_hex.isEmpty {
+        // the peer; pair both halves' records into the persisted store by pin.
+        for half in [localJSON, remoteJSON] {
+            guard let store = try? TrustStore.fromJSON(half) else { continue }
+            for r in (try? store.records()) ?? [] where !r.pin_hex.isEmpty {
+                // carryon_trust_pair OVERWRITES an existing record with
+                // revoked=false/trust_generation=0 — never resurrect a
+                // revoked pin (§18.4.9 fail-closed).
+                if let existing = persisted.first(where: { $0.pin_hex == r.pin_hex }),
+                   existing.revoked { continue }
                 _ = try? merged.pair(name: r.device_name, pinHex: r.pin_hex, utc: r.paired_utc)
             }
         }
@@ -208,15 +236,21 @@ final class AppState {
     /// hold pins only — no secrets, EVD-006-clean).
     func runDemo() async {
         await demo.run()
-        if let r = demo.lastResult {
-            topology.absorbPairing(localJSON: r.localTrustJSON,
-                                   remoteJSON: r.remoteTrustJSON)
-            evidenceJSON = r.bundleJSON
-        }
+        // Fail closed: only a run that completed without error may absorb its
+        // pairing and publish its evidence bundle. lastError is set on every
+        // failure path (thrown error or cancellation); a failed run must not
+        // re-present the previous run's result (§2/EVD-003).
+        guard demo.lastError == nil, let r = demo.lastResult else { return }
+        topology.absorbPairing(localJSON: r.localTrustJSON,
+                               remoteJSON: r.remoteTrustJSON)
+        evidenceJSON = r.bundleJSON
     }
 
     /// ⌘N — prepare a fresh run state and focus the Sessions pane.
+    /// Model-level refusal while a run is in flight (control-equivalence with
+    /// the Android sibling's DemoRunner: no state mutation mid-run).
     func newSession() {
+        guard !demo.running else { return }
         demo.reset()
         pane = .sessions
     }
