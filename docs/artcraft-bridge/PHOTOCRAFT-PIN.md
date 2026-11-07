@@ -9,6 +9,13 @@ All research in this directory was performed against this exact checkout:
   2026-10-28)
 - Workspace version at pin: `0.16.0`, edition 2024, `rust-version = 1.95`
 
+Dependency provenance (CI reproducibility, 2026-11-07): the `inprocess` feature
+in `crates/carryon-adapter-photocraft/Cargo.toml` pins this same commit through
+the canonical public URL (`https://github.com/storytold/photocraft`), NOT the
+local clone path — a `file:///Volumes/...` pin made the workspace
+unresolvable on any other machine. The local clone remains a convenient
+offline mirror only.
+
 PhotoCraft is an early-alpha project that moves fast (dozens of merged PRs on the
 days around this pin). Every file/line citation below is valid only for this
 commit. Re-verify before relying on any of it.

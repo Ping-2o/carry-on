@@ -20,9 +20,9 @@ carryon-adapter-api = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-photocraft-engine = { git = "file:///Volumes/ADATA ELITE SE880/compilation/photocraft", rev = "1f7fc0f53696e54da79b95015abb37d7c22cdd1a", optional = true }
-photocraft-automation = { git = "file:///Volumes/ADATA ELITE SE880/compilation/photocraft", rev = "1f7fc0f53696e54da79b95015abb37d7c22cdd1a", optional = true }
-photocraft-io = { git = "file:///Volumes/ADATA ELITE SE880/compilation/photocraft", rev = "1f7fc0f53696e54da79b95015abb37d7c22cdd1a", optional = true }
+photocraft-engine = { git = "https://github.com/storytold/photocraft", rev = "1f7fc0f53696e54da79b95015abb37d7c22cdd1a", optional = true }
+photocraft-automation = { git = "https://github.com/storytold/photocraft", rev = "1f7fc0f53696e54da79b95015abb37d7c22cdd1a", optional = true }
+photocraft-io = { git = "https://github.com/storytold/photocraft", rev = "1f7fc0f53696e54da79b95015abb37d7c22cdd1a", optional = true }
 
 [dev-dependencies]
 carryon-core = { workspace = true }

@@ -48,6 +48,22 @@ with the scope).
 
 ### Phase 4 — SDK + flagship integrations · `TARGET` (Phase 1 done on both flagship branches — unmerged; Phase 2 dispatched)
 
+> **App wrapper pilots (branch `apps/native-wrappers`, merged from `security-fix`
+> 2026-11-07):** both native app wrappers exist and are CI-compiled — macOS
+> (SwiftUI; `swift build` clean, full L3 loopback demo through the C ABI,
+> `swift run carryon-demo-smoke` exit 0 incl. graph/chunk/budget/suspend
+> scenarios, `CarryOn.app` assembled + ad-hoc codesigned) and Android (Gradle
+> Kotlin-DSL + Compose; **first-ever compile in CI 2026-11-07** —
+> `assembleDebug` green, debug APK artifact; the first compile surfaced and
+> fixed 3 latent resolution errors; JVM unit tests for the state-machine
+> guard). GitHub Actions CI runs the rust green gate + both app builds on
+> every PR. All demo evidence is OBSERVED (LOCAL) — one device, loopback TLS
+> 1.3; the Android Demo Mode has still **never run on a device**; no platform
+> is "supported" (§30 unrun). The Swift binding and the Kotlin/JNI shim are
+> the **first slices** of the two SDK checkboxes below — the checkboxes stay
+> unchecked until these ship as full SDKs. Claim table: `apps/README.md`.
+> Everything else in this phase is unchanged.
+
 - [ ] Swift Package over the C ABI (macOS/iOS).
 - [ ] Kotlin/JNI bindings (Android).
 - [ ] `carryon-adapter-photocraft`:
@@ -118,3 +134,6 @@ massive content, mass audience).
 | 2026-10-29 | Kiwix fmt fix on branch (`1138079`): workspace-wide `cargo fmt` — `factory.rs` formatting was missed by per-crate checks (the agent edited ffi outside its crate). Branch pushed; PR #2 updates. |
 | 2026-10-29 | **ArtCraft Phase 4 complete** (`artcraft-bridge`, agent gate 69 suites green): tile-splitting in core (cumulative+progressive §6.8 budget admission — a **pre-existing core budget hole found and fixed**; `ImportOutcome::PartialBudget`; ABI minor 0→1), real-photo split carry (5.93 MB vs 6.87 MB monolith; re-carry dedup 222,413 B wire vs 5.9 MB), and **PHYSICAL L4 — the flagship proof on hardware**: live app → split cut → Galaxy A04 (50,391 B), §21.2 ownership on device, mac source-off + read-only refusal, device fresh-process continuation. |
 | 2026-10-29 | **M1 CLOSED — both flagship bridges merged to main.** #2 (kiwix, `74a3afd`) then #3 (artcraft, `7cd1690`, rebased cleanly 20/20). Merged-tree gate: **202 tests / 0 failures, fmt clean, clippy -D warnings clean** on an isolated target dir. main now carries: both L3/L4 flagship adapters, tile-splitting core (cumulative §6.8 budgets + `ImportOutcome::PartialBudget`, ABI minor 1), physical L4 on hardware for both flagships, all evidence bundles. Next frontier: discovery → APK/signing → §30 × 2 (macOS + Android; iOS dropped by owner). |
+| 2026-11-05 | **App wrapper pilots landed** (branch `apps/native-wrappers`, unmerged): macOS SwiftUI app drives the full L3 demo pipeline through the C ABI (OBSERVED, LOCAL — one device, loopback TLS 1.3); Android Compose app build-ready `TARGET` (no SDK on the authoring machine; JNI shim NDK-syntax-checked, 49/49 Kotlin↔C symbols cross-checked, engine `.so` fetched). First slices of the Phase-4 SDK items — the SDK checkboxes remain unchecked. See `apps/README.md`. |
+| 2026-11-07 | **Review rounds on the app wrappers closed** (PR #5, merged into `apps/native-wrappers` as `faf48f5`): concurrent session polling removed (counters sampled between wire ops only), honest graph-authority skip, real source-off (source engine closes), UTC + NSD `pr` fixes, dest-only evidence metrics, Android timeout watchdog + zombie-pipeline isolation (generation guard + JVM unit tests, `testDebugUnitTest` in CI). Photocraft dependency pin now resolves via the canonical GitHub URL (workspace reproducible off the authoring machine). |
+| 2026-11-07 | **CI (GitHub Actions) + first-ever Android compile**: rust green gate + macOS smoke + Android `assembleDebug` on every PR; the first `compileDebugKotlin` found 3 latent resolution errors (fixed); Android build claim upgraded to `IMPLEMENTED` (CI compile) in `apps/README.md` — the app has still never RUN on a device. Merged-tree gate green (run 42371949597). |

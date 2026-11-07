@@ -1,0 +1,2 @@
+# Placeholder so the jniLibs/arm64-v8a directory is tracked. The engine binary
+# (libcarryon_ffi.so) is fetched by Scripts/fetch_engine_lib.sh and gitignored.
