@@ -198,34 +198,51 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 1
+      # Download each artifact BY NAME into a fixed dir (deterministic layout;
+      # a missing artifact — e.g. a failed platform — is tolerated).
       - uses: actions/download-artifact@v8
+        continue-on-error: true
         with:
-          pattern: screenshots-*
-          path: ${{ runner.temp }}/shots
+          name: screenshots-macos
+          path: ${{ runner.temp }}/shots/macos
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: screenshots-android
+          path: ${{ runner.temp }}/shots/android
       - name: Commit to docs/screenshots/
         id: commit
+        shell: bash -o pipefail {0}
         run: |
           set -e
-          for p in macos android; do
-            if [ -d "$RUNNER_TEMP/shots/screenshots-$p" ] && ls "$RUNNER_TEMP/shots/screenshots-$p"/*.png >/dev/null 2>&1; then
-              rm -rf "docs/screenshots/$p"
-              mkdir -p "docs/screenshots/$p"
-              cp "$RUNNER_TEMP/shots/screenshots-$p"/*.png "docs/screenshots/$p/"
-            fi
-          done
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/screenshots
-          if git diff --cached --quiet; then
-            echo "No screenshot changes"
-          else
-            git commit -m "docs(screenshots): update UI screenshots [skip ci]"
-            for i in 1 2 3; do
-              git pull --rebase origin "${{ github.head_ref }}" && git push origin HEAD:"${{ github.head_ref }}" && break
-              sleep 3
+          {
+            echo "== downloaded =="
+            find "$RUNNER_TEMP/shots" -maxdepth 3 2>/dev/null | sort || true
+            for p in macos android; do
+              n=$(find "$RUNNER_TEMP/shots/$p" -name '*.png' 2>/dev/null | wc -l)
+              echo "$p: $n png"
+              if [ "$n" -gt 0 ]; then
+                rm -rf "docs/screenshots/$p"
+                mkdir -p "docs/screenshots/$p"
+                find "$RUNNER_TEMP/shots/$p" -name '*.png' -exec cp {} "docs/screenshots/$p/" \;
+              fi
             done
-          fi
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            if [ -d docs/screenshots ]; then git add -A docs/screenshots; fi
+            if git diff --cached --quiet; then
+              echo "No screenshot changes"
+            else
+              git commit -m "docs(screenshots): update UI screenshots [skip ci]"
+              pushed=0
+              for i in 1 2 3; do
+                if git pull --rebase --depth=50 origin "${{ github.head_ref }}" && git push origin HEAD:"${{ github.head_ref }}"; then pushed=1; break; fi
+                sleep 3
+              done
+              test "$pushed" = 1
+            fi
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          } 2>&1 | tee -a "$RUNNER_TEMP/publish.log"
       - name: Gallery comment
         env:
           GH_TOKEN: ${{ github.token }}
@@ -258,3 +275,16 @@ jobs:
           else
             gh pr comment "$PR" --repo "$REPO" --body-file body.md
           fi
+      - name: Post the failure log to the PR
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "### ❌ Publish screenshots failed"
+            echo
+            echo '```'
+            tail -n 80 "$RUNNER_TEMP/publish.log" 2>/dev/null || echo "(no publish log)"
+            echo '```'
+          } > fail.md
+          gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body-file fail.md

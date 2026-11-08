@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Compose draws everything; this framework theme only styles the window
-         pre-composition (minSdk 29 → attributes are safe without -v23 qualifiers). -->
-    <style name="Theme.CarryOn" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@android:color/black</item>
+         before the first frame (minSdk 29). Light by default; values-night
+         overrides for dark so there is no white/black flash on launch. -->
+    <style name="Theme.CarryOn" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>

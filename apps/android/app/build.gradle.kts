@@ -68,6 +68,18 @@ android {
         buildConfig = true
     }
 
+    // Roborazzi/Robolectric screenshot tests (JVM, no device): CI renders every
+    // production screen light + dark and publishes the PNGs to the PR.
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all {
+                it.systemProperty("roborazzi.test.record", "true")
+                it.maxHeapSize = "2g"
+            }
+        }
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -94,7 +106,12 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
+    // Adaptive navigation: bottom bar on phones, rail on tablets/foldables.
+    implementation("androidx.compose.material3:material3-adaptive-navigation-suite:1.3.1")
+    implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
+    // ComponentActivity host for Compose tests / Roborazzi captures.
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
@@ -110,6 +127,12 @@ dependencies {
     // stubbed in local unit tests and throw "not mocked" (the JSON-parse
     // regression tests need a working JSONObject/JSONArray).
     testImplementation("org.json:json:20260814")
+    // Screenshot tests: Robolectric native graphics + Roborazzi.
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.32.2")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.32.2")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("androidx.test.ext:junit:1.2.1")
 
     // Instrumented tests (device only; the FFI smoke test loads the real engine).
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
