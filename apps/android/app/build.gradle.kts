@@ -16,7 +16,10 @@ plugins {
 
 android {
     namespace = "com.carryon.app"
-    compileSdk = 36
+    // compileSdk runs ahead of targetSdk: the 2026 AndroidX / Compose BOM AARs
+    // declare minCompileSdk 37 (checkDebugAarMetadata). Compiling against newer
+    // APIs does not opt the app in to new runtime behaviour — targetSdk does.
+    compileSdk = 37
 
     // The NDK the prebuilt engine was cross-compiled with (r27c; proven by
     // Scripts/fetch_engine_lib.sh). Kept so the engine ABI and the NDK the
