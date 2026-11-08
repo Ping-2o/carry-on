@@ -10,7 +10,9 @@
  * If the engine itself hangs on device, the test blocks until the JUnit-side
  * watchdog; if it returns, the hang lives in the Kotlin orchestration layer.
  */
-package com.carryon.app.ffi
+package com.carryon.app.kitcheck
+
+import dev.carryon.kit.*
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.File

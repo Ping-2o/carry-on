@@ -185,8 +185,8 @@ class ReceiveRunner(
                         }
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
-                    } catch (e: com.carryon.app.ffi.CoreException) {
-                        fail(gen, "engine error ${com.carryon.app.ffi.Err.name(e.code)}: ${e.message}")
+                    } catch (e: dev.carryon.kit.CoreException) {
+                        fail(gen, "engine error ${dev.carryon.kit.Err.name(e.code)}: ${e.message}")
                     } catch (e: Exception) {
                         fail(gen, "receive failed: ${e.message}")
                     }

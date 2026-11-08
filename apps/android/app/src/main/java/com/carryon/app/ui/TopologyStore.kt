@@ -16,11 +16,11 @@ package com.carryon.app.ui
 
 import android.content.Context
 import android.os.Build
-import com.carryon.app.ffi.AbiVersion
-import com.carryon.app.ffi.Identity
-import com.carryon.app.ffi.Trust
-import com.carryon.app.ffi.TrustRecord
-import com.carryon.app.ffi.abiVersion
+import dev.carryon.kit.AbiVersion
+import dev.carryon.kit.Identity
+import dev.carryon.kit.Trust
+import dev.carryon.kit.TrustRecord
+import dev.carryon.kit.abiVersion
 import com.carryon.app.demo.DemoState
 import com.carryon.app.secure.KeystoreIdentityStore
 import kotlinx.coroutines.Dispatchers

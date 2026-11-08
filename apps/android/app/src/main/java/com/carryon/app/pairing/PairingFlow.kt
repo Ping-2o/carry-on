@@ -33,14 +33,14 @@
  */
 package com.carryon.app.pairing
 
-import com.carryon.app.ffi.Identity
-import com.carryon.app.ffi.Listener
-import com.carryon.app.ffi.Session
-import com.carryon.app.ffi.Trust
-import com.carryon.app.ffi.pairingCode
-import com.carryon.app.ffi.pairingPayloadFormat
-import com.carryon.app.ffi.pairingPayloadParse
-import com.carryon.app.ffi.pairingVerificationString
+import dev.carryon.kit.Identity
+import dev.carryon.kit.Listener
+import dev.carryon.kit.Session
+import dev.carryon.kit.Trust
+import dev.carryon.kit.pairingCode
+import dev.carryon.kit.pairingPayloadFormat
+import dev.carryon.kit.pairingPayloadParse
+import dev.carryon.kit.pairingVerificationString
 import com.carryon.app.handoff.HandoffFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

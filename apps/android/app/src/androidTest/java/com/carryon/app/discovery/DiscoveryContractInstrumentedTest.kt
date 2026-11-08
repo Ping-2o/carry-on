@@ -12,10 +12,10 @@
 package com.carryon.app.discovery
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.carryon.app.ffi.CoreException
-import com.carryon.app.ffi.DiscoveryContract
-import com.carryon.app.ffi.DiscoveryTxt
-import com.carryon.app.ffi.Err
+import dev.carryon.kit.CoreException
+import dev.carryon.kit.DiscoveryContract
+import dev.carryon.kit.DiscoveryTxt
+import dev.carryon.kit.Err
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail

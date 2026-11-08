@@ -18,7 +18,7 @@ package com.carryon.app.secure
 import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.carryon.app.ffi.Identity
+import dev.carryon.kit.Identity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull

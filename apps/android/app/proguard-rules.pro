@@ -1,9 +1,9 @@
 # Carry-On for Android — R8 rules.
 #
-# The JNI shim resolves `external fun`s on com.carryon.app.ffi.CarryOnFfi by name
-# from native code (Java_com_carryon_app_ffi_CarryOnFfi_*). Never rename or strip
-# that class, and keep the fields used as handles.
--keep class com.carryon.app.ffi.** { *; }
-
+# The JNI shim and the engine binding now ship inside the :carryon-kit AAR,
+# which carries its own consumer ProGuard rules (dev.carryon.kit.CarryOnFfi is
+# kept there and merged into this app automatically). Nothing app-specific to
+# keep for the FFI anymore — the SDK owns that contract.
+#
 # Coroutines debug metadata is safe to drop; everything else is default R8 for
 # Compose + AndroidX (AGP ships the consumer rules).
