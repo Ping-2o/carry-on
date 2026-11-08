@@ -1,4 +1,7 @@
-# CI — the AGENTS.md green gate, run on every push and pull request.
+# CI — the AGENTS.md green gate, run on pushes to main and on pull requests.
+# Jobs are path-gated (the `changes` job): a PR runs only the jobs whose
+# inputs it touches, so a docs-only PR finishes in seconds. Skipped jobs count
+# as passing for required checks. workflow_dispatch runs everything.
 #
 # Labels law (spec §2): a green run is LOCAL, automated evidence that the
 # workspace builds, the tests pass, and clippy/fmt stay clean. It upgrades no
@@ -38,8 +41,56 @@ env:
   NDK_VERSION: "27.2.12479018"
 
 jobs:
+  # Path gating. All four heavy jobs build the Rust engine, so every one of
+  # them depends on the shared `engine` paths; each also adds its own tree.
+  # sdk-swift additionally watches apps/macos (its source-sync drift check
+  # mirrors the app package).
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      rust: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.rust == 'true' }}
+      macos: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.macos == 'true' }}
+      android: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.android == 'true' }}
+      swift: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.swift == 'true' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          filters: |
+            engine: &engine
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - '**/Cargo.toml'
+              - 'crates/**'
+              - 'prototype/**'
+              - 'xtask/**'
+              - 'rust-toolchain*'
+              - '.cargo/**'
+              - '.github/workflows/ci.yml'
+            rust:
+              - *engine
+            macos:
+              - *engine
+              - 'apps/macos/**'
+            android:
+              - *engine
+              - 'apps/android/**'
+            swift:
+              - *engine
+              - 'sdk/swift/**'
+              - 'apps/macos/**'
+
   rust:
     name: Rust green gate (fmt + clippy + tests)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -67,6 +118,8 @@ jobs:
 
   macos-app:
     name: macOS app build + demo smoke (loopback)
+    needs: changes
+    if: needs.changes.outputs.macos == 'true'
     runs-on: macos-15
     timeout-minutes: 60
     env:
@@ -105,6 +158,8 @@ jobs:
 
   android-app:
     name: Android app build (assembleDebug)
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -204,6 +259,8 @@ jobs:
 
   sdk-swift:
     name: Swift SDK build + contract tests + examples
+    needs: changes
+    if: needs.changes.outputs.swift == 'true'
     runs-on: macos-15
     timeout-minutes: 45
     env:

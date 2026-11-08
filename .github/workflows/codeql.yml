@@ -1,39 +1,120 @@
 # Code scanning (CodeQL): the Rust workspace and the workflows themselves.
 # Results land in Security → Code scanning. Rust uses build-mode none (no
-# compile), so this job does not need libzim, the NDK or Xcode.
+# build step of ours), so this job does not need libzim, the NDK or Xcode.
+#
+# Cost control — the Rust scan is the slowest check in the repo:
+# - PRs and pushes trigger only when Rust sources, manifests or workflows
+#   change; docs-only and app-only PRs skip CodeQL entirely.
+# - Each language runs only when its own inputs changed (`changes` job);
+#   the weekly schedule and manual runs scan both, so nothing goes unscanned.
+# - A new push to a PR cancels the superseded scan.
+# - The Rust extractor drives cargo itself (dependency resolution, build
+#   scripts and proc macros for macro expansion); its registry, git db and
+#   target dir are cached between runs.
 name: CodeQL
 
 on:
   push:
     branches: [main]
+    paths:
+      - "**/*.rs"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/**"
   pull_request:
     branches: [main]
+    paths:
+      - "**/*.rs"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/**"
   schedule:
     - cron: "41 3 * * 1"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
-  analyze:
-    name: Analyze (${{ matrix.language }})
+  changes:
+    name: Detect languages to scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      rust: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || steps.filter.outputs.rust == 'true' }}
+      actions: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || steps.filter.outputs.actions == 'true' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        with:
+          filters: |
+            rust:
+              - '**/*.rs'
+              - 'Cargo.toml'
+              - '**/Cargo.toml'
+              - 'Cargo.lock'
+              - '.github/workflows/codeql.yml'
+            actions:
+              - '.github/workflows/**'
+
+  rust:
+    name: Analyze (rust)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
       actions: read
       contents: read
       security-events: write
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [actions, rust]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Point the extractor's cargo at a cacheable target dir
+        run: echo "CODEQL_EXTRACTOR_RUST_OPTION_CARGO_TARGET_DIR=$HOME/codeql-cargo-target" >> "$GITHUB_ENV"
+      - name: Cache cargo registry + git db + extractor target dir
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            ~/codeql-cargo-target
+          key: codeql-rust-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            codeql-rust-${{ runner.os }}-
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: rust
+          build-mode: none
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:rust"
+
+  actions:
+    name: Analyze (actions)
+    needs: changes
+    if: needs.changes.outputs.actions == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v5
       - uses: github/codeql-action/init@v4
         with:
-          languages: ${{ matrix.language }}
+          languages: actions
           build-mode: none
       - uses: github/codeql-action/analyze@v4
         with:
-          category: "/language:${{ matrix.language }}"
+          category: "/language:actions"
