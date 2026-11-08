@@ -1,0 +1,31 @@
+source_pin:  169a4e1276969802818e23fa78142a1946a18e80fe39da5785d55c0bb9afb325  (full 64-hex; type/paste on the receiver)
+== Carry-On macOS file handoff — L0/L1 (manual IP, pre-discovery) ==
+    file:          /tmp/carryon-l0l1/carryon-doc.png  (530347 bytes)
+    sha256:        4247072a6bda8ebdaca926d52bb343764ca5d2280be474d77bbfb3cf26a18063  (declared)
+    evidence_class:  PHYSICAL — cross-device LAN TLS 1.3 (two machines, two NICs)
+state:  Preparing
+    source_dir:    /var/folders/bf/h1qkc_4s2xqfxh4q2xk4wtg40000gn/T/carryon-filehandoff-1794079981/source
+    adapter:       org.carryon.file  (compiled-in, §10.7 L1 content-hash identity)
+state:  CutProposed
+state:  CutSealed
+    session:       ccf56fed-f793-4430-b5a0-3360ae10abcc
+    cut:           {session: ccf56fed-f793-4430-b5a0-3360ae10abcc, number: 0}  (two-phase publish, CORE-004)
+    source_pin:    169a4e127696…  (truncated; full pin copied/emitted for the receiver)
+    trust:         receiver pin 17e140359b58… paired  (mutual pin, §18.4)
+    connect:       192.168.3.3:43473  (TLS 1.3, mutual certificate pinning §18.5)
+    negotiate:     descriptor sent (7 features, data only §3.8); theirs: 
+state:  Importing
+counters:  sent=708328 recv=882
+    serve:         cut served — destination reported ImportComplete
+    bytes:         sent=708328 recv=882
+ladder:  L0 ─ file carried + verified → ok
+state:  ActionReady
+    L1:            launcher activation runs on the receiver (engine document.open + OS ACTION_VIEW) — see its Receive screen
+ladder:  L1 ─ opened in a real app → skipped("on receiver")
+    evidence:      /var/folders/bf/h1qkc_4s2xqfxh4q2xk4wtg40000gn/T/carryon-filehandoff-1794079981/source/handoff-evidence.json
+    verify:        {"ok":true,"message":"section hashes match"}
+
+done:  file handoff served in 16589.7 ms
+DISCLOSURE: PHYSICAL cross-device handoff over LAN TLS 1.3 (two machines, two NICs).
+Proves the L0/L1 file pipeline across devices; NOT a supported platform (spec §2/§30).
+done:  served ccf56fed-f793-4430-b5a0-3360ae10abcc cut=0 hash=4247072a6bda8ebd… evid=physical

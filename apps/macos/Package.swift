@@ -44,5 +44,13 @@ let package = Package(
             name: "carryon-demo-smoke",
             dependencies: ["CarryOnKit"]
         ),
+        .executableTarget(
+            name: "carryon-filehandoff-smoke",
+            dependencies: ["CarryOnKit"]
+        ),
+        .testTarget(
+            name: "CarryOnKitTests",
+            dependencies: ["CarryOnKit", "CCarryon"]
+        ),
     ]
 )

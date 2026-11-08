@@ -36,6 +36,7 @@ struct RootView: View {
         } detail: {
             switch app.pane {
             case .demo: DemoView()
+            case .carry: CarryFileView()
             case .topology: TopologyView()
             case .sessions: SessionsView()
             case .evidence: EvidenceView()
@@ -53,9 +54,10 @@ struct RootView: View {
     private func paneShortcut(_ pane: AppState.Pane) -> KeyEquivalent {
         switch pane {
         case .demo: return "1"
-        case .topology: return "2"
-        case .sessions: return "3"
-        case .evidence: return "4"
+        case .carry: return "2"
+        case .topology: return "3"
+        case .sessions: return "4"
+        case .evidence: return "5"
         }
     }
 }
