@@ -108,6 +108,8 @@ class NsdDiscovery(private val context: Context) {
     private var browseStartedAtElapsedMs: Long? = null
 
     private var regListener: NsdManager.RegistrationListener? = null
+    /** The port the CURRENT registration advertises (re-arm re-registers). */
+    private var advertisedPort: Int? = null
     private var discListener: NsdManager.DiscoveryListener? = null
 
     /**
@@ -122,7 +124,15 @@ class NsdDiscovery(private val context: Context) {
             _state.update { it.copy(lastError = "NSD unavailable on this device") }
             return
         }
-        if (regListener != null) return // already advertising
+        // Re-arm means a NEW listener/port: the old registration advertises a
+        // dead port (found by the 2026-11-08 physical run — connection
+        // refused). Re-register when the port changed, never silently keep
+        // the stale one.
+        if (regListener != null) {
+            if (advertisedPort == port) return // already advertising THIS port
+            runCatching { manager.unregisterService(regListener) }
+            regListener = null
+        }
         // ---- engine owns the advertised TXT (§18.3) ----
         val txt = DiscoveryTxt(
             protocolMajor = abiVersion().major,
@@ -155,10 +165,12 @@ class NsdDiscovery(private val context: Context) {
             override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                 _state.update { it.copy(lastError = "register failed (code $errorCode)") }
                 regListener = null
+                advertisedPort = null
             }
 
             override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) {
                 _state.update { it.copy(advertising = false, advertisedName = "") }
+                advertisedPort = null
             }
 
             override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
@@ -168,9 +180,11 @@ class NsdDiscovery(private val context: Context) {
         regListener = listener
         try {
             manager.registerService(info, NsdManager.PROTOCOL_DNS_SD, listener)
+            advertisedPort = port
         } catch (e: IllegalArgumentException) {
             _state.update { it.copy(lastError = "register rejected: ${e.message}") }
             regListener = null
+            advertisedPort = null
         }
     }
 
@@ -292,6 +306,7 @@ class NsdDiscovery(private val context: Context) {
         regListener?.let {
             runCatching { manager.unregisterService(it) }
             regListener = null
+            advertisedPort = null
         }
         discListener?.let {
             runCatching { manager.stopServiceDiscovery(it) }

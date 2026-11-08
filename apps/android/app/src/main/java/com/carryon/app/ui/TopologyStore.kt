@@ -152,6 +152,14 @@ class TopologyStore(private val context: Context) {
         return engineIdentity
     }
 
+    /** The durable, Keystore-sealed trust store handle (stage-6 receive: the
+     *  accept path pins the source from it — no pin typing when paired;
+     *  unpaired/revoked sources fail the TLS handshake closed, §18.5). */
+    suspend fun durableTrust(): Trust? {
+        ensureLoaded()
+        return engineTrust
+    }
+
     /** Record the completed demo run's mirror session with its exact state. */
     fun recordDemoSession(state: DemoState) {
         val bundleJson = state.evidenceBundleJson ?: return

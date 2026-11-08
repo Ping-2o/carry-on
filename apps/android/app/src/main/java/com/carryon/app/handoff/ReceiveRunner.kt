@@ -1,9 +1,16 @@
 /*
  * ReceiveRunner.kt — the "Receive" screen's state machine (the Android sibling
- * of CarryFileModel): arms a receiver (core + identity + listener, shown to
- * the source BEFORE it serves), then runs the full L0/L1 receive when the
- * user accepts. State names follow §16.2 (Idle, Preparing, Importing,
- * ActionReady, Failed — never the bare word "Ready").
+ * of the macOS TransferSessionModel, stage 6): arms a receiver with the
+ * DURABLE Keystore identity + sealed trust (PLAT-002/stage 5 — the pin is
+ * stable across launches, so pairing actually matches), advertises it over
+ * NSD (engine TXT contract), then runs the full L0/L1 receive: a PAIRED
+ * source needs NO typing (unpaired/revoked fails the TLS handshake closed,
+ * §18.5); the manual typed-pin stays the fallback. §16.2 state names.
+ *
+ * Stage-6 drills (honest, visible): a cooperative suspend mid-import resumes
+ * on a fresh connection (§11.2 — the crash-drill that SAVES the transfer);
+ * a tiny §6.8 budget refuses visibly. bytes_before_first_action is measured
+ * wire recv and shown in the UI + evidence.
  *
  * Zombie isolation + watchdog (DemoRunner rules, simplified to one run):
  *  - one accept at a time (mutex);
@@ -11,12 +18,14 @@
  *    blocked JNI accept cannot be interrupted; on timeout the run is marked
  *    FAILED immediately and the parked accept + its handles LEAK with the
  *    process (freeing under a blocked call is use-after-free). A fresh arm
- *    uses a FRESH core/identity/listener, so a leaked wedge cannot poison it.
+ *    uses a FRESH core/identity-borrow/listener, so a leaked wedge cannot
+ *    poison it.
  *  - a zombie's late writes are dropped by run generation.
  */
 package com.carryon.app.handoff
 
 import android.content.Context
+import com.carryon.app.ui.TopologyStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -41,12 +50,18 @@ data class ReceiveState(
     val pinHex: String = "",
     /** 16-hex truncated pin for the §22.3-style display line. */
     val shortPin: String = "",
+    /** Stage 6: paired records in the durable store (Keystore-sealed). */
+    val pairedRecords: Int = 0,
     /** Exact §16.2 session state (never the bare word "Ready"). */
     val sessionState: String? = null,
     val ladder: Map<HandoffLadderStep, HandoffOutcome> = emptyMap(),
     val console: List<String> = emptyList(),
     val bytesSent: Long = 0,
     val bytesRecv: Long = 0,
+    /** Wire recv before the FIRST action (§5.6 measured; between ops only). */
+    val bytesBeforeFirstAction: Long = 0,
+    /** Import legs used (§11.2: >1 = a cooperative suspend was resumed). */
+    val legsUsed: Int = 0,
     val running: Boolean = false,
     val lastResult: ReceiveResult? = null,
     val error: String? = null,
@@ -56,7 +71,7 @@ data class ReceiveState(
         /** The receive screen's honest static label; the per-run footer in the
          *  console is DYNAMIC (LOCAL vs PHYSICAL by the descriptor). */
         const val RUN_LABEL =
-            "L0/L1 handoff — OBSERVED per run (LOCAL on loopback, PHYSICAL across two real devices); platform supported: NO (§30 unrun)"
+            "L0/L1 cross-device receive — OBSERVED per run (LOCAL on loopback, PHYSICAL across two real devices); platform supported: NO (§30 unrun)"
     }
 }
 
@@ -64,6 +79,8 @@ class ReceiveRunner(
     private val scope: CoroutineScope,
     private val context: Context,
     private val baseDir: File,
+    /** The durable identity + sealed trust owner (stage 6). */
+    private val topology: TopologyStore,
 ) {
     private val mutex = Mutex()
     private val _state = MutableStateFlow(ReceiveState())
@@ -72,7 +89,11 @@ class ReceiveRunner(
     private var armed: HandoffFlow.Armed? = null
     private val runGeneration = AtomicLong(0)
 
-    /** Arm: open the core + identity + bind the listener; display addr + pin. */
+    /** Stage-6 receive knobs (set by the screen before accepting). */
+    @Volatile var suspendDrill: Boolean = false
+    @Volatile var tinyBudget: Boolean = false
+
+    /** Arm: open the core, borrow the DURABLE identity, bind the listener. */
     fun arm() {
         scope.launch {
             mutex.withLock {
@@ -83,17 +104,24 @@ class ReceiveRunner(
                 val gen = runGeneration.incrementAndGet()
                 try {
                     val workDir = File(baseDir, "handoff/${stamp()}")
-                    val a = HandoffFlow.arm(workDir)
+                    // The durable identity: its pin is stable across launches,
+                    // so the stage-5 pairing actually matches this receiver.
+                    val identity = topology.durableIdentity()
+                        ?: throw IllegalStateException("durable identity not loaded yet (Keystore)")
+                    val a = HandoffFlow.arm(workDir, identity)
+                    val paired = topology.durableTrust()?.records()?.size ?: 0
                     armed = a
                     _state.value = ReceiveState(
                         armed = true,
                         displayAddr = a.displayAddr,
                         pinHex = a.pinHex,
                         shortPin = a.shortPin,
+                        pairedRecords = paired,
                         sessionState = "Idle",
                         console = listOf(
                             "armed:  listener ${a.wireAddr} (display ${a.displayAddr})",
-                            "pin:  ${a.shortPin}  (full pin copyable above — the source pairs it, §18.4)",
+                            "pin:  ${a.shortPin}  (durable Keystore identity — stable across launches)",
+                            "trust:  $paired paired record(s) in the sealed store",
                         ),
                     )
                 } catch (e: Exception) {
@@ -103,33 +131,42 @@ class ReceiveRunner(
         }
     }
 
-    /** Accept + import + verify + open. `sourcePin` is the source's 64-hex pin;
-     *  `chunkSize` 0 = engine default (destination-controlled §18.6). */
-    fun accept(sourcePin: String, chunkSize: Long) {
+    /**
+     * Accept + import + verify + open (the stage-6 chain).
+     * `sourcePin` null = the PAIRED durable trust (no typing); non-null =
+     * the manual typed-pin fallback.
+     */
+    fun accept(sourcePin: String?, chunkSize: Long) {
         scope.launch {
             mutex.withLock {
                 val a = armed ?: return@withLock
                 if (_state.value.running) return@withLock
-                if (!HandoffValidation.isValidPinHex(sourcePin)) {
-                    _state.update { it.copy(error = "source pin must be the 64-hex fingerprint from the source screen") }
+                if (sourcePin == null && (_state.value.pairedRecords) == 0) {
+                    _state.update {
+                        it.copy(error = "no paired peers — pair first (the Pairing tab, stage 5) or type the source pin (manual fallback)")
+                    }
                     return@withLock
                 }
                 val started = System.nanoTime()
                 val gen = runGeneration.incrementAndGet()
                 _state.update {
                     it.copy(running = true, error = null, lastResult = null,
+                            legsUsed = 0, bytesBeforeFirstAction = 0,
                             ladder = mapOf(HandoffLadderStep.L0_CARRY to HandoffOutcome.RUNNING),
-                            sessionState = "Preparing", console = it.console + "accept:  waiting for the source (pinned)…")
+                            sessionState = "Preparing",
+                            console = it.console + "accept:  waiting for the source (${if (sourcePin == null) "PAIRED trust, no typing" else "manual pin"})…")
                 }
                 val workDir = File(baseDir, "handoff/${stamp()}").apply { mkdirs() }
                 val pipeline = launch {
                     try {
                         val result = HandoffFlow.receive(
-                            armed = a, sourcePin = sourcePin, chunkSize = chunkSize,
-                            workDir = workDir,
+                            armed = a, sourcePin = sourcePin,
+                            durableTrust = topology.durableTrust(),
+                            chunkSize = chunkSize, workDir = workDir,
+                            suspendDrill = suspendDrill, tinyBudget = tinyBudget,
                             launcher = { bytes, fileName, mime ->
-                                val uri = L0L1Launcher.writeToMediaStore(this@ReceiveRunner.context, bytes, fileName, mime)
-                                uri.toString() to L0L1Launcher.launch(this@ReceiveRunner.context, uri, mime)
+                                val uri = L0L1Launcher.writeToMediaStore(context, bytes, fileName, mime)
+                                uri.toString() to L0L1Launcher.launch(context, uri, mime)
                             },
                             emitter = { event -> apply(gen, event) },
                         )

@@ -27,6 +27,7 @@ ASCII art + animations that honor Reduce Motion.
 | One-device demo = physical cross-device | **NO — `OBSERVED (LOCAL)` only** | Loopback TLS 1.3 on one machine, two in-process cores (spec §2/§30) — true on the A04 exactly as on the mac |
 | Any platform "supported" | **NO** | §30 acceptance never run on real hardware |
 | Signed APK / distribution signing | `UNSUPPORTED` here | PLAT-006 out of scope; macOS ad-hoc codesign is LOCAL-ONLY |
+| **Cross-device handoff chain (stage 6): mac «Transfer session» ⇄ A04 «Receive» — discovery → pairing → import → action, on real devices** | `OBSERVED (PHYSICAL)` | 2026-11-08, two machines: engine discovery found the A04 in **308 ms**; the transfer used the **PAIRED** Keystore/Keychain trust (no pin typed) and the discovered address (never typed); 500,008 B verified byte-for-byte (CORE-004), opened in Samsung Gallery; receiver `bytes_before_first_action=667880`, `paired_trust=true`. Cooperative §11.2 suspend drill: leg 1 checkpointed → resume on a fresh connection → **5,000,008 B completed (legs=2, verify ok:true)**. Non-cooperative kill -9: interrupted ≠ success — nothing published on the receiver, the source honestly needed a watchdog (finding), a fresh run then completed. Evidence: [`docs/evidence/20261108-xdevice-handoff/`](../docs/evidence/20261108-xdevice-handoff/). Stage-5 pairing (typed-code/QR-payload pilot, no camera) and the manual IP/pin fallback remain. NOT a "supported" platform (§30 unrun) |
 | **Engine-side discovery, NET-003 (stage 4): mac engine (mdns-sd) ⇄ A04 NSD, same LAN, TXT contract owned by the engine** | `OBSERVED (PHYSICAL)` | 2026-11-08, two machines: the mac's engine browse found the NSD-advertised Galaxy A04 in **537 ms**; the A04's NSD browse found the engine-advertised mac in **177 ms** (NET-003 gate < 10 s — PASS both directions). Fail-closed receive filter provable in the UI (rejected records never become peers); a full L0/L1 handoff served to the `discovered` address (192.168.3.3:36017, never typed on the mac) completed with verify `ok:true`. Evidence: [`docs/evidence/20261108-net003-discovery/`](../docs/evidence/20261108-net003-discovery/). Discovery is evidence-class LOCAL when self-advertised on one machine. NOT a "supported" platform (§30 unrun); pairing UX (typed pin) stays manual until stage 5 — discovery never replaces pairing |
 | Process/memory migration | `UNSUPPORTED` | Typed continuation only (spec §1) |
 
@@ -105,9 +106,9 @@ engine pipeline, NOT physical cross-device transfer or a supported platform (spe
   one connected device; 5 tests: FFI load + baseline/all-toggles editor +
   baseline/all-toggles graph + engine-level budget refusal). JVM units cover
   the pure logic of every fix; run in CI via `:app:testDebugUnitTest`.
-- Engine-side discovery is `OBSERVED (PHYSICAL)` for the stage-4 contract run
-  (see the claim table above; pairing UX stays manual until stage 5). Signed
-  packaging and §30 platform acceptance are still `TARGET` in
+- Engine-side discovery (stage 4) and the cross-device handoff chain (stage 6)
+  are `OBSERVED (PHYSICAL)` (see the claim table above). Signed packaging and
+  §30 platform acceptance are still `TARGET` in
   [`docs/FRONTIER.md`](../docs/FRONTIER.md). The Swift binding and the
   Kotlin/JNI shim are the first slices of the Phase-4 SDK items — the SDKs
   themselves remain unchecked.

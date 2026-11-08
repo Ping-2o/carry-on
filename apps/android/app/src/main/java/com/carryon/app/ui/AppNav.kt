@@ -66,13 +66,14 @@ object AppGraph {
                 scope = kotlinx.coroutines.MainScope(),
                 baseDir = appContext.cacheDir,
             )
+            topology = TopologyStore(appContext)
             receiveRunner = ReceiveRunner(
                 scope = kotlinx.coroutines.MainScope(),
                 context = appContext,
                 baseDir = appContext.cacheDir,
+                topology = topology,
             )
             discovery = NsdDiscovery(appContext)
-            topology = TopologyStore(appContext)
             inited = true
         }
     }
