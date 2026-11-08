@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Carry-On Kit (the distributable Android SDK, AAR).
+     The merged manifest of every consumer carries the engine ABI this AAR was
+     built against (1.2, append-only within major 1) — the same contract the
+     runtime gate (dev.carryon.kit.CarryOnKit.requireCompatibleEngine) enforces
+     against the loaded engine. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <application>
+        <meta-data
+            android:name="dev.carryon.kit.ABI_MAJOR"
+            android:value="1" />
+        <meta-data
+            android:name="dev.carryon.kit.ABI_MINOR"
+            android:value="2" />
+        <meta-data
+            android:name="dev.carryon.kit.SDK_VERSION"
+            android:value="1.2.0" />
+    </application>
+</manifest>

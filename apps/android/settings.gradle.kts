@@ -25,3 +25,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "CarryOn"
 include(":app")
+include(":carryon-kit")

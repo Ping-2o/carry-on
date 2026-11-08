@@ -24,7 +24,7 @@ package com.carryon.app.secure
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
-import com.carryon.app.ffi.Identity
+import dev.carryon.kit.Identity
 import java.io.File
 import java.security.KeyStore
 import javax.crypto.Cipher

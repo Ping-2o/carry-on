@@ -339,6 +339,17 @@ public final class Engine: @unchecked Sendable {
         return out
     }
 
+    /// §21.3 recovery: open a fresh epoch with a conflict-risk record for an
+    /// ambiguous authority state. Returns the new epoch (the Kotlin binding's
+    /// `recoverAuthority` mirror).
+    public func recoverAuthority(sessionID: String) throws -> UInt64 {
+        var epoch: UInt64 = 0
+        try CarryonError.check(
+            sessionID.withCString { carryon_recover_authority(handle, $0, &epoch) },
+            "carryon_recover_authority")
+        return epoch
+    }
+
     /// Source side: offer + relinquish single-writer authority (BLOCKING — the
     /// destination's acceptance is awaited on the wire). Drops this device to a
     /// read-only replica. Returns the receipt set JSON (`new_epoch`, receipts).

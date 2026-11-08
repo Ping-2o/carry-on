@@ -21,7 +21,7 @@
  * This file mirrors engine behavior only — labels follow §2: the demo built on
  * these wrappers is OBSERVED (LOCAL) evidence, never physical cross-device.
  */
-package com.carryon.app.ffi
+package dev.carryon.kit
 
 import org.json.JSONArray
 import org.json.JSONObject
@@ -603,6 +603,57 @@ class Session private constructor(internal val handle: Long) : Closeable {
         if (!closed) {
             closed = true
             CarryOnFfi.sessionFree(handle)
+        }
+    }
+}
+
+/** `_carryon._tcp` advertiser (ABI 1.2 §18.3). TEXT records are the §18.3
+ *  minimal set produced by [discoveryTxtEncode] — never user/session names or
+ *  keys. The handle is consumed by [close]. */
+class DiscoveryAdvertiser private constructor(internal val handle: Long) : Closeable {
+    @Volatile private var closed = false
+
+    companion object {
+        fun start(instanceName: String, port: Int, txtPairsJson: String): DiscoveryAdvertiser {
+            val h = CarryOnFfi.discoveryAdvertiseStart(instanceName, port, txtPairsJson)
+            if (h == 0L) {
+                throw CoreException(Err.UNKNOWN, "discovery_advertise_start: ${lastErrorMessage()}")
+            }
+            return DiscoveryAdvertiser(h)
+        }
+    }
+
+    override fun close() {
+        if (!closed) {
+            closed = true
+            CarryOnFfi.discoveryAdvertiseStop(handle)
+        }
+    }
+}
+
+/** `_carryon._tcp` browser (ABI 1.2 §18.3). Every record it receives is
+ *  validated by the engine (fail closed: unknown keys ignored, malformed
+ *  records dropped). */
+class DiscoveryBrowser private constructor(internal val handle: Long) : Closeable {
+    @Volatile private var closed = false
+
+    companion object {
+        fun start(): DiscoveryBrowser {
+            val h = CarryOnFfi.discoveryBrowseStart()
+            if (h == 0L) {
+                throw CoreException(Err.UNKNOWN, "discovery_browse_start: ${lastErrorMessage()}")
+            }
+            return DiscoveryBrowser(h)
+        }
+    }
+
+    /** Current validated peer snapshot JSON. */
+    fun snapshotJson(): String = requireOut(CarryOnFfi.discoveryBrowseSnapshot(handle))
+
+    override fun close() {
+        if (!closed) {
+            closed = true
+            CarryOnFfi.discoveryBrowseStop(handle)
         }
     }
 }
