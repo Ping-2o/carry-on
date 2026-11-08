@@ -1,0 +1,2 @@
+Carry-On NET-003 physical handoff via discovered peer — 2026-11-08.
+The receiver was found by engine discovery (mdns-sd browse; NSD advertise), never typed by hand.
