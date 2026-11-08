@@ -7,7 +7,7 @@
  * # Carry-On Kit (Android SDK)
  *
  * Typed bindings over the REAL Carry-On engine C ABI
- * (`carryon.h`, ABI 1.2, append-only within major 1). Everything here is a
+ * (`carryon.h`, ABI 1.3, append-only within major 1). Everything here is a
  * thin, documented translation of the C surface:
  *
  * - [Core] — engine lifecycle (§6), adapters by id + JSON params (§3.8,

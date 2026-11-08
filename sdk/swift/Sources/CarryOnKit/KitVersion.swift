@@ -4,7 +4,7 @@
  * version and the engine ABI the package was built against.
  *
  * Version policy (plan.md stage 9): the SDK version FOLLOWS the engine ABI
- * major.minor — ABI 1.2 → SDK 1.2.x. Major tracks the ABI major (breaking);
+ * major.minor — ABI 1.3 → SDK 1.3.x. Major tracks the ABI major (breaking);
  * minor tracks the ABI minor (append-only additions); patch is SDK-only
  * fixes. No SDK release ever spans two ABI minors.
  *
@@ -19,7 +19,7 @@ import Foundation
 
 public enum CarryOnSDK {
     /// SDK version (semver, follows the engine ABI major.minor).
-    public static let version = "1.2.0"
+    public static let version = "1.3.0"
 
     /// The engine ABI this package was built against (vendored carryon.h).
     public static let abiMajor: UInt32 = CARRYON_ABI_MAJOR

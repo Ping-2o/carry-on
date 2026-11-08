@@ -2,13 +2,13 @@
  * Carry-On for Android — carryon-kit library module (§9 SDK, plan.md stage 9).
  *
  * The distributable Kotlin SDK over the REAL Carry-On engine C ABI
- * (crates/carryon-ffi/include/carryon.h, ABI 1.2, append-only within major 1).
+ * (crates/carryon-ffi/include/carryon.h, ABI 1.3, append-only within major 1).
  * Ships as an AAR: the JNI shim (built here with CMake against the fetched
  * engine .so), the engine .so itself (jniLibs, fetched — never committed), the
  * typed wrappers (dev.carryon.kit), kdoc, and consumer ProGuard rules.
  *
- * Version policy: the SDK version FOLLOWS the engine ABI major.minor — ABI 1.2
- * → SDK 1.2.x (append-only minor; patch = SDK-only fixes).
+ * Version policy: the SDK version FOLLOWS the engine ABI major.minor — ABI 1.3
+ * → SDK 1.3.x (append-only minor; patch = SDK-only fixes).
  *
  * Claim labels (spec §2): the AAR is IMPLEMENTED (builds); the engine calls it
  * wraps are OBSERVED on a device (instrumented tests) and the same contract
@@ -20,10 +20,10 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// SDK version follows the engine ABI major.minor (plan.md stage 9): ABI 1.2 →
-// SDK 1.2.x. Recorded in the AAR's metadata and republished in the merged
+// SDK version follows the engine ABI major.minor (plan.md stage 9): ABI 1.3 →
+// SDK 1.3.x. Recorded in the AAR's metadata and republished in the merged
 // manifest (dev.carryon.kit.SDK_VERSION).
-version = "1.2.0"
+version = "1.3.0"
 group = "dev.carryon"
 
 android {

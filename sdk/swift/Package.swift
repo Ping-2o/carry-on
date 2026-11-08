@@ -1,6 +1,6 @@
 // swift-tools-version:5.9
 // CarryOnKit — the distributable Swift SDK over the real Carry-On engine C ABI
-// (crates/carryon-ffi/include/carryon.h, ABI 1.2, append-only within major 1).
+// (crates/carryon-ffi/include/carryon.h, ABI 1.3, append-only within major 1).
 //
 // Distribution model (plan.md stage 9): SOURCE package + the engine as a
 // FETCHED STATIC ARCHIVE. The binding sources are Swift (copied from

@@ -29,6 +29,7 @@ SYNC_SOURCES=(
   AnyJSON.swift CarryonCore.swift CarryonError.swift DemoConsole.swift
   DemoPipeline.swift Discovery.swift EngineDiscovery.swift EvidenceModels.swift
   Handoff.swift Net.swift Pairing.swift SecureStore.swift
+  PhotoCraft.swift
 )
 
 CHECK=0

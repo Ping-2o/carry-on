@@ -24,8 +24,20 @@ import java.io.File
 
 class AbiCompatibilityTest {
 
-    /** Header symbols the shim intentionally does not wrap. */
-    private val unboundAllowlist = setOf<String>()
+    /**
+     * Header symbols the shim intentionally does not wrap.
+     *
+     * The PhotoCraft live bridge (ABI 1.3) drives a DESKTOP app over its loopback
+     * control channel; there is no Android surface for it (the A04 never runs a
+     * PhotoCraft desktop instance), so the Kotlin SDK deliberately does not bind
+     * it. The Swift SDK does (its desktop package), and both ABI suites still
+     * verify the engine exports the symbols.
+     */
+    private val unboundAllowlist = setOf(
+        "carryon_photocraft_inspect",
+        "carryon_photocraft_register",
+        "carryon_photocraft_restore",
+    )
 
     private fun module(): File = File(".").absoluteFile
 
