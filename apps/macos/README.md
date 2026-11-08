@@ -1,7 +1,7 @@
 # Carry-On for macOS
 
 A native SwiftUI wrapper over the **real** Carry-On engine C ABI
-(`crates/carryon-ffi/include/carryon.h`, ABI 1.1). One device, two in-process
+(`crates/carryon-ffi/include/carryon.h`, ABI 1.2 — 1.1 plus the stage-4 discovery entries, append-only). One device, two in-process
 cores, real TLS 1.3 loopback, mutual pin pairing, L4 single-writer authority
 transfer — the full 8-stage demo pipeline from `plan.md`, driven end-to-end
 through the FFI.
@@ -14,7 +14,7 @@ through the FFI.
 | Demo pipeline (8 stages incl. L4 authority transfer) | **OBSERVED (LOCAL)** | One device, loopback TLS 1.3, two temp-dir cores. Proves the FFI binding and the engine pipeline. NOT physical cross-device transfer. |
 | **"Carry File" screen — L0/L1 ladder (stage 3, manual-IP)** | **OBSERVED (PHYSICAL)** when the receiver is a real second device | NSOpenPanel pick (last dir cached) → file adapter cut → hand-entered receiver `IPv4:port` (cached) + pin → serve. The descriptor (session/cut/hash/name/mime/evidence-class) rides the Hello/Welcome features — data only (§3.8). Evidence class derived from the dialled address per run (loopback → LOCAL, LAN → PHYSICAL). Physical evidence: [`apps/android/evidence/20261108-a04-l0l1/`](../android/evidence/20261108-a04-l0l1/). Headless driver: `swift run carryon-filehandoff-smoke serve <file> <addr> <pin> [--tamper]`. |
 | macOS platform | **supported: NO** | §30 acceptance never ran; no notarized/Developer-ID packaging. The bundle is ad-hoc signed, LOCAL-ONLY (explicitly not PLAT-006 distribution signing). |
-| Discovery (NWListener/NWBrowser `_carryon._tcp`) | **app-level pilot** | Engine-side discovery is `TARGET` (FRONTIER Phase 2). The pilot advertises/browses with §18.3 minimal TXT (`pm`, `id`, `pr`, `dc`, `ch`) — labeled in the UI as a pilot. |
+| Discovery (engine-side §18.3, stage 4) | **engine + app UI** | The engine owns the TXT contract: `carryon_discovery_txt_encode`/`_validate` (ABI 1.2) + engine-side advertise/browse (`mdns-sd`) exposed to the app via `EngineDiscovery`. The NWListener/NWBrowser `DiscoveryPilot.swift` remains as a stage-3 pilot artifact (unused). NET-003 PHYSICAL: engine browse found the A04 in 537 ms (2026-11-08, `docs/evidence/20261108-net003-discovery/`). TXT records carry only `pm`, `id`, `pr`, `dc`, `ch` — foreign keys ignored, malformed records dropped (fail closed). |
 | Secret handling | **IMPLEMENTED (law)** | Identity key DER is SECRET (EVD-006/§22.3): never logged, displayed, or bundled. Only the SHA-256 pin hex appears, truncated, in UI. |
 
 The fixed footer every run ends with (verbatim, `plan.md`):
@@ -94,5 +94,7 @@ NORMAL fail-closed outcome (§6.8 — partial admission or a typed refusal, code
 - `org.carryon.graph` declares `supports_authority_transfer:false`; the AUTHORITY
   stage is labeled skipped for that scenario — labels stay law (§2).
 - Bundle signing is ad-hoc (`codesign --sign -`): LOCAL-ONLY, not PLAT-006.
-- The discovery pilot is app-level only; TXT records carry no user/session/app
+- Discovery is ENGINE-CONTRACT (stage 4): the engine builds/validates the §18.3
+  TXT and (on macOS) advertises/browses itself (`mdns-sd`); the app renders what
+  the engine reports. TXT records carry no user/session/app
   names, no object hashes, and no key material (§18.3).

@@ -25,7 +25,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.carryon.app.discovery.DISCOVERY_PILOT_LABEL
+import com.carryon.app.discovery.DISCOVERY_LABEL
 import com.carryon.app.ui.AppGraph
 import com.carryon.app.ui.ReadinessStates
 import com.carryon.app.ui.components.AsciiBox
@@ -156,10 +156,10 @@ fun TopologyScreen() {
 
         AsciiRule()
 
-        // ---- discovery pilot (labeled) ----
+        // ---- engine-contract discovery (§18.3) ----
         Text("Discovery", style = MaterialTheme.typography.titleSmall)
         Text(
-            text = DISCOVERY_PILOT_LABEL,
+            text = DISCOVERY_LABEL,
             style = ConsoleTextStyle,
             color = MaterialTheme.colorScheme.tertiary,
         )
@@ -168,17 +168,30 @@ fun TopologyScreen() {
             if (discovery.advertising) "${discovery.advertisedName} (_carryon._tcp)" else "not advertising",
         )
         KeyValueLine("browse", if (discovery.browsing) "browsing _carryon._tcp" else "idle")
+        discovery.firstPeerLatencyMs?.let { ms ->
+            KeyValueLine(
+                "NET-003",
+                "first peer in $ms ms (gate < 10 s) — ${if (ms < 10_000) "PASS" else "FAIL"}",
+            )
+        }
         discovery.peers.forEach { p ->
             KeyValueLine(
                 "peer",
-                "${p.serviceName} dc=${p.deviceClass} pm=${p.protocolMajor} pr=${p.pairingRequired}",
+                "${p.serviceName} dc=${p.deviceClass} pm=${p.protocolMajor} " +
+                    "pr=${if (p.pairingRequired) "1" else "0"} → ${p.host}:${p.port}",
             )
+            if (p.ignoredKeys.isNotEmpty()) {
+                KeyValueLine("ignored_keys", p.ignoredKeys.joinToString(","))
+            }
+        }
+        discovery.rejections.forEach { why ->
+            KeyValueLine("filtered", why)
         }
         discovery.lastError?.let {
             Text("nsd:  $it", style = ConsoleTextStyle, color = MaterialTheme.colorScheme.error)
         }
         Text(
-            text = "TXT keys are the §18.3 minimal set only (pm, id, pr, dc, ch) — never user/session/app names or keys.",
+            text = "TXT keys are the §18.3 minimal set only (pm, id, pr, dc, ch) — built and validated by the ENGINE;\nforeign keys are ignored, malformed records are dropped (fail closed). Never user/session/app names or keys.",
             style = ConsoleTextStyle,
             color = MaterialTheme.colorScheme.secondary,
         )

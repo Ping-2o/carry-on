@@ -274,7 +274,7 @@ object HandoffFlow {
 
         emitter(HandoffEvent.Console("== Carry-On Android receive — L0/L1 (manual IP, pre-discovery) =="))
         val abi = abiVersion()
-        emitterLog("abi", "engine $abi (expect 1.1)")
+        emitterLog("abi", "engine $abi (expect 1.2)")
         emitterLog("core", workDir.resolve("dest").absolutePath)
         // A file-adapter instance just satisfies registration on the receiver —
         // the import verifies bytes, and the store holds the exact content

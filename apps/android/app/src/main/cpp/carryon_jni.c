@@ -850,3 +850,38 @@ Java_com_carryon_app_ffi_CarryOnFfi_verifyEvidence(JNIEnv *env, jobject thiz,
     release_utf(env, bundle_path, path);
     return out_string_result(env, rc, out);
 }
+
+/* ---- Discovery (spec §18.3, stage 4; ABI 1.2) -----------------------------
+ * Android's NSD responder registers/browses natively (app layer), but the TXT
+ * contract is the ENGINE's: advertise TXT is built by
+ * carryon_discovery_txt_encode, and every received record is validated by
+ * carryon_discovery_txt_validate (fail closed — E_PLATFORM_DISCOVERY drops the
+ * peer, never repairs it). The browse/advertise engine entries are
+ * desktop-side (mdns-sd) and are NOT bridged here: NSD owns them on Android.
+ */
+
+JNIEXPORT jbyteArray JNICALL
+Java_com_carryon_app_ffi_CarryOnFfi_discoveryTxtEncode(JNIEnv *env, jobject thiz,
+                                                       jstring fields_json) {
+    (void)thiz;
+    const char *fields = borrow_utf(env, fields_json);
+    char *out = NULL;
+    jint rc = fields
+        ? carryon_discovery_txt_encode(fields, &out)
+        : CARRYON_ERR_NULL_ARG;
+    release_utf(env, fields_json, fields);
+    return out_string_result(env, rc, out);
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_com_carryon_app_ffi_CarryOnFfi_discoveryTxtValidate(JNIEnv *env, jobject thiz,
+                                                         jstring pairs_json) {
+    (void)thiz;
+    const char *pairs = borrow_utf(env, pairs_json);
+    char *out = NULL;
+    jint rc = pairs
+        ? carryon_discovery_txt_validate(pairs, &out)
+        : CARRYON_ERR_NULL_ARG;
+    release_utf(env, pairs_json, pairs);
+    return out_string_result(env, rc, out);
+}

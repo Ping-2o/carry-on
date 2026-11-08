@@ -161,15 +161,22 @@ final class CarryModel {
     var fileURL: URL? {
         didSet { UserDefaults.standard.set(fileURL?.path, forKey: "carryon.handoff.lastFile") }
     }
-    /// Last receiver address typed by hand (cached; discovery is stage 4).
+    /// Receiver address: filled from the engine's discovered list or typed by
+    /// hand (manual fallback, cached). Hand edits clear the discovery claim.
     var receiverAddr: String {
-        didSet { UserDefaults.standard.set(receiverAddr, forKey: "carryon.handoff.lastAddr") }
+        didSet {
+            UserDefaults.standard.set(receiverAddr, forKey: "carryon.handoff.lastAddr")
+            discoveryLatencyMS = nil
+        }
     }
     /// The receiver's 64-hex pin (typed/pasted from its Receive screen).
     var receiverPin = ""
     /// Integrity negative test toggle (declares a tampered hash; the receiver
     /// MUST refuse — the visible-failure counterpart of the §6.8 showcase).
     var integrityNegative = false
+    /// NET-003 measurement when the receiver was picked from the engine's
+    /// discovered list (nil on the manual fallback — no claim rides along).
+    var discoveryLatencyMS: Double?
     /// Pre-armed identity: created once so its pin exists before serving.
     private(set) var sourceIdentity: DeviceIdentity?
     private(set) var sourcePinHex = ""
@@ -238,7 +245,8 @@ final class CarryModel {
         defer { if runToken == token { running = false } }
         let config = FileHandoffConfig(
             fileURL: file, receiverAddr: receiverAddr, receiverPin: receiverPin,
-            identity: identity, integrityNegative: integrityNegative)
+            identity: identity, integrityNegative: integrityNegative,
+            discoveryFirstPeerMS: discoveryLatencyMS)
         do {
             let result = try await FileHandoffPipeline().run(config) { [weak self] event in
                 let s = self
@@ -302,8 +310,6 @@ final class TopologyModel {
     private var trustJSON: String {
         didSet { UserDefaults.standard.set(trustJSON, forKey: "carryon.trust.json") }
     }
-
-    let discovery = DiscoveryPilot()
 
     init() {
         trustJSON = UserDefaults.standard.string(forKey: "carryon.trust.json") ?? "{\"peers\":{}}"
@@ -378,6 +384,9 @@ final class AppState {
     var demo = DemoModel()
     var topology = TopologyModel()
     var carry = CarryModel()
+    /// Engine-side discovery (stage 4): one shared advertiser/browser — the
+    /// engine owns the §18.3 TXT contract; screens drive it foreground-first.
+    let discovery = EngineDiscovery()
     /// The last evidence bundle text (from a run or a loaded file) for the viewer.
     var evidenceJSON: String?
 

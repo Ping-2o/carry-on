@@ -33,11 +33,22 @@ stays relevant if iOS ever returns; the artcraft engine and libzim already
 cross-compile for aarch64-apple-ios (compile-level only, OBSERVED labels dropped
 with the scope).
 
-### Phase 2 — Real discovery · `TARGET` (not started)
+### Phase 2 — Real discovery · partially `OBSERVED` (2026-11-08, stage 4)
 
-- [ ] Bonjour browse on macOS/iOS (Local Network permission flow, Info.plist services).
-- [ ] NSD discovery on Android.
-- [ ] PIN/QR pairing UX; zero-config < 10 s, NET-003 minimal metadata.
+- [x] **Engine-side mDNS advertise/browse on macOS** — `mdns-sd` in `carryon-net`
+      behind the C ABI (TXT contract owned + fail-closed-filtered by the engine);
+      Local Network permission keys already in the bundle Info.plist.
+      OBSERVED (PHYSICAL): the mac's engine browse found the NSD-advertised
+      Galaxy A04 in **537 ms** (NET-003 gate < 10 s).
+- [x] **NSD discovery on Android** — the platform NSD responder registers/browses
+      in the app layer, but the §18.3 TXT is built by the engine
+      (`carryon_discovery_txt_encode`) and every received record validated by it
+      (`carryon_discovery_txt_validate`, fail closed; foreign keys ignored).
+      OBSERVED (PHYSICAL): the A04's NSD browse found the engine-advertised mac in
+      **177 ms**. Evidence: `docs/evidence/20261108-net003-discovery/`.
+- [ ] PIN/QR pairing UX (stage 5 — the trust pin is still typed by hand; discovery
+      never replaces pairing). Zero-config timing itself: NET-003 **PASS** both
+      directions (177 ms / 537 ms, both ≪ 10 s gate).
 
 ### Phase 3 — Packaging + §30 × 2 platforms (macOS, Android) · `TARGET` (not started)
 
