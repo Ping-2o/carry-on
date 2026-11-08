@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -76,7 +76,7 @@ jobs:
       # workspace path, not $RUNNER_TEMP.
       CARGO_TARGET_DIR: ${{ github.workspace }}/carryon-target
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       # Dependency caching (Swatinem/rust-cache): target dir + crates.io
       # registry + the photocraft git db (~/.cargo/git/db), keyed on
@@ -112,12 +112,12 @@ jobs:
       # land where Swatinem's cache looks for them.
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
@@ -137,7 +137,7 @@ jobs:
       # code 2" (actions/cache#1420-style extraction quirks over a live SDK
       # path). We control both ends of the tar pipeline instead.
       - name: NDK cache (r27c is ~2 GB installed; keyed by version)
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/ndk-cache.tgz
           key: android-ndk-${{ env.NDK_VERSION }}
@@ -190,13 +190,13 @@ jobs:
           # build_desktop_shim.sh compiles the HOST engine cdylib too.
           CARGO_TARGET_DIR: ${{ github.workspace }}/target
       - name: Upload the SDK AAR
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: carryon-kit-aar
           path: apps/android/carryon-kit/build/outputs/aar/carryon-kit-release.aar
           retention-days: 7
       - name: Upload the debug APK
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: carryon-debug-apk
           path: apps/android/app/build/outputs/apk/debug/app-debug.apk
@@ -209,7 +209,7 @@ jobs:
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/carryon-target
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build + vendor the static engine archive (fetched, never committed)
