@@ -65,18 +65,21 @@ class HandoffLoopbackInstrumentedTest {
             // the receive pins the source, so here we pre-pair the receiver's
             // trust through receive()'s sourcePin param and pre-pair the
             // source's trust through serveFile's destPin (a.pinHex).
-            val events = mutableListOf<HandoffEvent>()
+            // Separate event lists: the SOURCE's ladder events must never stand
+            // in for the RECEIVER's own (the physical run's bug class).
+            val sourceEvents = mutableListOf<HandoffEvent>()
+            val receiveEvents = mutableListOf<HandoffEvent>()
             val sourceJob = launch(Dispatchers.IO) {
                 HandoffFlow.serveFile(
                     dataDir = srcDir, file = png,
                     addr = "127.0.0.1:${a.wireAddr.substringAfterLast(':')}",
                     destPin = a.pinHex, identity = null, tamper = false,
-                ) { events += it }
+                ) { sourceEvents += it }
             }
             val result = HandoffFlow.receive(
-                armed = a, sourcePin = sourcePinOf(events, sourceJob), chunkSize = 65536,
+                armed = a, sourcePin = sourcePinOf(sourceEvents, sourceJob), chunkSize = 65536,
                 workDir = dstDir, launcher = launcher,
-            ) { events += it }
+            ) { receiveEvents += it }
             sourceJob.join()
 
             assertTrue("receive did not verify", result.ok)
@@ -93,9 +96,12 @@ class HandoffLoopbackInstrumentedTest {
             assertNotNull("ACTION_VIEW did not resolve", result.resolvedActivity)
             assertNotNull(result.contentUri)
             assertTrue(result.verifyOk)
-            // Ladder: both levels honest-done.
-            val ladder = events.filterIsInstance<HandoffEvent.Ladder>()
-            assertTrue(ladder.contains(HandoffEvent.Ladder(HandoffLadderStep.L0_CARRY, HandoffOutcome.OK)))
+            // Ladder: both levels honest-done BY THE RECEIVER's own events.
+            val ladder = receiveEvents.filterIsInstance<HandoffEvent.Ladder>()
+            assertTrue(
+                "receiver must emit L0 OK itself (source events don't count)",
+                ladder.contains(HandoffEvent.Ladder(HandoffLadderStep.L0_CARRY, HandoffOutcome.OK)),
+            )
             assertTrue(ladder.contains(HandoffEvent.Ladder(HandoffLadderStep.L1_OPEN, HandoffOutcome.OK)))
         }
     }
@@ -108,7 +114,8 @@ class HandoffLoopbackInstrumentedTest {
 
         val armed = HandoffFlow.arm(dstDir)
         armed.use { a ->
-            val events = mutableListOf<HandoffEvent>()
+            val sourceEvents = mutableListOf<HandoffEvent>()
+            val receiveEvents = mutableListOf<HandoffEvent>()
             val sourceJob = launch(Dispatchers.IO) {
                 // --tamper: the descriptor declares a TAMPERED hash; the
                 // receive gate must REFUSE (fail closed) — no success on a
@@ -118,22 +125,22 @@ class HandoffLoopbackInstrumentedTest {
                         dataDir = srcDir, file = png,
                         addr = "127.0.0.1:${a.wireAddr.substringAfterLast(':')}",
                         destPin = a.pinHex, identity = null, tamper = true,
-                    ) { events += it }
+                    ) { sourceEvents += it }
                 }
             }
             try {
                 HandoffFlow.receive(
-                    armed = a, sourcePin = sourcePinOf(events, sourceJob), chunkSize = 0,
+                    armed = a, sourcePin = sourcePinOf(sourceEvents, sourceJob), chunkSize = 0,
                     workDir = dstDir, launcher = launcher,
-                ) { events += it }
+                ) { receiveEvents += it }
                 org.junit.Assert.fail("receive must REFUSE a tampered declared hash")
             } catch (expected: com.carryon.app.ffi.CoreException) {
                 // fail closed — the only correct outcome (CORE-004)
                 assertTrue(expected.message!!.contains("REFUSED"))
             }
             sourceJob.join()
-            // No L1 must ever have fired.
-            assertFalse(events.any {
+            // No L1 must ever have fired on the receiver.
+            assertFalse(receiveEvents.any {
                 it is HandoffEvent.Ladder && it.step == HandoffLadderStep.L1_OPEN &&
                     it.outcome == HandoffOutcome.OK
             })

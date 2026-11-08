@@ -358,6 +358,7 @@ object HandoffFlow {
                 val out = File(workDir, descriptor.fileName)
                 out.writeBytes(bytes)
                 emitterLog("L0", "file carried + verified → ${out.name} (${bytes.size} bytes)")
+                emitter(HandoffEvent.Ladder(HandoffLadderStep.L0_CARRY, HandoffOutcome.OK))
 
                 // ---- honest L1: the real OS ACTION_VIEW first (PLAT-003, the
                 // shell's flow), then the engine's activation-only record with

@@ -79,6 +79,9 @@ jobs:
       - name: swift build
         working-directory: apps/macos
         run: swift build
+      - name: swift test (handoff validation + loopback pipeline units)
+        working-directory: apps/macos
+        run: swift test
       - name: Demo smoke — L3 editor scenario
         working-directory: apps/macos
         run: swift run -q carryon-demo-smoke editor
