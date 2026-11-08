@@ -5,6 +5,11 @@
 # platform claim (§30 acceptance is unrun) and the macOS smoke job is one-device
 # loopback evidence only.
 #
+# Discovery live-multicast tests never run here: they are #[ignore]d in the
+# Rust suite (owner-machine runs — see docs/evidence/20261108-net003-discovery/
+# for the documented physical procedure); the pure TXT-contract tests DO run
+# in CI (crate units + swift test through the FFI + Android JVM units).
+#
 # Why carryon-adapter-kiwix is excluded from the workspace job: its default
 # `zim-backend` feature links the locally built libzim on the authoring
 # machine's external-storage prefix (see its build.rs and
