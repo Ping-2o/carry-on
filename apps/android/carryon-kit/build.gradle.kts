@@ -17,7 +17,6 @@
  */
 plugins {
     id("com.android.library")
-    id("org.jetbrains.kotlin.android")
 }
 
 // SDK version follows the engine ABI major.minor (plan.md stage 9): ABI 1.3 →
@@ -28,7 +27,7 @@ group = "dev.carryon"
 
 android {
     namespace = "dev.carryon.kit"
-    compileSdk = 35
+    compileSdk = 36
 
     // The NDK the prebuilt engine was cross-compiled with (r27c; proven by
     // Scripts/fetch_engine_lib.sh). Pinned so AGP resolves exactly this NDK.
@@ -76,9 +75,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    // No kotlinOptions {}: AGP 9 built-in Kotlin derives jvmTarget from
+    // compileOptions.targetCompatibility (17).
 
     buildFeatures {
         buildConfig = true

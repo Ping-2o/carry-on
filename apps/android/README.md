@@ -50,7 +50,7 @@ the verified stock Gradle 8.9 wrapper from
 `github.com/gradle/gradle` (tag `v8.9.0`); `distributionUrl` and
 `distributionSha256Sum` are pinned to the official Gradle 8.9 release
 (`gradle-8.9-bin.zip`, sha256 `d725d707bfabd4dfdc958c624003b3c80accc03f7037b5122c4b1d0ef15cecab`)
-to match AGP 8.7.3. Provenance hashes (apps/ security audit):
+to match AGP 9.5.1. Provenance hashes (apps/ security audit):
 
 - `gradlew`     sha256 `9cbbb4d68ff7fb5211c4d58f598ac9d8664c05fdcd1e5f59b7f2c3ac1ee00af0`
 - `gradlew.bat` sha256 `0f3ed8f03b50934cb8c48b15a470d5c20a30a5385825e48b55bcc8ea3d8f8e18`
