@@ -15,6 +15,8 @@ use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+mod acceptance;
+
 fn main() {
     let cmd = std::env::args().nth(1).unwrap_or_else(|| "help".into());
     match cmd.as_str() {
@@ -25,10 +27,29 @@ fn main() {
         "fault-injection" => run_fault_injection(),
         "bench-aggregate" => run_bench_aggregate(),
         "demo" => run_demo(),
+        "acceptance" => {
+            // §30 acceptance harness (stage 8). LOCAL loopback scenarios only;
+            // the device-phase runner is Scripts/acceptance_xdev.sh.
+            let out = std::env::args()
+                .nth(2)
+                .map(PathBuf::from)
+                .unwrap_or_else(|| std::env::temp_dir().join("carryon-acceptance"));
+            acceptance::run(&out);
+        }
+        "acceptance-worker" => {
+            // Internal: the SIGKILL crash-recovery worker (S3) — a separate
+            // source process the parent kills mid-transfer.
+            let args: Vec<String> = std::env::args().skip(2).collect();
+            if args.first().map(|s| s.as_str()) != Some("serve") || args.len() < 2 {
+                eprintln!("usage: xtask acceptance-worker serve <dir>");
+                std::process::exit(2);
+            }
+            acceptance::worker_serve(&PathBuf::from(&args[1]));
+        }
         _ => {
             eprintln!(
                 "usage: xtask <evidence|handoff-evidence|ffi-demo|bench|fault-injection|\
-                 bench-aggregate|demo> [out_dir]"
+                 bench-aggregate|demo|acceptance> [out_dir]"
             );
             std::process::exit(2);
         }
