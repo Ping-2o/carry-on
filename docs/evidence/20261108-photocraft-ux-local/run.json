@@ -1,0 +1,259 @@
+{
+  "budget_window_bytes": 262144,
+  "capture": {
+    "dirty": true,
+    "document_bytes": 4209105,
+    "documents": 1,
+    "encoding": "split",
+    "name": "photo.pcraft",
+    "parts": 48,
+    "path": "photo.pcraft",
+    "revision": 5,
+    "rotation": 4.0,
+    "selected_layers": 1,
+    "tool": "Brush",
+    "total_bytes": 8366284,
+    "unsaved_bytes": 4157179,
+    "zoom": 1.350000023841858
+  },
+  "capture_seconds": 0.320297,
+  "channel": "desktop JSON control channel (loopback, bearer token file, method whitelist)",
+  "connections": 22,
+  "encoding": "split",
+  "experiment": "stage-10 PhotoCraft desktop flagship UX (two live apps)",
+  "label": "OBSERVED (LOCAL)",
+  "live_after": {
+    "active": 4,
+    "dirty": false,
+    "documents": 5,
+    "name": "photo.pcraft_copy.pcraft",
+    "path": "carryon-ingress/a85e2e7b/photo.pcraft",
+    "revision": 3,
+    "rotation": 4.0,
+    "selected_layers": 1,
+    "tool": "Brush",
+    "zoom": 1.350000023841858
+  },
+  "mirror_cut": 0,
+  "not_claimed": [
+    "PHYSICAL (no second machine / second NIC)",
+    "platform supported (§30 unrun)",
+    "PhotoCraft MCP channel (control channel chosen)"
+  ],
+  "objects_sealed": 51,
+  "oracle": {
+    "agreed": true,
+    "checked": true,
+    "detail": "session restored at generation 1; auth_hash matches the sealed state"
+  },
+  "photocraft_pin": "1f7fc0f53696e54da79b95015abb37d7c22cdd1a",
+  "position_match": {
+    "selected_layers": true,
+    "tool": true,
+    "zoom": true
+  },
+  "progressive_note": "each window is the engine's real §6.8 budget admission; the UI shows published/deferred objects per window",
+  "restore_seconds": 1.232775834,
+  "restored": {
+    "active": 4,
+    "dirty": false,
+    "name": "photo.pcraft_copy.pcraft",
+    "opened_path": "carryon-ingress/a85e2e7b/photo.pcraft",
+    "revision": 2,
+    "rotation": 4.0,
+    "screenshot": "ux-after-restore.png",
+    "screenshot_error": null,
+    "selected_layers": 1,
+    "tool": "Brush",
+    "zoom": 1.350000023841858
+  },
+  "scope": "two PhotoCraft processes + two Carry-On cores on ONE machine; loopback only",
+  "screenshot": "/Users/pauyedin/.local/share/opencode/worktree/b6724fde0f0fdd227fbfc3d0f885b81702ad6f29/pairing/docs/evidence/20261108-photocraft-ux-local/ux-after-restore.png",
+  "screenshot_note": "app B's own window, captured by PhotoCraft's ui.screenshot into its automation write root",
+  "source_live_before": {
+    "active": 2,
+    "dirty": true,
+    "documents": 5,
+    "name": "photo.pcraft",
+    "path": "photo.pcraft",
+    "revision": 5,
+    "rotation": 4.0,
+    "selected_layers": 1,
+    "tool": "Brush",
+    "zoom": 1.350000023841858
+  },
+  "source_session": "14c5dcdd-0242-4a30-9b2a-a30d73b1330c",
+  "transfer_seconds": 6.584270209,
+  "windows": [
+    {
+      "completed": false,
+      "deferred": 46,
+      "deferred_bytes": 7993352,
+      "published": 5,
+      "seconds": 0.452995083,
+      "window": 1,
+      "window_bytes_effective": 262144,
+      "wire_bytes": 360145
+    },
+    {
+      "completed": false,
+      "deferred": 43,
+      "deferred_bytes": 7746749,
+      "published": 3,
+      "seconds": 0.384903583,
+      "window": 2,
+      "window_bytes_effective": 262144,
+      "wire_bytes": 356661
+    },
+    {
+      "completed": false,
+      "deferred": 40,
+      "deferred_bytes": 7490845,
+      "published": 3,
+      "seconds": 0.354888708,
+      "window": 3,
+      "window_bytes_effective": 262144,
+      "wire_bytes": 369069
+    },
+    {
+      "completed": false,
+      "deferred": 37,
+      "deferred_bytes": 7235469,
+      "published": 3,
+      "seconds": 0.3730935,
+      "window": 4,
+      "window_bytes_effective": 262144,
+      "wire_bytes": 368361
+    },
+    {
+      "completed": false,
+      "deferred": 34,
+      "deferred_bytes": 6975952,
+      "published": 3,
+      "seconds": 0.353745583,
+      "window": 5,
+      "window_bytes_effective": 262144,
+      "wire_bytes": 373885
+    },
+    {
+      "completed": false,
+      "deferred": 31,
+      "deferred_bytes": 6717392,
+      "published": 3,
+      "seconds": 0.316918292,
+      "window": 6,
+      "window_bytes_effective": 262144,
+      "wire_bytes": 372609
+    },
+    {
+      "completed": false,
+      "deferred": 28,
+      "deferred_bytes": 6462991,
+      "published": 3,
+      "seconds": 0.301009041,
+      "window": 7,
+      "window_bytes_effective": 262144,
+      "wire_bytes": 367061
+    },
+    {
+      "completed": false,
+      "deferred": 25,
+      "deferred_bytes": 6210559,
+      "published": 3,
+      "seconds": 0.277892875,
+      "window": 8,
+      "window_bytes_effective": 262144,
+      "wire_bytes": 364441
+    },
+    {
+      "completed": false,
+      "deferred": 22,
+      "deferred_bytes": 5951437,
+      "published": 3,
+      "seconds": 0.3241755,
+      "window": 9,
+      "window_bytes_effective": 262144,
+      "wire_bytes": 373361
+    },
+    {
+      "completed": false,
+      "deferred": 19,
+      "deferred_bytes": 5696503,
+      "published": 3,
+      "seconds": 0.258177709,
+      "window": 10,
+      "window_bytes_effective": 262144,
+      "wire_bytes": 367773
+    },
+    {
+      "completed": false,
+      "deferred": 16,
+      "deferred_bytes": 5435434,
+      "published": 3,
+      "seconds": 0.257531292,
+      "window": 11,
+      "window_bytes_effective": 262144,
+      "wire_bytes": 375953
+    },
+    {
+      "completed": false,
+      "deferred": 13,
+      "deferred_bytes": 5175172,
+      "published": 3,
+      "seconds": 0.238001625,
+      "window": 12,
+      "window_bytes_effective": 262144,
+      "wire_bytes": 374877
+    },
+    {
+      "completed": false,
+      "deferred": 10,
+      "deferred_bytes": 4914172,
+      "published": 3,
+      "seconds": 0.228915333,
+      "window": 13,
+      "window_bytes_effective": 262144,
+      "wire_bytes": 375861
+    },
+    {
+      "completed": false,
+      "deferred": 7,
+      "deferred_bytes": 4655367,
+      "published": 3,
+      "seconds": 0.222983208,
+      "window": 14,
+      "window_bytes_effective": 262144,
+      "wire_bytes": 372937
+    },
+    {
+      "completed": false,
+      "deferred": 4,
+      "deferred_bytes": 4406163,
+      "published": 3,
+      "seconds": 0.207914125,
+      "window": 15,
+      "window_bytes_effective": 262144,
+      "wire_bytes": 360133
+    },
+    {
+      "completed": false,
+      "deferred": 1,
+      "deferred_bytes": 4157179,
+      "published": 3,
+      "seconds": 0.190272125,
+      "window": 16,
+      "window_bytes_effective": 262144,
+      "wire_bytes": 359841
+    },
+    {
+      "completed": true,
+      "mirror_cut": 0,
+      "seconds": 1.8397854580000002,
+      "window": 17,
+      "window_bytes_effective": 4194304,
+      "wire_bytes": 5589891
+    }
+  ],
+  "wire_bytes_received": 11482859,
+  "wire_bytes_sent": 11587342
+}

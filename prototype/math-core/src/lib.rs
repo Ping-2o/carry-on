@@ -54,4 +54,7 @@ pub mod hierarchy;
 pub mod layout;
 pub mod testvectors;
 
+#[cfg(kani)]
+pub mod verification;
+
 pub use error::{MathError, Result};

@@ -1,6 +1,6 @@
 // swift-tools-version:5.9
 // Carry-On for macOS — native SwiftUI wrapper over the real Carry-On engine C ABI
-// (crates/carryon-ffi/include/carryon.h, ABI 1.1). Swift 5 language mode on the
+// (crates/carryon-ffi/include/carryon.h, ABI 1.3). Swift 5 language mode on the
 // Swift 6.4.2 compiler; deployment target macOS 14.0 for @Observable.
 //
 // Targets:
@@ -57,6 +57,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "carryon-discovery-smoke",
+            dependencies: ["CarryOnKit"]
+        ),
+        .executableTarget(
+            name: "carryon-photocraft-smoke",
             dependencies: ["CarryOnKit"]
         ),
         .testTarget(

@@ -7,9 +7,10 @@
 # with the NDK cross-compile env proven by
 # crates/carryon-ffi/shells/android-cli/build_and_run.sh (AR_/CC_/LINKER; NDK
 # r27+; external CARGO_TARGET_DIR). The resulting libcarryon_ffi.so is copied to
-# app/src/main/jniLibs/arm64-v8a/ — a FETCHED build artifact, gitignored (see
-# app/.gitignore), never committed. The vendored header
-# app/src/main/cpp/include/carryon.h is re-synced with a drift check.
+# carryon-kit/src/main/jniLibs/arm64-v8a/ — a FETCHED build artifact, gitignored
+# (see app/.gitignore), never committed. The kit module is the distributable
+# SDK (stage 9): its AAR packages the engine .so + the JNI shim. The vendored
+# header carryon-kit/src/main/cpp/include/carryon.h is re-synced with a drift check.
 #
 # Env:
 #   NDK        — Android NDK root (default: the machine's external-storage NDK r27c).
@@ -50,9 +51,9 @@ TC="$NDK/toolchains/llvm/prebuilt/$HOST_TAG"
 CLANG="$TC/bin/${TARGET}${API}-clang"
 CXX="$TC/bin/${TARGET}${API}-clang++"
 SO_SRC="$TARGET_DIR/$TARGET/release/libcarryon_ffi.so"
-JNI_DIR="$APP_ANDROID/app/src/main/jniLibs/$ABI"
+JNI_DIR="$APP_ANDROID/carryon-kit/src/main/jniLibs/$ABI"
 HEADER_SRC="$REPO/crates/carryon-ffi/include/carryon.h"
-HEADER_DST="$APP_ANDROID/app/src/main/cpp/include/carryon.h"
+HEADER_DST="$APP_ANDROID/carryon-kit/src/main/cpp/include/carryon.h"
 
 [ -d "$NDK" ] || { echo "FAIL: NDK not found at $NDK (set NDK=...)"; exit 1; }
 [ -x "$CLANG" ] || { echo "FAIL: NDK clang missing: $CLANG"; exit 1; }
@@ -117,7 +118,7 @@ cp "$HEADER_SRC" "$HEADER_DST"
 
 echo ">> re-checking the JNI shim against the NDK sysroot"
 "$CLANG" -fsyntax-only -Wall -Wextra -I "$REPO/crates/carryon-ffi/include" \
-    "$APP_ANDROID/app/src/main/cpp/carryon_jni.c"
+    "$APP_ANDROID/carryon-kit/src/main/cpp/carryon_jni.c"
 
 echo ">> OK: $JNI_DIR/libcarryon_ffi.so"
 ls -l "$JNI_DIR/"

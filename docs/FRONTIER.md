@@ -22,7 +22,8 @@ completes, its rows move to `docs/TARGETS.md` with real evidence — not before.
 | L3 structured session continuation | OBSERVED (physical) | `l3_handoff.sh` (document + unsaved + cursor/selection/viewport/tab + meta) |
 | Machine-checked authority protocol | MODEL-level (not implementation proof) | `prototype/authority-model`: Kani 11/11 loop-free harnesses (exhaustive), stateright exhaustive interleavings (§19.3.6 crash windows, loss, duplication, §21.3 flagged recovery) — commit `e8f47af` |
 | Statistical preparation-strategy benchmarks | OBSERVED | `xtask bench` (mac 88×30 loopback; Galaxy A04 14×8 on-device), `bench_xdev.sh` (real cross-device campaign) |
-| Endpoint-Hamming dilation theorem + application benchmark | PROVED (paper, uncommitted) | `main.tex` — arXiv-ready: PET/FEC related work, terminology map, acknowledgments, Kani/stateright section |
+| Endpoint-Hamming dilation theorem + application benchmark | PROVED (paper) | `main.tex` — arXiv-ready: PET/FEC related work, terminology map, acknowledgments, Kani/stateright section (paper kept outside the repo by design) |
+| Block-sum checkpoint index in the engine (stage 11) | IMPLEMENTED (research feature) + OBSERVED (LOCAL measurement) | `crates/carryon-core/src/checkpoint.rs`, opt-in `blocksum-checkpoint` feature — `carryon-ffi` (and both apps) never enable it. `xtask bench-blocksum` over the **real** 60-tile PhotoCraft pyramid (10×6 grid, 5,914,711 tile bytes): q=4, bound q+1=**5**, measured single-update max **5** (attained), min 1, mean **3.466**, every checkpoint view equal to the independent reference. **Update-cost, not delivery** — no transfer path consumes the index. Evidence: [`docs/evidence/20261108-blocksum-checkpoint/`](../docs/evidence/20261108-blocksum-checkpoint/) |
 
 ## 2. Frontier phases
 
@@ -97,7 +98,19 @@ with the scope).
   - [x] Phase 3 — photo journal replay (397 B journal vs 7,022,517 B snapshot, composite oracle match); **L4 + source-off proof with two LIVE apps (21/21 checks, OBSERVED, LOCAL — kill -9 source, dest keeps editing, restarted source reports AUTH_ReadOnly)**; **PHYSICAL mac→Galaxy A04 carry (OBSERVED, physical — 57,663 B LAN TLS, on-device composite render hash MATCH)**; edit-stream: journal ~117 B/step, no crossover < ~100k steps (extrapolation, labeled).
   - [x] Phase 4 tile-splitting (on branch, unmerged) — core budget admission cumulative + progressive (§6.8, `ImportOutcome::PartialBudget`, ABI minor 0→1 append-only — **a pre-existing per-object budget hole found and fixed**: an N-object closure whose sum exceeded the budget admitted entirely; with tiles this would have been a live bug); tile-split document encoding — manifest object + parent-linked BLAKE3 tile/blob objects (two-phase publish per tile); real-photo measurement (OBSERVED, LOCAL): split carry 5,930,649 B vs monolithic 6,868,017 B (delta = embedded previews the split doesn't carry), re-carry dedup moves **222,413 B wire vs 5.9 MB** (6 of 67 objects changed).
   - [x] Phase 4 physical L4 (**OBSERVED, PHYSICAL** — two machines, two NICs, LAN TLS): live mac app → split cut over the wire → **Galaxy A04 imports 50,391 B**, re-hashes everything from its own store, renders (composite `ef8c0c13…` identical mac↔device); §21.2 on-device: epoch 0→1, **device owns**; mac source-off (SIGKILL → reopened core `may_mutate=false`, relaunched app read-only-paired); **device FRESH-PROCESS continuation** — `document.edit` steps_ran=2, still owns. Stretch: `cargo xtask demo` live-harness registry (7 bundles on disk). Agent gate: 69 suites green, clippy/fmt clean; orchestrator re-verification on an isolated target dir in flight.
-  - [ ] Phase 5 candidates — physical many-tile run (60-tile photo to the device, real budget windows); control-channel split support (orchestrator decision: PhotoCraft-side `app.save` to dir bundles vs mac-side conversion as the documented bridge); >16 MiB document scale test; **artcraft↔kiwix object-model reconciliation** (per-object progressive admission vs bulk/partial-fetch) — through the orchestrator.
+  - [x] Phase 5 (desktop half, stage 10) — **the flagship is in the product**: the
+      macOS app's **PhotoCraft** pane sees a LIVE session over the app's loopback
+      JSON control channel (chosen over MCP — same verbs, one tested surface),
+      cuts it through `carryon-adapter-photocraft` (split carry: PhotoCraft's own
+      stored ZIP entries → tiles), streams it in visible §6.8 budget windows, and
+      restores it into a second live PhotoCraft (engine oracle AGREED; viewport/
+      tool/selection reapplied). `carryon_photocraft_inspect/_register/_restore`
+      (ABI 1.3, append-only); no fork, no MCP, no linked PhotoCraft runtime.
+      **OBSERVED (LOCAL)** — two instances on ONE Mac; evidence
+      `docs/evidence/20261108-photocraft-ux-local/`; design
+      `docs/artcraft-bridge/UX.md`. Remaining Phase-5 candidates: physical
+      many-tile run to the A04, L4 authority transfer in the pane, >16 MiB scale,
+      artcraft↔kiwix object-model reconciliation (through the orchestrator).
 - [ ] `carryon-adapter-kiwix`:
   - [x] Phase 1 — research, adapter design, skeleton (8 tests, orchestrator-verified green) on branch `kiwix-bridge` (unmerged). Sources pinned: libzim 9.8.2 `ad888b4`, libkiwix 14.3.0 `c8a4b8a`, kiwix-android `8fd5b93`, kiwix-apple `f410135`. Session models mapped (Android DataStore/Room, iOS CoreData `Tab.interactionState`); libzim chunk API confirmed (`getData(offset,size)` + direct access) → progressive bulk feasible. Builds **IMPLEMENTED**: libzim/libkiwix macOS, libzim→Android arm64, libzim→iOS staticlib via kiwix-build (SSD sparse image `/Volumes/kbwork`). libkiwix→Android **UNSUPPORTED** (Linux-host-only per kiwix-build) — honest negative, non-blocking (reading needs only libzim). Surface: standalone companion reader, no fork.
   - [x] Phase 2 — libzim C-ABI backend (C++ shim → C ABI → Rust FFI) **IMPLEMENTED** (host 12/12 tests incl. 4 real-ZIM; Android arm64 static link; iOS compile); **on-device probe + real session capture OBSERVED (physical)** on the Galaxy A04 — real Kiwix app session (27 MB ZIM, uuid cross-check passed), Chromium bundle carried but DROPPED-labeled; flagship measurement **OBSERVED (LOCAL, real bytes)**: A = 27,041,691 B vs D = 31,205 B → **D/A = 0.1154% (866.6×)** — target #4 passes by ~434×.
@@ -105,15 +118,37 @@ with the scope).
   - [x] Phase 4 (partial, on branch, session cancelled + respawned) — **sparse lazy-index materialization: 0.0138% of the 1.7 GB WikiMed before first read (OBSERVED, physical)** — two orders past the planned ~3% target; **companion-shell first paint renders the carried article on-device (OBSERVED, physical)**. Gates 14/14 green on the branch.
   - [x] ~~iOS simulator run~~ — **DROPPED by owner (2026-10-29)** with the whole iOS scope; the respawned session is winding down (no iOS artifacts committed; leftovers inventoried for the record). Engine decision points (partial-fetch API, tiered caps) remain REPORT-ONLY.
 
-### Phase 5 — Theorem into the engine · `TARGET` / `RESEARCH`
+### Phase 5 — Theorem into the engine · `RESEARCH` (implemented, LOCAL measurement)
 
 Make the `main.tex` block-sum theorem load-bearing instead of parallel:
 
-- [ ] Choose the encoding site (sealed cut / hash-chained journal / store layout).
-- [ ] Implement a view-pure checkpointed encoding attaining `q+1`.
-- [ ] Measure endpoint dilation on a real hierarchy (leading candidate domain:
-      layered-image resolution pyramids, e.g. PhotoCraft documents).
-- [ ] Record the connection honestly (update-cost theorem ≠ delivery).
+- [x] **Encoding site: the sealed cut.** Coordinate `i` is the served size
+      (`logical_size`) of authoritative object `i` of a sealed cut, in cut
+      ordinal order. Rejected: the hash-chained journal (append-only — endpoint
+      Hamming is the wrong cost model) and the store layout (content-addressed
+      paths — a byte prefix is payload, not a block-sum view). The cut is the
+      engine's immutable handoff boundary (§6.2), so a tile whose served size
+      changes is one source-coordinate update (the view is a size summary, not a
+      content digest).
+- [x] **View-pure encoding attaining `q+1`**: `crates/carryon-core/src/checkpoint.rs`
+      instantiates the proved all-but-one-child construction
+      (`carryon-math-core`) over a tile-pyramid plan (whole → row bands → rows →
+      half-rows → cells). Behind the opt-in `blocksum-checkpoint` feature; the
+      C ABI / both apps never enable it, and the index is derived, never persisted.
+- [x] **Measured on a real hierarchy**: the real PhotoCraft demo document
+      (2400×1500, 256 px tiles → 10×6 = 60 tiles, 5,914,711 tile bytes) saved by
+      the pinned engine. q=4, bound **5**; across all 60 single-tile updates
+      measured max **5** (attained), min 1, mean **3.466**
+      (histogram 1:1, 2:8, 3:21, 4:22, 5:8); every checkpoint view equals the
+      block sums computed independently from the source. A six-tile update
+      measures 12 — reported as a multi-coordinate change, **not** bounded by
+      `q+1`. Raw identity storage changes 1 symbol but is **not view-pure**.
+- [x] **Recorded honestly (update-cost theorem ≠ delivery)**: the theorem bounds
+      persistent symbols, not wire bytes, latency, or probes. The engine index is
+      a research view; no delivery win is claimed and no transfer path consumes
+      it. `main.tex` §benchmark gained the same boundary note; the Kani harnesses
+      are model-level (4/4, `prototype/math-core/src/verification.rs`).
+      OBSERVED (LOCAL): `xtask bench-blocksum` → evidence bundle.
 
 ## 3. Flagship application candidates (all `TARGET`, researched 2026-10-27)
 
@@ -163,3 +198,6 @@ massive content, mass audience).
 | 2026-11-05 | **App wrapper pilots landed** (branch `apps/native-wrappers`, unmerged): macOS SwiftUI app drives the full L3 demo pipeline through the C ABI (OBSERVED, LOCAL — one device, loopback TLS 1.3); Android Compose app build-ready `TARGET` (no SDK on the authoring machine; JNI shim NDK-syntax-checked, 49/49 Kotlin↔C symbols cross-checked, engine `.so` fetched). First slices of the Phase-4 SDK items — the SDK checkboxes remain unchecked. See `apps/README.md`. |
 | 2026-11-07 | **Review rounds on the app wrappers closed** (PR #5, merged into `apps/native-wrappers` as `faf48f5`): concurrent session polling removed (counters sampled between wire ops only), honest graph-authority skip, real source-off (source engine closes), UTC + NSD `pr` fixes, dest-only evidence metrics, Android timeout watchdog + zombie-pipeline isolation (generation guard + JVM unit tests, `testDebugUnitTest` in CI). Photocraft dependency pin now resolves via the canonical GitHub URL (workspace reproducible off the authoring machine). |
 | 2026-11-07 | **CI (GitHub Actions) + first-ever Android compile**: rust green gate + macOS smoke + Android `assembleDebug` on every PR; the first `compileDebugKotlin` found 3 latent resolution errors (fixed); Android build claim upgraded to `IMPLEMENTED` (CI compile) in `apps/README.md` — the app has still never RUN on a device. Merged-tree gate green (run 42371949597). |
+| 2026-11-08 | **Stage 11 (RESEARCH) — block-sum theorem in the engine**: the sealed cut's authoritative sizes are encoded by the proved all-but-one-child construction (`crates/carryon-core/src/checkpoint.rs`, opt-in `blocksum-checkpoint`; the C ABI/apps never enable it). Real 60-tile PhotoCraft pyramid: q=4, bound q+1=**5**, measured single-tile-update max **5**, min 1, mean **3.466**; views match the independent reference; a 6-tile change is 12 (not the theorem's unit). Kani model harnesses 4/4. Honest boundary: update cost ≠ delivery — no transfer path consumes the index. Evidence: `docs/evidence/20261108-blocksum-checkpoint/`. |
+| 2026-11-08 | **Stage 10 desktop flagship (PhotoCraft) in the product** (branch `flagship/photocraft-ux`): the macOS app's PhotoCraft pane drives a LIVE PhotoCraft over its loopback **JSON control channel** (not MCP), captures the session into the adapter, and carries it into a second live PhotoCraft — **OBSERVED (LOCAL)**, two instances on ONE Mac. 51 sealed objects (48 PhotoCraft tiles) moved in 17 §6.8 budget windows (256 KiB, widened for the 4.16 MB dirty snapshot); destination engine oracle AGREED; tool/zoom/selected layers restored. ABI 1.3 (`carryon_photocraft_inspect/_register/_restore`, append-only). No fork; no physical/§30 claim. Evidence: `docs/evidence/20261108-photocraft-ux-local/`. |
+

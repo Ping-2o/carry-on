@@ -1,4 +1,4 @@
-# Carry-On for Android — native build (app-local JNI shim).
+# Carry-On Kit — native build (the SDK's JNI shim; stage 9).
 #
 # The shim (carryon_jni.c) is pure translation over the REAL engine C ABI; the
 # engine itself is the prebuilt cross-compiled libcarryon_ffi.so fetched into

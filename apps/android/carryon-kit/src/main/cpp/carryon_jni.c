@@ -154,7 +154,7 @@ static jint len_precheck(JNIEnv *env, jbyteArray buf, jlongArray len,
 
 /* carryon_abi_version(&major, &minor) -> jintArray(major, minor). */
 JNIEXPORT jintArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_abiVersion(JNIEnv *env, jobject thiz) {
+Java_dev_carryon_kit_CarryOnFfi_abiVersion(JNIEnv *env, jobject thiz) {
     (void)thiz;
     uint32_t major = 0, minor = 0;
     carryon_abi_version(&major, &minor);
@@ -166,7 +166,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_abiVersion(JNIEnv *env, jobject thiz) {
 
 /* carryon_last_error(buf, &len) — *len query protocol (see header comment). */
 JNIEXPORT jint JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_lastError(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_lastError(JNIEnv *env, jobject thiz,
                                               jbyteArray buf, jlongArray len) {
     (void)thiz;
     jlong cap_in = 0;
@@ -192,7 +192,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_lastError(JNIEnv *env, jobject thiz,
  * out_string_result). Kotlin reads it immediately after a jbyteArray wrapper
  * returned NULL — the signature itself cannot carry the code. */
 JNIEXPORT jint JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_lastOutRc(JNIEnv *env, jobject thiz) {
+Java_dev_carryon_kit_CarryOnFfi_lastOutRc(JNIEnv *env, jobject thiz) {
     (void)env; (void)thiz;
     return get_out_rc();
 }
@@ -203,7 +203,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_lastOutRc(JNIEnv *env, jobject thiz) {
 /* ---- Core --------------------------------------------------------------- */
 
 JNIEXPORT jlong JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_coreOpen(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_coreOpen(JNIEnv *env, jobject thiz,
                                              jstring data_dir) {
     (void)thiz;
     const char *dir = borrow_utf(env, data_dir);
@@ -213,13 +213,13 @@ Java_com_carryon_app_ffi_CarryOnFfi_coreOpen(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT void JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_coreFree(JNIEnv *env, jobject thiz, jlong core) {
+Java_dev_carryon_kit_CarryOnFfi_coreFree(JNIEnv *env, jobject thiz, jlong core) {
     (void)env; (void)thiz;
     carryon_core_free((CarryonCore *)h2p(core));
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_coreRecoveryReportJson(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_coreRecoveryReportJson(JNIEnv *env, jobject thiz,
                                                            jlong core) {
     (void)thiz;
     char *out = NULL;
@@ -228,14 +228,14 @@ Java_com_carryon_app_ffi_CarryOnFfi_coreRecoveryReportJson(JNIEnv *env, jobject 
 }
 
 JNIEXPORT jint JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_coreSetChunkSize(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_coreSetChunkSize(JNIEnv *env, jobject thiz,
                                                      jlong core, jlong bytes) {
     (void)env; (void)thiz;
     return carryon_core_set_chunk_size((CarryonCore *)h2p(core), (uint64_t)bytes);
 }
 
 JNIEXPORT jint JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_coreSetBudget(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_coreSetBudget(JNIEnv *env, jobject thiz,
                                                   jlong core, jstring budget_json) {
     (void)thiz;
     const char *j = borrow_utf(env, budget_json);
@@ -246,14 +246,14 @@ Java_com_carryon_app_ffi_CarryOnFfi_coreSetBudget(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jint JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_coreSetForeground(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_coreSetForeground(JNIEnv *env, jobject thiz,
                                                       jlong core, jboolean fg) {
     (void)env; (void)thiz;
     return carryon_core_set_foreground((CarryonCore *)h2p(core), fg == JNI_TRUE);
 }
 
 JNIEXPORT jint JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_coreRequestSuspend(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_coreRequestSuspend(JNIEnv *env, jobject thiz,
                                                        jlong core) {
     (void)env; (void)thiz;
     return carryon_core_request_suspend((CarryonCore *)h2p(core));
@@ -262,7 +262,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_coreRequestSuspend(JNIEnv *env, jobject thiz
 /* ---- Adapters / sessions ------------------------------------------------ */
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_registerAdapter(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_registerAdapter(JNIEnv *env, jobject thiz,
                                                     jlong core, jstring adapter_id,
                                                     jstring params_json) {
     (void)thiz;
@@ -278,7 +278,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_registerAdapter(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_createSession(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_createSession(JNIEnv *env, jobject thiz,
                                                   jlong core,
                                                   jstring create_req_json) {
     (void)thiz;
@@ -294,7 +294,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_createSession(JNIEnv *env, jobject thiz,
 /* ---- Prepare / carry ---------------------------------------------------- */
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_createCut(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_createCut(JNIEnv *env, jobject thiz,
                                               jlong core, jstring session_id) {
     (void)thiz;
     const char *sid = borrow_utf(env, session_id);
@@ -307,7 +307,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_createCut(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_listAvailableActions(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_listAvailableActions(JNIEnv *env, jobject thiz,
                                                          jlong core,
                                                          jstring cut_json,
                                                          jstring classes_json) {
@@ -324,7 +324,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_listAvailableActions(JNIEnv *env, jobject th
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_executeActionAs(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_executeActionAs(JNIEnv *env, jobject thiz,
                                                     jlong core, jstring cut_json,
                                                     jstring action_req_json,
                                                     jstring adapter_id) {
@@ -343,7 +343,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_executeActionAs(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_executeAction(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_executeAction(JNIEnv *env, jobject thiz,
                                                   jlong core, jstring cut_json,
                                                   jstring action_req_json) {
     (void)thiz;
@@ -359,7 +359,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_executeAction(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jint JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_hasObjectHex(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_hasObjectHex(JNIEnv *env, jobject thiz,
                                                  jlong core, jstring content_hash,
                                                  jbooleanArray out) {
     (void)thiz;
@@ -376,7 +376,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_hasObjectHex(JNIEnv *env, jobject thiz,
 /* ---- Net: identity / trust / pairing ------------------------------------ */
 
 JNIEXPORT jlong JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_identityGenerate(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_identityGenerate(JNIEnv *env, jobject thiz,
                                                      jstring name) {
     (void)thiz;
     const char *n = borrow_utf(env, name);
@@ -389,7 +389,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_identityGenerate(JNIEnv *env, jobject thiz,
  * app-level API never surfaces the bytes — pin hex only (§22.3, EVD-006). */
 
 JNIEXPORT jint JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_identityCertDer(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_identityCertDer(JNIEnv *env, jobject thiz,
                                                     jlong id, jbyteArray buf,
                                                     jlongArray len) {
     (void)thiz;
@@ -409,7 +409,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_identityCertDer(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jint JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_identityKeyDer(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_identityKeyDer(JNIEnv *env, jobject thiz,
                                                    jlong id, jbyteArray buf,
                                                    jlongArray len) {
     (void)thiz;
@@ -429,7 +429,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_identityKeyDer(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_identityPinHex(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_identityPinHex(JNIEnv *env, jobject thiz,
                                                    jlong id) {
     (void)thiz;
     char *out = NULL;
@@ -438,14 +438,14 @@ Java_com_carryon_app_ffi_CarryOnFfi_identityPinHex(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT void JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_identityFree(JNIEnv *env, jobject thiz, jlong id) {
+Java_dev_carryon_kit_CarryOnFfi_identityFree(JNIEnv *env, jobject thiz, jlong id) {
     (void)env; (void)thiz;
     carryon_identity_free((CarryonIdentity *)h2p(id));
 }
 
 /* pair_devices -> `{local_trust, remote_trust}` JSON (abi_net.rs). */
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_pairDevices(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_pairDevices(JNIEnv *env, jobject thiz,
                                                 jlong a, jlong b, jstring utc) {
     (void)thiz;
     const char *u = borrow_utf(env, utc);
@@ -459,7 +459,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_pairDevices(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jlong JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_trustFromJson(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_trustFromJson(JNIEnv *env, jobject thiz,
                                                   jstring json) {
     (void)thiz;
     const char *j = borrow_utf(env, json);
@@ -469,7 +469,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_trustFromJson(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_trustToJson(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_trustToJson(JNIEnv *env, jobject thiz,
                                                 jlong trust) {
     (void)thiz;
     char *out = NULL;
@@ -478,7 +478,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_trustToJson(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jint JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_trustPair(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_trustPair(JNIEnv *env, jobject thiz,
                                               jlong trust, jstring name,
                                               jstring pin_hex, jstring utc) {
     (void)thiz;
@@ -495,7 +495,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_trustPair(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jint JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_trustIsTrusted(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_trustIsTrusted(JNIEnv *env, jobject thiz,
                                                    jlong trust, jstring pin_hex,
                                                    jbooleanArray out) {
     (void)thiz;
@@ -510,7 +510,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_trustIsTrusted(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jint JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_trustRevoke(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_trustRevoke(JNIEnv *env, jobject thiz,
                                                 jlong trust, jstring pin_hex,
                                                 jbooleanArray out) {
     (void)thiz;
@@ -525,7 +525,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_trustRevoke(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT void JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_trustFree(JNIEnv *env, jobject thiz, jlong trust) {
+Java_dev_carryon_kit_CarryOnFfi_trustFree(JNIEnv *env, jobject thiz, jlong trust) {
     (void)env; (void)thiz;
     carryon_trust_free((CarryonTrust *)h2p(trust));
 }
@@ -533,7 +533,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_trustFree(JNIEnv *env, jobject thiz, jlong t
 /* ---- Net: listener / session -------------------------------------------- */
 
 JNIEXPORT jlong JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_listenerBind(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_listenerBind(JNIEnv *env, jobject thiz,
                                                  jstring addr) {
     (void)thiz;
     const char *a = borrow_utf(env, addr);
@@ -543,7 +543,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_listenerBind(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_listenerAddr(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_listenerAddr(JNIEnv *env, jobject thiz,
                                                  jlong listener) {
     (void)thiz;
     char *out = NULL;
@@ -552,14 +552,14 @@ Java_com_carryon_app_ffi_CarryOnFfi_listenerAddr(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT void JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_listenerFree(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_listenerFree(JNIEnv *env, jobject thiz,
                                                  jlong listener) {
     (void)env; (void)thiz;
     carryon_listener_free((CarryonListener *)h2p(listener));
 }
 
 JNIEXPORT jlong JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_sessionConnect(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_sessionConnect(JNIEnv *env, jobject thiz,
                                                    jstring addr, jlong id,
                                                    jlong trust) {
     (void)thiz;
@@ -573,7 +573,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_sessionConnect(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jlong JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_sessionAccept(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_sessionAccept(JNIEnv *env, jobject thiz,
                                                   jlong listener, jlong id,
                                                   jlong trust) {
     (void)env; (void)thiz;
@@ -584,7 +584,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_sessionAccept(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_sessionClientNegotiate(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_sessionClientNegotiate(JNIEnv *env, jobject thiz,
                                                            jlong session,
                                                            jstring features_json) {
     (void)thiz;
@@ -598,7 +598,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_sessionClientNegotiate(JNIEnv *env, jobject 
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_sessionServerNegotiate(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_sessionServerNegotiate(JNIEnv *env, jobject thiz,
                                                            jlong session,
                                                            jstring features_json) {
     (void)thiz;
@@ -612,7 +612,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_sessionServerNegotiate(JNIEnv *env, jobject 
 }
 
 JNIEXPORT void JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_sessionFree(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_sessionFree(JNIEnv *env, jobject thiz,
                                                 jlong session) {
     (void)env; (void)thiz;
     carryon_session_free((CarryonSession *)h2p(session));
@@ -624,7 +624,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_sessionFree(JNIEnv *env, jobject thiz,
  * its durable identity from Keystore-held DER bytes (stable pin across
  * launches). The key DER arrives from Keystore-decrypted bytes only. */
 JNIEXPORT jlong JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_identityFromDer(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_identityFromDer(JNIEnv *env, jobject thiz,
                                                     jstring name,
                                                     jbyteArray cert,
                                                     jbyteArray key) {
@@ -650,7 +650,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_identityFromDer(JNIEnv *env, jobject thiz,
 
 /* carryon_pairing_payload_format — §18.4.1: the destination's QR URI. */
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_pairingPayloadFormat(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_pairingPayloadFormat(JNIEnv *env, jobject thiz,
                                                          jstring device_name,
                                                          jstring addr,
                                                          jstring pin_hex,
@@ -673,7 +673,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_pairingPayloadFormat(JNIEnv *env, jobject th
 
 /* carryon_pairing_payload_parse — §18.4.2: strict, fail-closed parse. */
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_pairingPayloadParse(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_pairingPayloadParse(JNIEnv *env, jobject thiz,
                                                         jstring uri) {
     (void)thiz;
     const char *u = borrow_utf(env, uri);
@@ -685,7 +685,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_pairingPayloadParse(JNIEnv *env, jobject thi
 
 /* carryon_pairing_verification_string — §18.4.4: both devices' short string. */
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_pairingVerificationString(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_pairingVerificationString(JNIEnv *env, jobject thiz,
                                                               jstring pin_a_hex,
                                                               jstring pin_b_hex) {
     (void)thiz;
@@ -702,7 +702,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_pairingVerificationString(JNIEnv *env, jobje
 
 /* carryon_pairing_code — the six-digit code shown with the QR (§18.4.1-2). */
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_pairingCode(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_pairingCode(JNIEnv *env, jobject thiz,
                                                 jstring pin_hex, jlong seed) {
     (void)thiz;
     const char *k = borrow_utf(env, pin_hex);
@@ -715,7 +715,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_pairingCode(JNIEnv *env, jobject thiz,
 /* ---- Net: provisional pairing channel (§18.4.3) -------------------------- */
 
 JNIEXPORT jlong JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_sessionConnectPairing(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_sessionConnectPairing(JNIEnv *env, jobject thiz,
                                                           jstring addr, jlong id) {
     (void)thiz;
     const char *a = borrow_utf(env, addr);
@@ -727,7 +727,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_sessionConnectPairing(JNIEnv *env, jobject t
 }
 
 JNIEXPORT jlong JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_sessionAcceptPairing(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_sessionAcceptPairing(JNIEnv *env, jobject thiz,
                                                          jlong listener, jlong id) {
     (void)env; (void)thiz;
     CarryonSession *s = carryon_session_accept_pairing(
@@ -736,7 +736,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_sessionAcceptPairing(JNIEnv *env, jobject th
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_sessionPeerPinHex(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_sessionPeerPinHex(JNIEnv *env, jobject thiz,
                                                       jlong session) {
     (void)thiz;
     char *out = NULL;
@@ -745,7 +745,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_sessionPeerPinHex(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jint JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_sessionIsPairing(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_sessionIsPairing(JNIEnv *env, jobject thiz,
                                                      jlong session,
                                                      jbooleanArray out) {
     (void)thiz;
@@ -756,19 +756,71 @@ Java_com_carryon_app_ffi_CarryOnFfi_sessionIsPairing(JNIEnv *env, jobject thiz,
 }
 
 
+/* ---- Discovery (ABI 1.2 §18.3) ------------------------------------------- */
+
+/* Handle-based discovery entries (the TXT encode/validate pair lives above).
+ * Advertiser/browser handles are opaque jlong exactly like every other
+ * engine handle; the snapshot is an out-string (the same ownership rule). */
+
+JNIEXPORT jlong JNICALL
+Java_dev_carryon_kit_CarryOnFfi_discoveryAdvertiseStart(JNIEnv *env, jobject thiz,
+                                                       jstring instance_name,
+                                                       jint port,
+                                                       jstring txt_pairs_json) {
+    (void)thiz;
+    const char *n = borrow_utf(env, instance_name);
+    const char *t = borrow_utf(env, txt_pairs_json);
+    CarryonDiscoveryAdvertiser *adv = (n && t)
+        ? carryon_discovery_advertise_start(n, (uint16_t)port, t)
+        : NULL;
+    release_utf(env, instance_name, n);
+    release_utf(env, txt_pairs_json, t);
+    return p2h(adv);
+}
+
+JNIEXPORT void JNICALL
+Java_dev_carryon_kit_CarryOnFfi_discoveryAdvertiseStop(JNIEnv *env, jobject thiz,
+                                                       jlong adv) {
+    (void)env; (void)thiz;
+    carryon_discovery_advertise_stop((CarryonDiscoveryAdvertiser *)h2p(adv));
+}
+
+JNIEXPORT jlong JNICALL
+Java_dev_carryon_kit_CarryOnFfi_discoveryBrowseStart(JNIEnv *env, jobject thiz) {
+    (void)env; (void)thiz;
+    return p2h(carryon_discovery_browse_start());
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_dev_carryon_kit_CarryOnFfi_discoveryBrowseSnapshot(JNIEnv *env, jobject thiz,
+                                                        jlong browser) {
+    (void)thiz;
+    char *out = NULL;
+    jint rc = carryon_discovery_browse_snapshot(
+        (const CarryonDiscoveryBrowser *)h2p(browser), &out);
+    return out_string_result(env, rc, out);
+}
+
+JNIEXPORT void JNICALL
+Java_dev_carryon_kit_CarryOnFfi_discoveryBrowseStop(JNIEnv *env, jobject thiz,
+                                                    jlong browser) {
+    (void)env; (void)thiz;
+    carryon_discovery_browse_stop((CarryonDiscoveryBrowser *)h2p(browser));
+}
+
 /* ---- Transfer (handoff) -------------------------------------------------- */
 
 /* Blocking: runs until the peer's import_cut finishes. Kotlin calls this on a
  * dedicated IO coroutine; DemoRunner pairs it with importCut on the other core. */
 JNIEXPORT jint JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_serveCut(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_serveCut(JNIEnv *env, jobject thiz,
                                              jlong core, jlong session) {
     (void)env; (void)thiz;
     return carryon_serve_cut((CarryonCore *)h2p(core), (CarryonSession *)h2p(session));
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_importCut(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_importCut(JNIEnv *env, jobject thiz,
                                               jlong core, jlong session,
                                               jstring remote_session,
                                               jlong remote_cut) {
@@ -784,7 +836,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_importCut(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_resumeImport(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_resumeImport(JNIEnv *env, jobject thiz,
                                                  jlong core, jlong session,
                                                  jstring resume_token_json) {
     (void)thiz;
@@ -801,7 +853,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_resumeImport(JNIEnv *env, jobject thiz,
 /* Object read via the *len query protocol; bytes verified against the declared
  * content_hash by the core before publish (CORE-004 two-phase invariant). */
 JNIEXPORT jint JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_readObject(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_readObject(JNIEnv *env, jobject thiz,
                                                jlong core, jstring content_hash,
                                                jbyteArray buf, jlongArray len) {
     (void)thiz;
@@ -828,7 +880,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_readObject(JNIEnv *env, jobject thiz,
 
 /* -> LongArray(2): [sent, recv]. Live transport counters (MEASURED, §5.6). */
 JNIEXPORT jint JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_sessionBytes(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_sessionBytes(JNIEnv *env, jobject thiz,
                                                  jlong session, jlongArray out) {
     (void)thiz;
     if (!out) return CARRYON_ERR_NULL_ARG;
@@ -850,7 +902,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_sessionBytes(JNIEnv *env, jobject thiz,
 /* Blocking converse of requestAuthorityTransfer (propose -> await accept ->
  * commit relinquishment). DemoRunner runs both on separate IO coroutines. */
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_serveAuthorityTransfer(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_serveAuthorityTransfer(JNIEnv *env, jobject thiz,
                                                            jlong core, jlong session,
                                                            jstring session_id,
                                                            jlong cut_number) {
@@ -867,7 +919,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_serveAuthorityTransfer(JNIEnv *env, jobject 
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_requestAuthorityTransfer(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_requestAuthorityTransfer(JNIEnv *env, jobject thiz,
                                                              jlong core, jlong session,
                                                              jstring mirror_session_id,
                                                              jstring adapter_id) {
@@ -887,7 +939,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_requestAuthorityTransfer(JNIEnv *env, jobjec
 
 /* -> LongArray(1): fresh epoch (§21.3 recovery). */
 JNIEXPORT jint JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_recoverAuthority(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_recoverAuthority(JNIEnv *env, jobject thiz,
                                                      jlong core,
                                                      jstring session_id,
                                                      jlongArray out) {
@@ -915,7 +967,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_recoverAuthority(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jint JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_mayMutate(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_mayMutate(JNIEnv *env, jobject thiz,
                                               jlong core, jstring session_id,
                                               jbooleanArray out) {
     (void)thiz;
@@ -930,7 +982,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_mayMutate(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_mirrorSessionId(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_mirrorSessionId(JNIEnv *env, jobject thiz,
                                                     jstring remote_session) {
     (void)thiz;
     const char *rs = borrow_utf(env, remote_session);
@@ -945,7 +997,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_mirrorSessionId(JNIEnv *env, jobject thiz,
 /* ---- Evidence ------------------------------------------------------------ */
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_exportEvidence(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_exportEvidence(JNIEnv *env, jobject thiz,
                                                    jlong core, jstring session_id) {
     (void)thiz;
     const char *sid = borrow_utf(env, session_id);
@@ -958,7 +1010,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_exportEvidence(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_exportEvidenceWith(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_exportEvidenceWith(JNIEnv *env, jobject thiz,
                                                        jlong core,
                                                        jstring session_id,
                                                        jstring extra_metrics_json) {
@@ -977,7 +1029,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_exportEvidenceWith(JNIEnv *env, jobject thiz
 /* Verifies a bundle FROM DISK path; bundle content is parsed, never executed
  * (EVD-005). The caller owns the bundle file (app storage). */
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_verifyEvidence(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_verifyEvidence(JNIEnv *env, jobject thiz,
                                                    jlong core, jstring bundle_path) {
     (void)thiz;
     const char *path = borrow_utf(env, bundle_path);
@@ -999,7 +1051,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_verifyEvidence(JNIEnv *env, jobject thiz,
  */
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_discoveryTxtEncode(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_discoveryTxtEncode(JNIEnv *env, jobject thiz,
                                                        jstring fields_json) {
     (void)thiz;
     const char *fields = borrow_utf(env, fields_json);
@@ -1012,7 +1064,7 @@ Java_com_carryon_app_ffi_CarryOnFfi_discoveryTxtEncode(JNIEnv *env, jobject thiz
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_carryon_app_ffi_CarryOnFfi_discoveryTxtValidate(JNIEnv *env, jobject thiz,
+Java_dev_carryon_kit_CarryOnFfi_discoveryTxtValidate(JNIEnv *env, jobject thiz,
                                                          jstring pairs_json) {
     (void)thiz;
     const char *pairs = borrow_utf(env, pairs_json);

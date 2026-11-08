@@ -56,6 +56,9 @@ name = "tile_progressive"
 required-features = ["inprocess"]
 
 [[example]]
+name = "photocraft_ux_live"
+
+[[example]]
 name = "phys_l4_source"
 required-features = ["inprocess"]
 

@@ -1,0 +1,34 @@
+{
+  "channel" : "PhotoCraft desktop JSON control channel (not MCP)",
+  "encoding" : "split",
+  "experiment" : "stage-10 PhotoCraft desktop UX via CarryOnKit (headless run of the app path)",
+  "label" : "OBSERVED (LOCAL)",
+  "not_claimed" : [
+    "PHYSICAL (no second machine)",
+    "platform supported (§30 unrun)"
+  ],
+  "oracle" : {
+    "agreed" : true,
+    "checked" : true,
+    "detail" : "session restored at generation 1; auth_hash matches the sealed state"
+  },
+  "receiver_objects" : 51,
+  "receiver_seconds" : 2.5790940523147583,
+  "receiver_windows" : 17,
+  "receiver_wire_bytes" : 11482859,
+  "restored" : {
+    "dirty" : false,
+    "name" : "photo.pcraft_copy.pcraft",
+    "opened_path" : "carryon-ingress\/af83486c\/photo.pcraft",
+    "rotation" : 4,
+    "selected_layers" : 1,
+    "tool" : "Brush",
+    "zoom" : 1.3500000238418579
+  },
+  "scope" : "two live PhotoCraft apps + two Carry-On cores on ONE machine; loopback only",
+  "sender_connections" : 22,
+  "sender_wire_bytes" : 11587342,
+  "total_seconds" : 3.9673709869384766,
+  "window_bytes" : 262144,
+  "workspace" : "carried"
+}

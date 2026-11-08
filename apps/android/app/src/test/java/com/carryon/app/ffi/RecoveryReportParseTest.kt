@@ -15,7 +15,9 @@
  * test pins the exact engine JSON shape — clean AND dirty — so a future ABI
  * transcription cannot silently reintroduce the mismatch.
  */
-package com.carryon.app.ffi
+package com.carryon.app.kitcheck
+
+import dev.carryon.kit.*
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

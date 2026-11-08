@@ -25,7 +25,7 @@
  * serveAuthorityTransfer) MUST run off the main thread (DemoRunner uses
  * Dispatchers.IO coroutines — same discipline as the macOS wrapper).
  */
-package com.carryon.app.ffi
+package dev.carryon.kit
 
 /** Raw external functions. Call through the typed wrappers in CarryonCore.kt
  *  (Core/Identity/Trust/Listener/Session) instead. */
@@ -152,6 +152,24 @@ object CarryOnFfi {
 
     /** received "[[key,value],...]" -> {"txt":{...},"ignored_keys":[...]}. */
     external fun discoveryTxtValidate(pairsJson: String): ByteArray?
+
+    // ---- Discovery (ABI 1.2, §18.3) ------------------------------------------
+
+    /** Start advertising `_carryon._tcp` with §18.3 minimal TXT (pairs from
+     *  [discoveryTxtEncode]). -> advertiser handle, or 0 on failure. */
+    external fun discoveryAdvertiseStart(instanceName: String, port: Int, txtPairsJson: String): Long
+
+    /** Stop advertising; the handle is consumed. */
+    external fun discoveryAdvertiseStop(adv: Long)
+
+    /** Start browsing for `_carryon._tcp`. -> browser handle, or 0 on failure. */
+    external fun discoveryBrowseStart(): Long
+
+    /** Current validated peer snapshot (JSON bytes), or null on error. */
+    external fun discoveryBrowseSnapshot(browser: Long): ByteArray?
+
+    /** Stop browsing; the handle is consumed. */
+    external fun discoveryBrowseStop(browser: Long)
 
     // ---- Transfer (handoff) -----------------------------------------------------
 

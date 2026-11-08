@@ -9,3 +9,7 @@ local.properties
 # AGP machine-local build state (CMake obj dirs, Kotlin session data).
 .kotlin/
 app/.cxx/
+
+# SDK module fetched engine + build state
+carryon-kit/src/main/jniLibs/arm64-v8a/*.so
+carryon-kit/.cxx/

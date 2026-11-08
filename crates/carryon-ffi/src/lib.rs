@@ -22,6 +22,7 @@
 pub mod abi_core;
 pub mod abi_discovery;
 pub mod abi_net;
+pub mod abi_photocraft;
 pub mod abi_transfer;
 pub mod errors;
 pub mod factory;
@@ -32,6 +33,10 @@ pub mod strings;
 /// 1.1: `carryon_import_cut` / `carryon_resume_import` result JSON gains the
 /// additive `partial_budget` shape (§6.8 progressive budget admission); no
 /// signature changes.
+/// 1.3 (stage 10, append-only): the PhotoCraft desktop-flagship live bridge —
+/// `carryon_photocraft_inspect` / `_register` / `_restore` (loopback control
+/// channel; capture into the adapter, restore into a live app). No signature
+/// changes to existing entries.
 /// 1.2 (stage 4/5, append-only): §18.3 discovery — `carryon_discovery_txt_encode`,
 /// `carryon_discovery_txt_validate`, `carryon_discovery_advertise_start/stop`,
 /// `carryon_discovery_browse_start/snapshot/stop`; new code
@@ -39,7 +44,7 @@ pub mod strings;
 /// (format/parse), pairing code, verification string, provisional pairing
 /// channel (connect/accept), peer pin, is-pairing. No signature changes.
 pub const CARRYON_ABI_MAJOR: u32 = 1;
-pub const CARRYON_ABI_MINOR: u32 = 2;
+pub const CARRYON_ABI_MINOR: u32 = 3;
 
 /// Write the ABI version into the out-params. Lets a shell check compatibility at
 /// load time against the header's `#define`s.

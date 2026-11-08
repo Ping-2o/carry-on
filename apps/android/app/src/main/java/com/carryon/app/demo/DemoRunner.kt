@@ -91,22 +91,22 @@
  */
 package com.carryon.app.demo
 
-import com.carryon.app.ffi.Core
-import com.carryon.app.ffi.CoreException
-import com.carryon.app.ffi.Err
-import com.carryon.app.ffi.Identity
-import com.carryon.app.ffi.ImportOutcome
-import com.carryon.app.ffi.Listener
-import com.carryon.app.ffi.Session
-import com.carryon.app.ffi.Trust
-import com.carryon.app.ffi.abiVersion
-import com.carryon.app.ffi.importCut
-import com.carryon.app.ffi.mirrorSessionId
-import com.carryon.app.ffi.pairDevices
-import com.carryon.app.ffi.requestAuthorityTransfer
-import com.carryon.app.ffi.resumeImport
-import com.carryon.app.ffi.serveAuthorityTransfer
-import com.carryon.app.ffi.serveCut
+import dev.carryon.kit.Core
+import dev.carryon.kit.CoreException
+import dev.carryon.kit.Err
+import dev.carryon.kit.Identity
+import dev.carryon.kit.ImportOutcome
+import dev.carryon.kit.Listener
+import dev.carryon.kit.Session
+import dev.carryon.kit.Trust
+import dev.carryon.kit.abiVersion
+import dev.carryon.kit.importCut
+import dev.carryon.kit.mirrorSessionId
+import dev.carryon.kit.pairDevices
+import dev.carryon.kit.requestAuthorityTransfer
+import dev.carryon.kit.resumeImport
+import dev.carryon.kit.serveAuthorityTransfer
+import dev.carryon.kit.serveCut
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
@@ -452,7 +452,7 @@ class DemoRunner(
             val coreDst = withContext(Dispatchers.IO) { Core.open(dstDir.absolutePath) }
             dstCore = coreDst
             val abi = abiVersion()
-            ui.log("abi", "engine ${abi.major}.${abi.minor} (expect 1.2)")
+            ui.log("abi", "engine ${abi.major}.${abi.minor} (expect 1.3)")
             ui.log("core.src", "opened ${srcDir.absolutePath}")
             ui.log("core.dst", "opened ${dstDir.absolutePath}")
             coreSrc.setForeground(true)

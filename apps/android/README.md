@@ -1,7 +1,7 @@
 # Carry-On for Android
 
 Native-feeling app wrapper over the **real** Carry-On engine C ABI
-(`crates/carryon-ffi/include/carryon.h`, ABI 1.2 — 1.1 plus the stage-4 discovery entries, append-only). Kotlin,
+(`crates/carryon-ffi/include/carryon.h`, ABI 1.3 — 1.2 plus the PhotoCraft entries, append-only; the SDK `carryon-kit` wraps it). Kotlin,
 Jetpack Compose, Material 3 (dynamic color on API 31+), minSdk 29 (spec §9),
 targetSdk 35. One Kotlin module (`:app`), manual DI (no Hilt), coroutines +
 StateFlow MVVM.
@@ -14,7 +14,7 @@ StateFlow MVVM.
 | Claim | Label | Why |
 |---|---|---|
 | This Android project builds (`./gradlew assembleDebug`) | `IMPLEMENTED` (CI compile) — never run on a device | First compile: CI `android-app` job, 2026-11-07 (run 42365800510) — the real engine `.so` cross-compiled with NDK r27c, Kotlin compiled, JNI shim built via CMake, debug APK artifact. The first-ever compile surfaced 3 latent resolution errors (phantom imports + a typo'd `Err` constant), fixed in 77bd3ec. The pipeline's runtime behavior is hand-reviewed until a device run. |
-| JNI shim (`app/src/main/cpp/carryon_jni.c`) | verified | Syntax-checked clean with the NDK r27c clang (`aarch64-linux-android29-clang -fsyntax-only -Wall -Wextra`) against the real `carryon.h`. |
+| JNI shim (`carryon-kit/src/main/cpp/carryon_jni.c`) | verified | Syntax-checked clean with the NDK r27c clang (`aarch64-linux-android29-clang -fsyntax-only -Wall -Wextra`) against the real `carryon.h`; the SDK's ABI suite pins every JNI entry-point name against the Kotlin externals. |
 | Engine binary (`libcarryon_ffi.so`, arm64-v8a) | `OBSERVED` | Cross-compiled by `Scripts/fetch_engine_lib.sh` from this checkout (cargo, aarch64-linux-android). Fetched artifact — gitignored, never committed. |
 | Demo Mode (two cores, loopback TLS 1.3, full 8-stage pipeline) | `OBSERVED (LOCAL)` — **once run on a device** | One device, loopback TLS, two in-app cores. NOT physical cross-device evidence (spec §2/§30). The UI shows the verbatim disclosure footer on every run. |
 | **"Receive" tab — L0/L1 ladder (stage 3, manual-IP)** | `OBSERVED (PHYSICAL)` against a real mac; `OBSERVED (LOCAL — device-local)` in the loopback instrumented test | Arm on open (binds listener, shows this device's addr + full pin), source pin field (fail-closed validation), destination-controlled chunk size (§18.6 clamp 4096..8 MiB), accept → import → CORE-004 integrity gate (measured sha256 == declared, else `E_OBJECT_DIGEST_MISMATCH … REFUSED`) → engine `document.open` → MediaStore + ACTION_VIEW with the exact mime. Physical evidence: [`evidence/20261108-a04-l0l1/`](evidence/20261108-a04-l0l1/). |
@@ -103,16 +103,18 @@ optional.
 apps/android/
 ├── build.gradle.kts / settings.gradle.kts / gradle.properties   # Kotlin DSL
 ├── gradlew, gradle/wrapper/                                     # wrapper (verified Gradle 8.9, hash-pinned)
-├── Scripts/fetch_engine_lib.sh        # cross-compiles the engine -> jniLibs (gitignored)
+├── Scripts/fetch_engine_lib.sh        # cross-compiles the engine -> carryon-kit jniLibs (gitignored)
+├── Scripts/build_desktop_shim.sh      # host-JVM shim for the SDK contract tests
+├── carryon-kit/                       # STAGE-9 SDK: the AAR (shim + wrappers + engine) — see carryon-kit/README.md
 └── app/
     ├── build.gradle.kts               # minSdk 29, target/compile 35, CMake, Compose BOM
     ├── proguard-rules.pro             # keep com.carryon.app.ffi.**
     └── src/main/
         ├── AndroidManifest.xml        # INTERNET only; MainActivity exported
-        ├── cpp/carryon_jni.c          # app-local JNI shim over carryon.h (1:1)
+        # (the JNI shim + engine now live in carryon-kit/)
         ├── cpp/CMakeLists.txt         # IMPORTED prebuilt libcarryon_ffi.so
         ├── cpp/include/carryon.h      # vendored copy (drift-checked by fetch script)
-        ├── jniLibs/arm64-v8a/         # fetched libcarryon_ffi.so (gitignored) + .gitkeep
+        # (the fetched libcarryon_ffi.so now ships inside carryon-kit/ + its AAR)
         └── java/com/carryon/app/
             ├── ffi/CarryOnFfi.kt      # raw external funs (1:1 ABI mirror)
             ├── ffi/CarryonCore.kt     # wrappers, error-code mirror (errors.rs),

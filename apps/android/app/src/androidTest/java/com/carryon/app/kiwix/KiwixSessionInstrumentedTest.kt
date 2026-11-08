@@ -21,9 +21,9 @@ package com.carryon.app.kiwix
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.carryon.app.ffi.Core
-import com.carryon.app.ffi.CoreException
-import com.carryon.app.ffi.Err
+import dev.carryon.kit.Core
+import dev.carryon.kit.CoreException
+import dev.carryon.kit.Err
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals

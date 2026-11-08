@@ -31,7 +31,7 @@ extern "C" {
 
 /* ABI version. Check against carryon_abi_version() at load. */
 #define CARRYON_ABI_MAJOR 1u
-#define CARRYON_ABI_MINOR 2u
+#define CARRYON_ABI_MINOR 3u
 
 /* Result codes. */
 #define CARRYON_OK                    0
@@ -194,6 +194,31 @@ int32_t carryon_recover_authority(CarryonCore *core, const char *session_id,
                                   uint64_t *out_epoch);
 int32_t carryon_may_mutate(const CarryonCore *core, const char *session_id, bool *out);
 int32_t carryon_mirror_session_id(const char *remote_session, char **out_mirror_id);
+
+/* ---- PhotoCraft desktop flagship (stage 10; ABI 1.3) ----
+ *
+ * The live-app bridge over PhotoCraft's loopback JSON control channel:
+ *   inspect  -> a token-free live session card (nothing is written);
+ *   register -> capture the live session into the compiled-in
+ *               `org.carryon.photocraft` adapter on `core` (saved document,
+ *               dirty-state snapshot only when dirty, working position);
+ *   restore  -> re-materialize an imported session from `core`'s own store and
+ *               open it in a second live PhotoCraft, then run
+ *               `session.restore` so the engine's oracle re-derives the
+ *               authoritative-state hash.
+ * Config JSON: {"addr":"127.0.0.1:7878","token_file":"...",
+ *   "read_root":"...","write_root":"...","encoding":"split"|"monolithic",
+ *   "workspace_json":"<optional carried position>",
+ *   "name_hint":"...","screenshot":"<write-root-relative png>"}.
+ * The token is read from its file inside Rust and never returned (EVD-006).
+ * Evidence class: OBSERVED (LOCAL) — loopback only; no platform claim.
+ */
+int32_t carryon_photocraft_inspect(const char *cfg_json, char **out_json);
+int32_t carryon_photocraft_register(CarryonCore *core, const char *cfg_json,
+                                    char **out_json);
+int32_t carryon_photocraft_restore(CarryonCore *core, const char *cfg_json,
+                                   const char *mirror_session, uint64_t mirror_cut,
+                                   char **out_json);
 
 /* ---- Evidence ---- */
 int32_t carryon_export_evidence(CarryonCore *core, const char *session_id, char **out_bundle_json);

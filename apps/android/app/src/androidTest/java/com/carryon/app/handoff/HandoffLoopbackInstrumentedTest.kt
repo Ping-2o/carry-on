@@ -134,7 +134,7 @@ class HandoffLoopbackInstrumentedTest {
                     workDir = dstDir, launcher = launcher,
                 ) { receiveEvents += it }
                 org.junit.Assert.fail("receive must REFUSE a tampered declared hash")
-            } catch (expected: com.carryon.app.ffi.CoreException) {
+            } catch (expected: dev.carryon.kit.CoreException) {
                 // fail closed — the only correct outcome (CORE-004)
                 assertTrue(expected.message!!.contains("REFUSED"))
             }

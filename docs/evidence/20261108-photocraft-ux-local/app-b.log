@@ -1,0 +1,11 @@
+2026-11-08T13:07:41.360Z INFO  [main] photocraft::app_dirs: settings directory (Platform): Some("/Users/pauyedin/Library/Application Support/Photocraft")
+2026-11-08T13:07:41.366Z INFO  [main] photocraft: PhotoCraft 0.16.0 (dev build), log file /Users/pauyedin/Library/Application Support/Photocraft/logs/photocraft-49030.log
+photocraft: control token file: /Volumes/ADATA ELITE SE880/compilation/photocraft-ux-work/b/token
+2026-11-08T13:07:41.403Z INFO  [main] photocraft: presentation: autovsync, latency 1
+2026-11-08T13:07:41.403Z INFO  [main] photocraft: GPU startup: Plan { backend: Auto, env: None, reason: None, remember: false } (3.93 ms)
+2026-11-08T13:07:42.135Z INFO  [main] photocraft_ui_egui::canvas::gpu_canvas: gpu canvas: target Bgra8Unorm, max texture 16384, tile 8192, 16F canvas Budget, video memory unknown
+photocraft: control server listening on 127.0.0.1:7899
+2026-11-08T13:07:42.497Z INFO  [main] photocraft_ui_egui::menus::native_menu: menu: Cmd+, is Settings on macOS and layer.hideLayers in PhotoCraft; Settings has no shortcut
+2026-11-08T13:07:42.498Z INFO  [main] photocraft_ui_egui::menus::native_menu: menu: Cmd+H is Hide on macOS and view.extras in PhotoCraft; Hide moves to ⌃⌘H
+2026-11-08T13:07:42.498Z INFO  [main] photocraft_ui_egui::menus::native_menu: menu: Cmd+W is Close Window on macOS and file.close in PhotoCraft; no system Close Window item
+2026-11-08T13:07:42.498Z INFO  [main] photocraft_ui_egui::menus::native_menu: menu: Cmd+M is Minimize on macOS and image.adjustments.curves in PhotoCraft; Minimize moves to ⌃⌘M

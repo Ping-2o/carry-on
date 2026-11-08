@@ -11,7 +11,9 @@
  * 120 s watchdog. The JSON below is VERBATIM the engine's output (captured on
  * the host against the real editor L3 adapter with total_net_bytes=128).
  */
-package com.carryon.app.ffi
+package com.carryon.app.kitcheck
+
+import dev.carryon.kit.*
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

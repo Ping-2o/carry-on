@@ -19,11 +19,11 @@
 package com.carryon.app.pairing
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.carryon.app.ffi.Identity
-import com.carryon.app.ffi.Listener
-import com.carryon.app.ffi.Session
-import com.carryon.app.ffi.Trust
-import com.carryon.app.ffi.pairingVerificationString
+import dev.carryon.kit.Identity
+import dev.carryon.kit.Listener
+import dev.carryon.kit.Session
+import dev.carryon.kit.Trust
+import dev.carryon.kit.pairingVerificationString
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

@@ -1,10 +1,10 @@
 /*
  * Carry-On for Android — :app module.
  *
- * Binds the REAL engine through the C ABI: libcarryon_ffi.so is cross-compiled by
- * Scripts/fetch_engine_lib.sh into src/main/jniLibs/<ABI>/ (fetched, never
- * committed); app/src/main/cpp/carryon_jni.c is the app-local JNI shim linked
- * against the prebuilt engine (IMPORTED in CMakeLists.txt).
+ * The engine binding (JNI shim + typed wrappers + libcarryon_ffi.so) now lives
+ * in the distributable :carryon-kit library (stage 9 SDK); this app consumes
+ * it as a normal project dependency — the same AAR a third-party customer
+ * would. The app owns no C ABI code anymore.
  *
  * Labels (spec §2): build-ready TARGET; demo OBSERVED (LOCAL); no signing
  * (PLAT-006). See README.md for the honest claim table.
@@ -20,8 +20,8 @@ android {
     compileSdk = 35
 
     // The NDK the prebuilt engine was cross-compiled with (r27c; proven by
-    // Scripts/fetch_engine_lib.sh). Pinned explicitly so CI/AGP resolve exactly
-    // this NDK instead of a silently different AGP default.
+    // Scripts/fetch_engine_lib.sh). Kept so the engine ABI and the NDK the
+    // kit module builds its shim with stay pinned in lockstep.
     ndkVersion = "27.2.12479018"
 
     defaultConfig {
@@ -39,19 +39,6 @@ android {
         // Instrumented smoke test (FFI load on a real device — regression for
         // the 2026-11-07 DT_NEEDED device crash; run: connectedDebugAndroidTest).
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        externalNativeBuild {
-            cmake {
-                cppFlags += ""
-                arguments += listOf("-DANDROID_STL=none")
-            }
-        }
-    }
-
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
     }
 
     buildTypes {
@@ -85,19 +72,14 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
-        // libcarryon_ffi.so comes from jniLibs (not from a dependency); nothing to
-        // dedupe. Keep default compression (minSdk 29 > 23, uncompressed is fine).
-    }
-
-    sourceSets {
-        getByName("main") {
-            // Explicit for clarity: prebuilt engine + placeholder until fetched.
-            jniLibs.srcDir("src/main/jniLibs")
-        }
+        // The engine .so + JNI shim now arrive inside the AAR (carryon-kit).
     }
 }
 
 dependencies {
+    // The Android SDK (stage 9): the same AAR a third-party consumer gets.
+    implementation(project(":carryon-kit"))
+
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
 

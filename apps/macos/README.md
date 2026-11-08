@@ -1,7 +1,7 @@
 # Carry-On for macOS
 
 A native SwiftUI wrapper over the **real** Carry-On engine C ABI
-(`crates/carryon-ffi/include/carryon.h`, ABI 1.2 — 1.1 plus the stage-4 discovery entries, append-only). One device, two in-process
+(`crates/carryon-ffi/include/carryon.h`, ABI 1.3 — 1.1 plus discovery (1.2) and the PhotoCraft live bridge (1.3), append-only). One device, two in-process
 cores, real TLS 1.3 loopback, mutual pin pairing, L4 single-writer authority
 transfer — the full 8-stage demo pipeline from `plan.md`, driven end-to-end
 through the FFI.
@@ -10,11 +10,13 @@ through the FFI.
 
 | Piece | Label | Why |
 |---|---|---|
-| Swift binding (`CarryOnKit` over `CCarryon`) | **IMPLEMENTED** | Binds the existing C ABI only; no Rust changes, no new `#[no_mangle]` symbols. Verified by `swift build` + the smoke run. |
+| Swift binding (`CarryOnKit` over `CCarryon`) | **IMPLEMENTED** | Binds the C ABI (stage 10 added the append-only PhotoCraft entries, ABI 1.3). Verified by `swift build` + the smoke run. |
 | Demo pipeline (8 stages incl. L4 authority transfer) | **OBSERVED (LOCAL)** | One device, loopback TLS 1.3, two temp-dir cores. Proves the FFI binding and the engine pipeline. NOT physical cross-device transfer. |
 | **"Carry File" screen — L0/L1 ladder (stage 3, manual-IP)** | **OBSERVED (PHYSICAL)** when the receiver is a real second device | NSOpenPanel pick (last dir cached) → file adapter cut → hand-entered receiver `IPv4:port` (cached) + pin → serve. The descriptor (session/cut/hash/name/mime/evidence-class) rides the Hello/Welcome features — data only (§3.8). Evidence class derived from the dialled address per run (loopback → LOCAL, LAN → PHYSICAL). Physical evidence: [`apps/android/evidence/20261108-a04-l0l1/`](../android/evidence/20261108-a04-l0l1/). Headless driver: `swift run carryon-filehandoff-smoke serve <file> <addr> <pin> [--tamper]`. |
+| **PhotoCraft pane — live desktop flagship (stage 10)** | **OBSERVED (LOCAL)** | Two instances on ONE Mac (the honest equivalent of the two-Mac story): the pane inspects a RUNNING PhotoCraft over its loopback JSON control channel (not MCP), captures the session into `org.carryon.photocraft`, and carries it to a second core in visible §6.8 tile windows; the receiver reopens it in the second live PhotoCraft (engine oracle AGREED; tool/zoom/selection restored). No fork. Evidence: [`docs/evidence/20261108-photocraft-ux-local/`](../../docs/evidence/20261108-photocraft-ux-local/); design: [`docs/artcraft-bridge/UX.md`](../../docs/artcraft-bridge/UX.md). NOT physical, NOT §30. Headless app-path run: `swift run carryon-photocraft-smoke <config.json>`. |
 | macOS platform | **supported: NO** | §30 acceptance never ran; no notarized/Developer-ID packaging. The bundle is ad-hoc signed, LOCAL-ONLY (explicitly not PLAT-006 distribution signing). |
 | Discovery (engine-side §18.3, stage 4) | **engine + app UI** | The engine owns the TXT contract: `carryon_discovery_txt_encode`/`_validate` (ABI 1.2) + engine-side advertise/browse (`mdns-sd`) exposed to the app via `EngineDiscovery`. The NWListener/NWBrowser `DiscoveryPilot.swift` remains as a stage-3 pilot artifact (unused). NET-003 PHYSICAL: engine browse found the A04 in 537 ms (2026-11-08, `docs/evidence/20261108-net003-discovery/`). TXT records carry only `pm`, `id`, `pr`, `dc`, `ch` — foreign keys ignored, malformed records dropped (fail closed). |
+| **Swift SDK (stage 9): `sdk/swift`** | `IMPLEMENTED` + contract tests | The same binding, distributed as a source package with the engine as a fetched static archive (no `unsafeFlags` → consumable as a dependency), DocC catalog, semver following the ABI (1.2 → SDK 1.2.0), ABI gate at startup. `Scripts/sync_from_app.sh` keeps the SDK sources identical to this package (drift-checked). See [`sdk/swift/README.md`](../../sdk/swift/README.md). |
 | Secret handling | **IMPLEMENTED (law)** | Identity key DER is SECRET (EVD-006/§22.3): never logged, displayed, or bundled. Only the SHA-256 pin hex appears, truncated, in UI. |
 
 The fixed footer every run ends with (verbatim, `plan.md`):

@@ -18,6 +18,7 @@ carryon-adapter-launcher = { path = "../carryon-adapter-launcher" }
 carryon-adapter-graph = { path = "../carryon-adapter-graph" }
 carryon-adapter-image = { path = "../carryon-adapter-image" }
 carryon-adapter-editor = { path = "../carryon-adapter-editor" }
+carryon-adapter-photocraft = { path = "../carryon-adapter-photocraft" }
 carryon-adapter-unsupported = { path = "../carryon-adapter-unsupported" }
 carryon-adapter-kiwix = { path = "../carryon-adapter-kiwix", optional = true }
 serde = { workspace = true }
