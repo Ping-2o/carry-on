@@ -36,7 +36,7 @@ carryon-adapter-api = { path = "crates/carryon-adapter-api" }
 carryon-core = { path = "crates/carryon-core" }
 carryon-net = { path = "crates/carryon-net" }
 # External, pinned, minimal.
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 sha2 = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
