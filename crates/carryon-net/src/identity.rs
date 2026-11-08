@@ -45,7 +45,7 @@ impl DeviceIdentity {
         Ok(DeviceIdentity {
             device_name: name,
             cert_der: certified.cert.der().to_vec(),
-            key_der: certified.key_pair.serialize_der(),
+            key_der: certified.signing_key.serialize_der(),
         })
     }
 
