@@ -7,7 +7,7 @@ description = "Carry-On dev tasks: deterministic fixtures + one local evidence b
 publish = false
 
 [dependencies]
-carryon-core = { workspace = true }
+carryon-core = { workspace = true, features = ["blocksum-checkpoint"] }
 carryon-adapter-api = { workspace = true }
 carryon-adapter-graph = { path = "../crates/carryon-adapter-graph" }
 carryon-adapter-editor = { path = "../crates/carryon-adapter-editor" }

@@ -54,9 +54,12 @@ jobs:
       - name: rustfmt
         run: cargo fmt --all -- --check
       - name: clippy -D warnings (workspace, kiwix excluded — no libzim on runners)
-        run: cargo clippy --workspace --all-targets --features carryon-ffi/test-panic --exclude carryon-adapter-kiwix -- -D warnings
+        # `carryon-core/blocksum-checkpoint` is the RESEARCH (stage 11) checkpoint
+        # index. It is off the production path (carryon-ffi never enables it) but
+        # compiled + tested here so its tests cannot rot.
+        run: cargo clippy --workspace --all-targets --features carryon-ffi/test-panic,carryon-core/blocksum-checkpoint --exclude carryon-adapter-kiwix -- -D warnings
       - name: tests (workspace, kiwix excluded)
-        run: cargo test --workspace --features carryon-ffi/test-panic --exclude carryon-adapter-kiwix
+        run: cargo test --workspace --features carryon-ffi/test-panic,carryon-core/blocksum-checkpoint --exclude carryon-adapter-kiwix
       - name: kiwix adapter — pure-Rust lib (no-default-features)
         run: |
           cargo clippy -p carryon-adapter-kiwix --no-default-features --lib -- -D warnings

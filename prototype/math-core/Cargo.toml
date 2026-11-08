@@ -14,3 +14,7 @@ path = "src/lib.rs"
 
 [dev-dependencies]
 proptest = "1"
+
+[lints.rust]
+# `cfg(kani)` is set only by the Kani toolchain, so normal builds must not warn.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
