@@ -1,0 +1,290 @@
+# UI screenshots — renders the macOS app (SwiftUI, real window server) and the
+# Android app (Compose via Roborazzi/Robolectric, no emulator) in light and
+# dark mode from deterministic fixtures, then:
+#   • uploads them as workflow artifacts,
+#   • commits them to docs/screenshots/{macos,android}/ on the PR branch,
+#   • posts (and keeps updating) one gallery comment on the PR.
+# On failure the tail of the build log is posted to the PR instead, because
+# Actions logs are not readable from every client.
+#
+# Labels law (spec §2): screenshots are presentation evidence only; they
+# upgrade no platform claim.
+
+name: UI screenshots
+
+on:
+  pull_request:
+    paths:
+      - "apps/macos/**"
+      - "apps/android/**"
+      - ".github/workflows/ui-screenshots.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ui-screenshots-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  CARGO_TERM_COLOR: always
+  NDK_VERSION: "27.2.12479018"
+
+jobs:
+  macos:
+    name: macOS screenshots
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/carryon-target
+    steps:
+      - uses: actions/checkout@v7
+      - name: Select the newest Xcode
+        run: |
+          XC=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1 || true)
+          if [ -n "$XC" ]; then sudo xcode-select -s "$XC"; fi
+          sw_vers
+          xcodebuild -version
+          swift --version
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build + vendor the engine dylib
+        run: apps/macos/Scripts/build_engine.sh 2>&1 | tee -a "$RUNNER_TEMP/ui.log"
+        shell: bash -o pipefail {0}
+      - name: Build the app
+        working-directory: apps/macos
+        shell: bash -o pipefail {0}
+        run: swift build --product CarryOnApp 2>&1 | tee -a "$RUNNER_TEMP/ui.log"
+      - name: Render screenshots
+        working-directory: apps/macos
+        shell: bash -o pipefail {0}
+        run: |
+          OUT="$RUNNER_TEMP/shots/macos"
+          mkdir -p "$OUT"
+          BIN="$(swift build --product CarryOnApp --show-bin-path)/CarryOnApp"
+          "$BIN" --snapshots "$OUT" > "$RUNNER_TEMP/snap.log" 2>&1 &
+          PID=$!
+          for i in $(seq 1 240); do
+            if ! kill -0 "$PID" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          if kill -0 "$PID" 2>/dev/null; then
+            echo "snapshot renderer timed out" >> "$RUNNER_TEMP/snap.log"
+            kill -9 "$PID" || true
+          fi
+          wait "$PID"; RC=$?
+          cat "$RUNNER_TEMP/snap.log" | tee -a "$RUNNER_TEMP/ui.log"
+          ls -la "$OUT" | tee -a "$RUNNER_TEMP/ui.log"
+          test "$(ls "$OUT"/*.png 2>/dev/null | wc -l)" -gt 0
+          exit $RC
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: screenshots-macos
+          path: ${{ runner.temp }}/shots/macos
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Post the failure log to the PR
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "### ❌ macOS screenshots failed"
+            echo
+            echo '```'
+            grep -E "error:|warning: unre|fatal|\[snapshots\]" "$RUNNER_TEMP/ui.log" | tail -n 80 || true
+            echo "…"
+            tail -n 60 "$RUNNER_TEMP/ui.log" || true
+            echo '```'
+          } > body.md
+          gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body-file body.md
+
+  android:
+    name: Android screenshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: false
+      - name: NDK cache
+        uses: actions/cache@v6
+        with:
+          path: ~/ndk-cache.tgz
+          key: android-ndk-${{ env.NDK_VERSION }}
+      - name: Install NDK + SDK components
+        run: |
+          set -e
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKM" ]; then
+            cd "$RUNNER_TEMP"
+            curl -sS -o cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            unzip -q cmdtools.zip -d cmdtools-tmp
+            mkdir -p "$ANDROID_HOME/cmdline-tools"
+            mv cmdtools-tmp/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
+            cd "$GITHUB_WORKSPACE"
+          fi
+          if [ -f "$HOME/ndk-cache.tgz" ]; then
+            mkdir -p "$ANDROID_HOME/ndk"
+            tar -xzf "$HOME/ndk-cache.tgz" -C "$ANDROID_HOME/ndk"
+          elif [ -d "$ANDROID_HOME/ndk/$NDK_VERSION" ]; then
+            tar -czf "$HOME/ndk-cache.tgz" -C "$ANDROID_HOME/ndk" "$NDK_VERSION"
+          else
+            yes | "$SDKM" --install "ndk;$NDK_VERSION" > /dev/null
+            tar -czf "$HOME/ndk-cache.tgz" -C "$ANDROID_HOME/ndk" "$NDK_VERSION"
+          fi
+          yes | "$SDKM" --install "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" > /dev/null
+      - name: Cross-compile + fetch the engine .so
+        shell: bash -o pipefail {0}
+        run: apps/android/Scripts/fetch_engine_lib.sh 2>&1 | tee -a "$RUNNER_TEMP/ui.log"
+        env:
+          NDK: /usr/local/lib/android/sdk/ndk/${{ env.NDK_VERSION }}
+          WORK: ${{ github.workspace }}
+      - name: Render screenshots (Roborazzi + Robolectric, native graphics)
+        working-directory: apps/android
+        shell: bash -o pipefail {0}
+        run: |
+          ./gradlew :app:testDebugUnitTest --tests '*ScreenshotTest*' --no-daemon --stacktrace 2>&1 \
+            | tee -a "$RUNNER_TEMP/ui.log"
+          mkdir -p "$RUNNER_TEMP/shots/android"
+          find app/build/outputs/roborazzi -name '*.png' -exec cp {} "$RUNNER_TEMP/shots/android/" \;
+          ls -la "$RUNNER_TEMP/shots/android"
+          test "$(ls "$RUNNER_TEMP/shots/android"/*.png 2>/dev/null | wc -l)" -gt 0
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: screenshots-android
+          path: ${{ runner.temp }}/shots/android
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Post the failure log to the PR
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "### ❌ Android screenshots failed"
+            echo
+            echo '```'
+            grep -E "^e: |error:|FAILED|Exception|What went wrong" -A3 "$RUNNER_TEMP/ui.log" | tail -n 90 || true
+            echo "…"
+            tail -n 50 "$RUNNER_TEMP/ui.log" || true
+            echo '```'
+          } > body.md
+          gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body-file body.md
+
+  publish:
+    name: Publish screenshots to the PR
+    needs: [macos, android]
+    if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (needs.macos.result == 'success' || needs.android.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 1
+      # Download each artifact BY NAME into a fixed dir (deterministic layout;
+      # a missing artifact — e.g. a failed platform — is tolerated).
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: screenshots-macos
+          path: ${{ runner.temp }}/shots/macos
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: screenshots-android
+          path: ${{ runner.temp }}/shots/android
+      - name: Commit to docs/screenshots/
+        id: commit
+        shell: bash -o pipefail {0}
+        run: |
+          set -e
+          {
+            echo "== downloaded =="
+            find "$RUNNER_TEMP/shots" -maxdepth 3 2>/dev/null | sort || true
+            for p in macos android; do
+              n=$(find "$RUNNER_TEMP/shots/$p" -name '*.png' 2>/dev/null | wc -l)
+              echo "$p: $n png"
+              if [ "$n" -gt 0 ]; then
+                rm -rf "docs/screenshots/$p"
+                mkdir -p "docs/screenshots/$p"
+                find "$RUNNER_TEMP/shots/$p" -name '*.png' -exec cp {} "docs/screenshots/$p/" \;
+              fi
+            done
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            if [ -d docs/screenshots ]; then git add -A docs/screenshots; fi
+            if git diff --cached --quiet; then
+              echo "No screenshot changes"
+            else
+              git commit -m "docs(screenshots): update UI screenshots [skip ci]"
+              pushed=0
+              for i in 1 2 3; do
+                if git pull --rebase --depth=50 origin "${{ github.head_ref }}" && git push origin HEAD:"${{ github.head_ref }}"; then pushed=1; break; fi
+                sleep 3
+              done
+              test "$pushed" = 1
+            fi
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          } 2>&1 | tee -a "$RUNNER_TEMP/publish.log"
+      - name: Gallery comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.commit.outputs.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          base="https://github.com/$REPO/blob/$SHA/docs/screenshots"
+          {
+            echo "<!-- ui-screenshots -->"
+            echo "## 📸 UI screenshots"
+            echo
+            echo "Commit \`${SHA:0:7}\` · rendered from deterministic fixtures · light / dark"
+            for p in macos android; do
+              [ -d "docs/screenshots/$p" ] || continue
+              echo
+              echo "### $p"
+              echo
+              echo "| Light | Dark |"
+              echo "|---|---|"
+              for f in $(ls docs/screenshots/$p/*-light.png 2>/dev/null | sort); do
+                n=$(basename "$f" -light.png)
+                echo "| <img src=\"$base/$p/$n-light.png?raw=true\" width=\"420\" alt=\"$n light\"><br><sub>$n</sub> | <img src=\"$base/$p/$n-dark.png?raw=true\" width=\"420\" alt=\"$n dark\"> |"
+              done
+            done
+          } > body.md
+          PR=${{ github.event.pull_request.number }}
+          ID=$(gh api "repos/$REPO/issues/$PR/comments" --paginate --jq '.[] | select(.body | startswith("<!-- ui-screenshots -->")) | .id' | tail -1)
+          if [ -n "$ID" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$ID" -F body=@body.md > /dev/null
+          else
+            gh pr comment "$PR" --repo "$REPO" --body-file body.md
+          fi
+      - name: Post the failure log to the PR
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "### ❌ Publish screenshots failed"
+            echo
+            echo '```'
+            tail -n 80 "$RUNNER_TEMP/publish.log" 2>/dev/null || echo "(no publish log)"
+            echo '```'
+          } > fail.md
+          gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body-file fail.md

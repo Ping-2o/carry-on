@@ -18,6 +18,11 @@ struct CarryOnApp: App {
         if CommandLine.arguments.contains("--smoke-exit") {
             Self.runSmokeExit()
         }
+        if SnapshotRenderer.isActive {
+            // Deterministic fixtures for CI screenshots; never touches the network.
+            UIFixtures.install()
+            UserDefaults.standard.set(true, forKey: "carryon.onboarding.done")
+        }
     }
 
     /// Headless verification: run the demo pipeline, print the console, and
@@ -36,7 +41,12 @@ struct CarryOnApp: App {
         WindowGroup {
             RootView()
                 .environment(app)
+                .tint(DS.brand)
+                .task {
+                    if SnapshotRenderer.isActive { await SnapshotRenderer.run(app: app) }
+                }
         }
+        .defaultSize(width: 1180, height: 780)
         .windowToolbarStyle(.unified)
 
         Settings {
@@ -59,6 +69,21 @@ struct CarryOnApp: App {
                 }
                 .keyboardShortcut("n", modifiers: .command)
                 .disabled(app.demo.running)
+            }
+            CommandMenu("Go") {
+                Button("Home") { app.pane = .home }.keyboardShortcut("1", modifiers: .command)
+                Button("Send") { app.pane = .send }.keyboardShortcut("2", modifiers: .command)
+                Button("Devices") { app.pane = .devices }.keyboardShortcut("3", modifiers: .command)
+                Button("Activity") { app.pane = .activity }.keyboardShortcut("4", modifiers: .command)
+                Divider()
+                Button("PhotoCraft") { app.pane = .photocraft }.keyboardShortcut("5", modifiers: .command)
+                Divider()
+                Button("Engine Demo") { app.pane = .demo }.keyboardShortcut("6", modifiers: .command)
+                Button("Transfer Console") { app.pane = .carry }
+                Button("Pairing") { app.pane = .pairing }
+                Button("Topology") { app.pane = .topology }
+                Button("Lifecycle") { app.pane = .sessions }
+                Button("Evidence") { app.pane = .evidence }.keyboardShortcut("7", modifiers: .command)
             }
         }
     }

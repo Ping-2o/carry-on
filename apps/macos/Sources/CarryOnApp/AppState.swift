@@ -650,7 +650,7 @@ final class PairingModel {
 @MainActor
 @Observable
 final class AppState {
-    var pane: Pane = .demo
+    var pane: Pane = .home
     var demo = DemoModel()
     var topology = TopologyModel()
     var carry = CarryModel()
@@ -690,23 +690,55 @@ final class AppState {
     func newSession() {
         guard !demo.running else { return }
         demo.reset()
-        pane = .sessions
+        pane = .activity
     }
 
     enum Pane: String, CaseIterable, Identifiable, Hashable {
-        case demo = "Demo"
-        case carry = "Carry File"
+        // Carry — the everyday flow.
+        case home = "Home"
+        case send = "Send"
+        case devices = "Devices"
+        case activity = "Activity"
+        // Apps built on the engine.
         case photocraft = "PhotoCraft"
+        // Developer — engine surfaces, kept verbatim.
+        case demo = "Engine Demo"
+        case carry = "Transfer Console"
         case pairing = "Pairing"
         case topology = "Topology"
-        case sessions = "Sessions"
+        case sessions = "Lifecycle"
         case evidence = "Evidence"
         var id: String { rawValue }
 
+        enum Group: String, CaseIterable, Identifiable {
+            case carry = "Carry"
+            case apps = "Apps"
+            case developer = "Developer"
+            var id: String { rawValue }
+        }
+
+        var group: Group {
+            switch self {
+            case .home, .send, .devices, .activity: return .carry
+            case .photocraft: return .apps
+            case .demo, .carry, .pairing, .topology, .sessions, .evidence: return .developer
+            }
+        }
+
+        static func panes(in group: Group) -> [Pane] {
+            allCases.filter { $0.group == group }
+        }
+
+        var title: String { rawValue }
+
         var symbol: String {
             switch self {
+            case .home: return "house"
+            case .send: return "paperplane"
+            case .devices: return "laptopcomputer.and.iphone"
+            case .activity: return "clock.arrow.circlepath"
             case .demo: return "play.rectangle"
-            case .carry: return "paperplane"
+            case .carry: return "terminal"
             case .photocraft: return "photo.on.rectangle.angled"
             case .pairing: return "key.horizontal"
             case .topology: return "point.3.connected.trianglepath.dotted"

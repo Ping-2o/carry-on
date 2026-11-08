@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the Compose LightScheme surface (Theme.kt). -->
+    <color name="window_background">#FFF5FBF7</color>
+</resources>
