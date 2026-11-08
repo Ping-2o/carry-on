@@ -18,7 +18,9 @@
  * (needs one connected device; NOT part of the JVM unit suite — an FFI load
  * cannot be verified by a JVM test, and CI runners have no device).
  */
-package com.carryon.app.ffi
+package com.carryon.app.kitcheck
+
+import dev.carryon.kit.*
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals

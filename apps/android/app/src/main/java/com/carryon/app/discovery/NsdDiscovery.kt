@@ -33,11 +33,11 @@ package com.carryon.app.discovery
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
-import com.carryon.app.ffi.CoreException
-import com.carryon.app.ffi.DiscoveryContract
-import com.carryon.app.ffi.DiscoveryTxt
-import com.carryon.app.ffi.abiVersion
-import com.carryon.app.ffi.Err
+import dev.carryon.kit.CoreException
+import dev.carryon.kit.DiscoveryContract
+import dev.carryon.kit.DiscoveryTxt
+import dev.carryon.kit.abiVersion
+import dev.carryon.kit.Err
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

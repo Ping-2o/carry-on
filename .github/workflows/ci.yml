@@ -172,12 +172,54 @@ jobs:
         env:
           NDK: /usr/local/lib/android/sdk/ndk/${{ env.NDK_VERSION }}
           WORK: ${{ github.workspace }}
-      - name: gradlew unit tests + assembleDebug (Kotlin compile + JNI shim via CMake)
+      - name: SDK AAR + kit contract tests (host JVM, desktop shim) + app
         working-directory: apps/android
-        run: ./gradlew :app:testDebugUnitTest assembleDebug --no-daemon
+        run: |
+          # Stage 9: the engine binding lives in :carryon-kit (AAR). The kit's
+          # contract parity tests run on the host JVM against a desktop JNI
+          # shim built from the same carryon_jni.c the AAR ships.
+          Scripts/build_desktop_shim.sh
+          ./gradlew :carryon-kit:testDebugUnitTest \
+              -PcarryonDesktopLibDir=$PWD/carryon-kit/build/desktop-lib --no-daemon
+          ./gradlew :carryon-kit:assembleRelease --no-daemon
+          ./gradlew :app:testDebugUnitTest assembleDebug --no-daemon
+        env:
+          # build_desktop_shim.sh compiles the HOST engine cdylib too.
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
+      - name: Upload the SDK AAR
+        uses: actions/upload-artifact@v5
+        with:
+          name: carryon-kit-aar
+          path: apps/android/carryon-kit/build/outputs/aar/carryon-kit-release.aar
+          retention-days: 7
       - name: Upload the debug APK
         uses: actions/upload-artifact@v5
         with:
           name: carryon-debug-apk
           path: apps/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
+
+  sdk-swift:
+    name: Swift SDK build + contract tests + examples
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/carryon-target
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build + vendor the static engine archive (fetched, never committed)
+        run: sdk/swift/Scripts/build_engine_static.sh
+      - name: Source-sync drift check (binding mirrors the app package)
+        run: sdk/swift/Scripts/sync_from_app.sh --check
+      - name: swift build + ABI suite + contract parity
+        working-directory: sdk/swift
+        run: |
+          swift build
+          swift test
+      - name: Examples (carry-a-file + demo, in-process loopback)
+        working-directory: sdk/swift
+        run: |
+          swift run -q CarryFileExample
+          swift run -q DemoExample editor

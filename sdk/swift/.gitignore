@@ -1,0 +1,9 @@
+# Build artifacts (never commit the engine dylib — fetched by Scripts/build_engine.sh)
+Vendor/
+.build/
+dist/
+*.dylib
+.swiftpm/
+.DS_Store
+Vendor/
+.build/
