@@ -393,7 +393,11 @@ fn ffi_pairing_qr_provisional_channel_and_negatives() {
         };
         let server_rc = srv.join().unwrap();
         assert!(
-            if let Some(rc) = client_refused { rc != 0 } else { true },
+            if let Some(rc) = client_refused {
+                rc != 0
+            } else {
+                true
+            },
             "revoked peer must be refused on the client side (connect or I/O)"
         );
         assert_ne!(server_rc, 0, "server must reject the revoked client");
