@@ -1,0 +1,34 @@
+# Path-based PR labels (actions/labeler). Keep in sync with the issue labels.
+"area: engine":
+  - changed-files:
+      - any-glob-to-any-file: ["crates/carryon-core/**", "crates/carryon-adapter-api/**", "prototype/**"]
+"area: net":
+  - changed-files:
+      - any-glob-to-any-file: ["crates/carryon-net/**"]
+"area: ffi":
+  - changed-files:
+      - any-glob-to-any-file: ["crates/carryon-ffi/**"]
+"area: adapters":
+  - changed-files:
+      - any-glob-to-any-file: ["crates/carryon-adapter-*/**"]
+"flagship: photocraft":
+  - changed-files:
+      - any-glob-to-any-file: ["crates/carryon-adapter-photocraft/**", "docs/artcraft-bridge/**"]
+"flagship: kiwix":
+  - changed-files:
+      - any-glob-to-any-file: ["crates/carryon-adapter-kiwix/**", "docs/kiwix-bridge/**"]
+"area: macos":
+  - changed-files:
+      - any-glob-to-any-file: ["apps/macos/**"]
+"area: android":
+  - changed-files:
+      - any-glob-to-any-file: ["apps/android/**"]
+"area: sdk":
+  - changed-files:
+      - any-glob-to-any-file: ["sdk/**", "apps/android/carryon-kit/**"]
+"area: ci":
+  - changed-files:
+      - any-glob-to-any-file: [".github/**", "xtask/**", "deny.toml"]
+"area: docs":
+  - changed-files:
+      - any-glob-to-any-file: ["docs/**", "*.md"]

@@ -1,0 +1,52 @@
+# Dependabot version updates: weekly, grouped, labeled.
+# Security updates are switched on separately (Settings → Code security →
+# Dependabot security updates).
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Almaty
+    open-pull-requests-limit: 5
+    labels: [dependencies, "area: engine"]
+    commit-message:
+      prefix: "deps(cargo)"
+    groups:
+      cargo-minor-patch:
+        update-types: [minor, patch]
+    ignore:
+      # The PhotoCraft engine crates are pinned on purpose to one audited rev
+      # (docs/artcraft-bridge/PHOTOCRAFT-PIN.md). Bump them by hand.
+      - dependency-name: "photocraft-*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Almaty
+    labels: [dependencies, "area: ci"]
+    commit-message:
+      prefix: "deps(actions)"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: gradle
+    directory: /apps/android
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Almaty
+    open-pull-requests-limit: 5
+    labels: [dependencies, "area: android"]
+    commit-message:
+      prefix: "deps(gradle)"
+    groups:
+      android-minor-patch:
+        update-types: [minor, patch]

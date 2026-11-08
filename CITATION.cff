@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use Carry-On in your work, please cite it as below."
+title: "Carry-On: a cooperative cross-platform continuation engine"
+type: software
+authors:
+  - family-names: Yedil
+    given-names: Pauyedin
+repository-code: "https://github.com/Ping-2o/carry-on"
+url: "https://github.com/Ping-2o/carry-on"
+abstract: >-
+  A Rust engine that continues declared, typed actions across heterogeneous
+  devices (macOS and Android): unsaved edits, view state and single-writer
+  authority are carried with progressive, digest-verified transfer. Typed
+  continuation, not process or memory migration.
+keywords:
+  - continuation
+  - cross-device handoff
+  - session transfer
+  - single-writer authority
+  - rust
+license:
+  - MIT
+  - Apache-2.0
+version: 0.1.0

@@ -1,0 +1,75 @@
+name: 🐛 Bug report
+description: The engine, an app or an SDK behaves wrongly.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! **Security issues go to a private advisory**, not here (see SECURITY.md).
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Engine (carryon-core)
+        - Networking / pairing / discovery (carryon-net)
+        - C ABI (carryon-ffi)
+        - Adapter (file / launcher / editor / image / graph)
+        - PhotoCraft flagship
+        - Kiwix flagship
+        - macOS app
+        - Android app
+        - Swift SDK
+        - Kotlin SDK (carryon-kit)
+        - CI / xtask
+        - Docs
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Include the continuation level (L0–L4) if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. cargo run -p xtask -- ...
+        2. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: setup
+    attributes:
+      label: Setup
+      options:
+        - One device (LOCAL / loopback)
+        - Two physical devices on a LAN
+        - CI
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Commit / version
+      placeholder: main@6b805e4, ABI 1.3, SDK 1.3.0
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      placeholder: macOS 15.x on M2; Galaxy A04, Android 14
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Redact tokens, keys and pairing codes.
+      render: shell
