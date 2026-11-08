@@ -188,6 +188,162 @@ struct SendView: View {
                 ProgressView().controlSize(.small)
             }
         }) {
-           
+            VStack(alignment: .leading, spacing: DS.Space.m) {
+                if p.devices.isEmpty {
+                    EmptyStateView("Searching nearby…",
+                                   message: "Open Carry-On → Receive on the other device.",
+                                   systemImage: "antenna.radiowaves.left.and.right",
+                                   showsProgress: !reduceMotion)
+                } else {
+                    VStack(spacing: DS.Space.xxs) {
+                        ForEach(p.devices) { device in
+                            let selected = device.address == p.receiverAddress
+                            Button {
+                                if !UIFixtures.isActive { model.receiverAddr = device.address ?? "" }
+                            } label: {
+                                DeviceRow(device: device, selected: selected) {
+                                    if selected {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(.tint)
+                                            .imageScale(.large)
+                                    }
+                                }
+                                .padding(.horizontal, DS.Space.s)
+                                .background(selected ? DS.brand.opacity(0.08) : .clear,
+                                            in: RoundedRectangle(cornerRadius: DS.Radius.s, style: .continuous))
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
 
-[Truncated after 190 lines. To continue, call readFile again with offset=191.]
+                DisclosureGroup("Enter address manually", isExpanded: $showManual) {
+                    VStack(alignment: .leading, spacing: DS.Space.s) {
+                        TextField("host:port", text: $model.receiverAddr)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.body.monospaced())
+                        if !model.usePairedTrust {
+                            TextField("Receiver pin (64 hex)", text: $model.receiverPin)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.body.monospaced())
+                        }
+                    }
+                    .padding(.top, DS.Space.xs)
+                }
+                .font(.callout)
+
+                Toggle(isOn: $model.usePairedTrust) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Use trusted devices")
+                        Text(p.hasPairedDevices
+                             ? "Connects with your paired trust — no pin needed."
+                             : "No trusted devices yet — pair one first, or enter a pin.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            }
+        }
+    }
+
+    // MARK: Progress / result
+
+    @ViewBuilder
+    private func progressCard(_ p: SendPresentation) -> some View {
+        CardSection(p.running ? "Sending…" : "Result", systemImage: p.running ? "arrow.up.circle" : "checkmark.seal") {
+            VStack(alignment: .leading, spacing: DS.Space.m) {
+                if p.running {
+                    ProgressView()
+                        .progressViewStyle(.linear)
+                }
+                HStack(spacing: DS.Space.m) {
+                    MetricTile(title: "Sent", value: CarryFormat.bytes(p.bytesSent), systemImage: "arrow.up")
+                    MetricTile(title: "Received & verified", value: CarryFormat.bytes(p.bytesReceived),
+                               systemImage: "arrow.down", tone: .success)
+                    MetricTile(title: "Time", value: p.elapsedMS.map(CarryFormat.milliseconds) ?? "—",
+                               systemImage: "timer", tone: .neutral)
+                }
+                HStack(spacing: DS.Space.s) {
+                    ladderPill("L0 · Carried", p.carried)
+                    ladderPill("L1 · Opened", p.opened)
+                    if let legs = p.legsUsed {
+                        StatusPill(text: "\(legs) leg\(legs == 1 ? "" : "s")", systemImage: "arrow.triangle.branch")
+                    }
+                    if let ev = p.evidenceClass {
+                        StatusPill(text: "Evidence: \(ev)", systemImage: "checkmark.seal", tone: .info)
+                    }
+                    Spacer()
+                }
+                if let error = p.error {
+                    Callout(title: "Transfer didn't complete", message: error)
+                }
+            }
+        }
+    }
+
+    private func ladderPill(_ title: String, _ outcome: StageOutcome?) -> some View {
+        switch outcome {
+        case .ok?: return StatusPill(text: title, systemImage: "checkmark", tone: .success)
+        case .failed?: return StatusPill(text: title, systemImage: "xmark", tone: .danger)
+        case .skipped?: return StatusPill(text: title, systemImage: "minus", tone: .warning)
+        case nil: return StatusPill(text: title, systemImage: "circle.dotted", tone: .neutral)
+        }
+    }
+
+    // MARK: Floating action bar
+
+    private func actionBar(_ p: SendPresentation) -> some View {
+        HStack(spacing: DS.Space.m) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(p.fileName ?? "No file chosen")
+                    .font(.callout.weight(.semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Label(p.destinationName, systemImage: p.selectedDevice?.symbol ?? "questionmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: DS.Space.l)
+            Button {
+                Task { await app.carry.transfer() }
+            } label: {
+                Label(p.running ? "Sending…" : "Send", systemImage: "paperplane.fill")
+                    .frame(minWidth: 96)
+            }
+            .controlSize(.large)
+            .primaryActionStyle()
+            .keyboardShortcut(.return, modifiers: .command)
+            .disabled(!p.canSend)
+            .help("Send (⌘↩)")
+        }
+        .padding(.horizontal, DS.Space.l)
+        .padding(.vertical, DS.Space.m)
+        .floatingSurface(cornerRadius: DS.Radius.xl)
+        .frame(maxWidth: DS.contentMaxWidth - DS.Space.xl * 2)
+        .padding(.horizontal, DS.Space.xl)
+        .padding(.bottom, DS.Space.l)
+    }
+
+    // MARK: Actions
+
+    private func pickFile() {
+        guard !UIFixtures.isActive else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.message = "Choose a file to continue on another device (up to 16 MiB)"
+        panel.prompt = "Choose"
+        if let last = UserDefaults.standard.url(forKey: "carryon.handoff.lastDir") {
+            panel.directoryURL = last
+        }
+        if panel.runModal() == .OK, let url = panel.url {
+            app.carry.fileURL = url
+            UserDefaults.standard.set(url.deletingLastPathComponent(), forKey: "carryon.handoff.lastDir")
+        }
+    }
+}

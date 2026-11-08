@@ -207,6 +207,54 @@ jobs:
         run: |
           set -e
           for p in macos android; do
-            if [ -d "$RUNNER_TEMP/shots/screenshots-$p" ] &
-
-[Truncated after 209 lines. To continue, call readFile again with offset=210.]
+            if [ -d "$RUNNER_TEMP/shots/screenshots-$p" ] && ls "$RUNNER_TEMP/shots/screenshots-$p"/*.png >/dev/null 2>&1; then
+              rm -rf "docs/screenshots/$p"
+              mkdir -p "docs/screenshots/$p"
+              cp "$RUNNER_TEMP/shots/screenshots-$p"/*.png "docs/screenshots/$p/"
+            fi
+          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshots
+          if git diff --cached --quiet; then
+            echo "No screenshot changes"
+          else
+            git commit -m "docs(screenshots): update UI screenshots [skip ci]"
+            for i in 1 2 3; do
+              git pull --rebase origin "${{ github.head_ref }}" && git push origin HEAD:"${{ github.head_ref }}" && break
+              sleep 3
+            done
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Gallery comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.commit.outputs.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          base="https://github.com/$REPO/blob/$SHA/docs/screenshots"
+          {
+            echo "<!-- ui-screenshots -->"
+            echo "## 📸 UI screenshots"
+            echo
+            echo "Commit \`${SHA:0:7}\` · rendered from deterministic fixtures · light / dark"
+            for p in macos android; do
+              [ -d "docs/screenshots/$p" ] || continue
+              echo
+              echo "### $p"
+              echo
+              echo "| Light | Dark |"
+              echo "|---|---|"
+              for f in $(ls docs/screenshots/$p/*-light.png 2>/dev/null | sort); do
+                n=$(basename "$f" -light.png)
+                echo "| <img src=\"$base/$p/$n-light.png?raw=true\" width=\"420\" alt=\"$n light\"><br><sub>$n</sub> | <img src=\"$base/$p/$n-dark.png?raw=true\" width=\"420\" alt=\"$n dark\"> |"
+              done
+            done
+          } > body.md
+          PR=${{ github.event.pull_request.number }}
+          ID=$(gh api "repos/$REPO/issues/$PR/comments" --paginate --jq '.[] | select(.body | startswith("<!-- ui-screenshots -->")) | .id' | tail -1)
+          if [ -n "$ID" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$ID" -F body=@body.md > /dev/null
+          else
+            gh pr comment "$PR" --repo "$REPO" --body-file body.md
+          fi
