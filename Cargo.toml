@@ -47,7 +47,7 @@ thiserror = "2"
 # no C toolchain surprise vs aws-lc-rs default).
 # Floor 0.23.46: RUSTSEC-2026-0346/0347/0348/0349 (rustls-webpki >= 0.103.16 via Cargo.lock: RUSTSEC-2026-0382).
 rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12", "logging"] }
-rcgen = "0.13"
+rcgen = "0.14"
 # Engine-side mDNS/DNS-SD (§18.3 discovery): no async runtime dependency, pure Rust
 # — advertise + browse `_carryon._tcp` from the engine on desktop targets. Android
 # uses the platform NSD responder through the app layer instead (see apps/).
