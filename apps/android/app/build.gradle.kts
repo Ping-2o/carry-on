@@ -101,7 +101,7 @@ dependencies {
     // Stage 5 (§18.4.1): QR RENDERING ONLY (pure-Java encoder, no camera, no
     // permission). Scanning on this pilot is the honest manual fallback — the
     // payload text + six-digit code are typed/compared by the human.
-    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.google.zxing:core:3.5.4")
 
     // JVM unit tests (the zombie-isolation guard test; runs via
     // gradlew :app:testDebugUnitTest in CI).
