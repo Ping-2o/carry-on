@@ -655,6 +655,8 @@ final class AppState {
     var topology = TopologyModel()
     var carry = CarryModel()
     var pairing = PairingModel()
+    /// Stage-10 desktop flagship: the live PhotoCraft session pane.
+    var photocraft = PhotoCraftModel()
     /// Engine-side discovery (stage 4): one shared advertiser/browser — the
     /// engine owns the §18.3 TXT contract; screens drive it foreground-first.
     let discovery = EngineDiscovery()
@@ -694,6 +696,7 @@ final class AppState {
     enum Pane: String, CaseIterable, Identifiable, Hashable {
         case demo = "Demo"
         case carry = "Carry File"
+        case photocraft = "PhotoCraft"
         case pairing = "Pairing"
         case topology = "Topology"
         case sessions = "Sessions"
@@ -704,6 +707,7 @@ final class AppState {
             switch self {
             case .demo: return "play.rectangle"
             case .carry: return "paperplane"
+            case .photocraft: return "photo.on.rectangle.angled"
             case .pairing: return "key.horizontal"
             case .topology: return "point.3.connected.trianglepath.dotted"
             case .sessions: return "rectangle.stack"

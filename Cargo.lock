@@ -454,6 +454,7 @@ dependencies = [
  "carryon-adapter-image",
  "carryon-adapter-kiwix",
  "carryon-adapter-launcher",
+ "carryon-adapter-photocraft",
  "carryon-adapter-unsupported",
  "carryon-core",
  "serde",
