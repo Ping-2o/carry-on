@@ -128,5 +128,5 @@ engine pipeline, NOT physical cross-device transfer or a supported platform (spe
   are `OBSERVED (PHYSICAL)` (see the claim table above). Signed packaging and
   §30 platform acceptance are still `TARGET` in
   [`docs/FRONTIER.md`](../docs/FRONTIER.md). The Swift binding and the
-  Kotlin/JNI shim are the first slices of the Phase-4 SDK items — the SDKs
-  themselves remain unchecked.
+  Kotlin/JNI shim grew into the stage-9 SDKs (`sdk/swift`, `carryon-kit`):
+  `IMPLEMENTED`, contract tests green, not published (see the claim table).

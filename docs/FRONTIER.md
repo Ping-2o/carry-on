@@ -7,7 +7,7 @@ Android.** iOS is dropped from scope ("Android↔Mac and back is enough"); it ma
 return later, and the dropped iOS work is inventoried in the branches, but no iOS
 claim exists anywhere.
 
-Claim labels are law ([`AGENTS.md`](../AGENTS.md) §2): everything on this page is
+Claim labels are law (spec §2, [`CROSS-PLATFORM-ENGINE-SPEC.md`](../CROSS-PLATFORM-ENGINE-SPEC.md)): everything on this page is
 **TARGET** unless a status row cites evidence. No platform is "supported" until §30
 passes on real hardware; loopback evidence is LOCAL, not physical. When a phase
 completes, its rows move to `docs/TARGETS.md` with real evidence — not before.
@@ -68,11 +68,10 @@ with the scope).
       credentials and the trust store (stage 5, OBSERVED on the A04 + mac).
 
 - [ ] Signed APK, identities recorded (PLAT-006).
-- [ ] PLAT-002 secure storage: Android Keystore for device credentials.
 - [ ] §30 acceptance harness, run on both platforms on real hardware →
       only then may a platform be called "supported".
 
-### Phase 4 — SDK + flagship integrations · `TARGET` (Phase 1 done on both flagship branches — unmerged; Phase 2 dispatched)
+### Phase 4 — SDK + flagship integrations · partially `IMPLEMENTED` / `OBSERVED` (SDKs built + contract-tested in stage 9; both flagships merged and in the apps in stage 10)
 
 > **App wrapper pilots (branch `apps/native-wrappers`, merged from `security-fix`
 > 2026-11-07):** both native app wrappers exist and are CI-compiled — macOS
@@ -84,14 +83,18 @@ with the scope).
 > fixed 3 latent resolution errors; JVM unit tests for the state-machine
 > guard). GitHub Actions CI runs the rust green gate + both app builds on
 > every PR. All demo evidence is OBSERVED (LOCAL) — one device, loopback TLS
-> 1.3; the Android Demo Mode has still **never run on a device**; no platform
-> is "supported" (§30 unrun). The Swift binding and the Kotlin/JNI shim are
-> the **first slices** of the two SDK checkboxes below — the checkboxes stay
-> unchecked until these ship as full SDKs. Claim table: `apps/README.md`.
-> Everything else in this phase is unchanged.
+> 1.3. *Update 2026-11-08:* the Android Demo Mode has since run on a real
+> device (Galaxy A04, first run 2026-11-07, `OBSERVED (LOCAL — device-local)`),
+> and the Swift binding + Kotlin/JNI shim grew into the stage-9 SDKs checked
+> below (`IMPLEMENTED`, not published). No platform is "supported" (§30
+> unrun). Claim table: `apps/README.md`.
 
-- [ ] Swift Package over the C ABI (macOS/iOS).
-- [ ] Kotlin/JNI bindings (Android).
+- [x] Swift Package over the C ABI (macOS; iOS dropped) — `sdk/swift`, stage 9
+      ([#11](https://github.com/Ping-2o/carry-on/pull/11)): **IMPLEMENTED** — ABI 1.3 → SDK 1.3.0, ABI + contract-parity
+      suites green in CI. Publishing to an SPM registry is `TARGET`.
+- [x] Kotlin/JNI bindings (Android) — `apps/android/carryon-kit` AAR, stage 9
+      ([#11](https://github.com/Ping-2o/carry-on/pull/11)): **IMPLEMENTED** — contract-parity tests green on the host JVM
+      in CI. Publishing to Maven Central is `TARGET`.
 - [ ] `carryon-adapter-photocraft`:
   - [x] Phase 1 — research, adapter design, skeleton (16 tests, orchestrator-verified green) on branch `artcraft-bridge` (unmerged). Engine + CLI cross-builds **OBSERVED (LOCAL cross-compile, no device)**: aarch64-linux-android (NDK r27c) and aarch64-apple-ios, exit 0, logs in-repo. Native mobile GUI verdict: not realistic in months; realistic mobile editor path = the shipped WASM build (usability untested); adapter path = the headless engine.
   - [x] Phase 2 — ControlChannelDriver: **live L3 carry OBSERVED (LOCAL)** (live app → loopback TLS 57,659 B / 0.199 s → second live app, GUI-verified zoom/rotation/tool/selection restore); InProcessDriver: journal-mode carry + fail-closed authorize + composite-pixel replay oracle (IMPLEMENTED); journal-vs-snapshot measurement **OBSERVED (LOCAL)**: journal = 19–36% of snapshot across the tested grid (target #4 <50% holds on every document); unsaved object 90 B vs 7,419,132 B in the photo case. `app.save`-destroys-state finding recorded; EVD-006 verified (bearer tokens absent from all evidence).
@@ -117,6 +120,12 @@ with the scope).
   - [x] Phase 3 — **physical LAN carry of the real session (45,522 B, OBSERVED, physical)**; **L4 over the reading position ON HARDWARE + reader.navigate on device after transfer (physical)**; **progressive ZIM materialization: article readable at 23.787% (physical)**; portable authority hash (uuid+size+sha256, cross-path regression); GB-scale math on WikiMed 1.86 GB: D/A = 0.0007% (138,769×, LOCAL); ZIM bulk correctly lives as L1 outside the cut.
   - [x] Phase 4 (partial, on branch, session cancelled + respawned) — **sparse lazy-index materialization: 0.0138% of the 1.7 GB WikiMed before first read (OBSERVED, physical)** — two orders past the planned ~3% target; **companion-shell first paint renders the carried article on-device (OBSERVED, physical)**. Gates 14/14 green on the branch.
   - [x] ~~iOS simulator run~~ — **DROPPED by owner (2026-10-29)** with the whole iOS scope; the respawned session is winding down (no iOS artifacts committed; leftovers inventoried for the record). Engine decision points (partial-fetch API, tiered caps) remain REPORT-ONLY.
+  - [x] Phase 5 (mobile half, stage 10, [#14](https://github.com/Ping-2o/carry-on/pull/14)) — **companion reader in the
+      Android app**: a real ZIM opened on the A04 through the compiled-in libzim
+      backend, the reading position carried mac ⇄ A04 (**OBSERVED, PHYSICAL** for
+      the carries; on-device reading `OBSERVED (LOCAL)`). Evidence
+      `docs/evidence/20261108-kiwix-companion/`. Remaining: ZIM assets are not
+      served yet (text-first render).
 
 ### Phase 5 — Theorem into the engine · `RESEARCH` (implemented, LOCAL measurement)
 
@@ -150,12 +159,12 @@ Make the `main.tex` block-sum theorem load-bearing instead of parallel:
       are model-level (4/4, `prototype/math-core/src/verification.rs`).
       OBSERVED (LOCAL): `xtask bench-blocksum` → evidence bundle.
 
-## 3. Flagship application candidates (all `TARGET`, researched 2026-10-27)
+## 3. Flagship application candidates (researched 2026-10-27; status column updated 2026-11-08)
 
 | Candidate | Role | Integration path | Platforms | License | Status | Main risks |
 |---|---|---|---|---|---|---|
-| **PhotoCraft** (`storytold/photocraft`, 74k★) — ArtCraft suite of 13 pure-Rust apps | **primary L3/L4 desktop flagship** | same-language: crate-level or via their JSON control channel + MCP (no fork); layered doc = prerequisites (layers) / optional (pixels) / immediate (selection+tool) | macOS/Win/Linux + Web (WASM); **no native mobile** | Apache-2.0 | **Phase 1 done** (`artcraft-bridge`, unmerged) | early alpha, API churn; WASM-in-browser is not a §30 platform |
-| **Kiwix** (libkiwix) | **mobile mass flagship** | adapter: ZIM path (L1) + current article + position (L3); giant content vs tiny "needed now" shows `bytes_before_first_action` | **macOS/iOS/Android**/Win/Linux | open source | **Phase 1 done** (`kiwix-bridge`, unmerged) | libkiwix→Android UNSUPPORTED (reading needs only libzim) |
+| **PhotoCraft** (`storytold/photocraft`, 74k★) — ArtCraft suite of 13 pure-Rust apps | **primary L3/L4 desktop flagship** | same-language: crate-level or via their JSON control channel + MCP (no fork); layered doc = prerequisites (layers) / optional (pixels) / immediate (selection+tool) | macOS/Win/Linux + Web (WASM); **no native mobile** | Apache-2.0 | **merged** ([#3](https://github.com/Ping-2o/carry-on/pull/3)) and **in the macOS app** (stage 10, [#13](https://github.com/Ping-2o/carry-on/pull/13); `OBSERVED (LOCAL)`) | early alpha, API churn; WASM-in-browser is not a §30 platform |
+| **Kiwix** (libkiwix) | **mobile mass flagship** | adapter: ZIM path (L1) + current article + position (L3); giant content vs tiny "needed now" shows `bytes_before_first_action` | **macOS/iOS/Android**/Win/Linux | open source | **merged** ([#2](https://github.com/Ping-2o/carry-on/pull/2)) and **companion reader in the Android app** (stage 10, [#14](https://github.com/Ping-2o/carry-on/pull/14); carries `OBSERVED (PHYSICAL)`) | libkiwix→Android UNSUPPORTED (reading needs only libzim) |
 | **Delta Chat** (Rust core, C-FFI) | backup L4 candidate | patch core (Rust) or wrap C FFI; session = draft + chat + scroll | iOS/Android/desktop | open source | reserve | someone else's core; messenger UX expectations |
 | **Zotero** (open-source iOS app) | academic alternative | Swift-side adapter: PDF + annotations + reading position | iOS/Android/desktop | open source | reserve | desktop app is JS; narrow audience |
 | **Godot / KiCad** | optional desktop "wow" | editor session adapter (scene/PCB + unsaved edits) | desktop only | MIT | reserve | no mobile; large codebases |
@@ -193,11 +202,17 @@ massive content, mass audience).
 | 2026-10-29 | **Infra incident + fix**: the first full workspace gate on kiwix-bridge failed with a phantom `PartialBudget` non-exhaustive match — a `carryon-core` rmeta cached from the parallel artcraft worktree leaked through the SHARED `CARGO_TARGET_DIR` on the SSD. Not a branch defect; kiwix sources have no such variant (verified). Fix: per-checkout target dirs (`target-kiwix`, `target-artcraft`; convention recorded in AGENTS.md); clean kiwix workspace gate re-running on its own dir. PR #2 stays draft until it passes. |
 | 2026-10-29 | Kiwix fmt fix on branch (`1138079`): workspace-wide `cargo fmt` — `factory.rs` formatting was missed by per-crate checks (the agent edited ffi outside its crate). Branch pushed; PR #2 updates. |
 | 2026-10-29 | **ArtCraft Phase 4 complete** (`artcraft-bridge`, agent gate 69 suites green): tile-splitting in core (cumulative+progressive §6.8 budget admission — a **pre-existing core budget hole found and fixed**; `ImportOutcome::PartialBudget`; ABI minor 0→1), real-photo split carry (5.93 MB vs 6.87 MB monolith; re-carry dedup 222,413 B wire vs 5.9 MB), and **PHYSICAL L4 — the flagship proof on hardware**: live app → split cut → Galaxy A04 (50,391 B), §21.2 ownership on device, mac source-off + read-only refusal, device fresh-process continuation. |
-| 2026-11-08 | **Kiwix companion reader — mobile half (stage 10) — PHYSICAL mac⇄A04.** The Android app's Kiwix tab opens a real 27 MB ZIM through the compiled-in libzim backend (rendered Main Page), and the reading position carried both ways over LAN TLS 1.3: mac→A04 recv 45,522 B → `bytes_before_first_action=45,522` (D/A 0.1685 % of 27,010,448 B), restore `index @ 42`, authority epoch 1, on-device navigate; A04→mac recv 45,526 B, restore `index @ 0`, authority, mac navigates to «Эйнштейн, Альберт» @ 321. `time_to_action_ready` 2,392 ms (app side). The ZIM itself never crossed (strategy D). Evidence: `docs/evidence/20261108-kiwix-companion/`. Engine needs `--features kiwix`; text-first render (assets not served). NOT "supported" (§30 unrun). |
 | 2026-10-29 | **M1 CLOSED — both flagship bridges merged to main.** #2 (kiwix, `74a3afd`) then #3 (artcraft, `7cd1690`, rebased cleanly 20/20). Merged-tree gate: **202 tests / 0 failures, fmt clean, clippy -D warnings clean** on an isolated target dir. main now carries: both L3/L4 flagship adapters, tile-splitting core (cumulative §6.8 budgets + `ImportOutcome::PartialBudget`, ABI minor 1), physical L4 on hardware for both flagships, all evidence bundles. Next frontier: discovery → APK/signing → §30 × 2 (macOS + Android; iOS dropped by owner). |
 | 2026-11-05 | **App wrapper pilots landed** (branch `apps/native-wrappers`, unmerged): macOS SwiftUI app drives the full L3 demo pipeline through the C ABI (OBSERVED, LOCAL — one device, loopback TLS 1.3); Android Compose app build-ready `TARGET` (no SDK on the authoring machine; JNI shim NDK-syntax-checked, 49/49 Kotlin↔C symbols cross-checked, engine `.so` fetched). First slices of the Phase-4 SDK items — the SDK checkboxes remain unchecked. See `apps/README.md`. |
 | 2026-11-07 | **Review rounds on the app wrappers closed** (PR #5, merged into `apps/native-wrappers` as `faf48f5`): concurrent session polling removed (counters sampled between wire ops only), honest graph-authority skip, real source-off (source engine closes), UTC + NSD `pr` fixes, dest-only evidence metrics, Android timeout watchdog + zombie-pipeline isolation (generation guard + JVM unit tests, `testDebugUnitTest` in CI). Photocraft dependency pin now resolves via the canonical GitHub URL (workspace reproducible off the authoring machine). |
 | 2026-11-07 | **CI (GitHub Actions) + first-ever Android compile**: rust green gate + macOS smoke + Android `assembleDebug` on every PR; the first `compileDebugKotlin` found 3 latent resolution errors (fixed); Android build claim upgraded to `IMPLEMENTED` (CI compile) in `apps/README.md` — the app has still never RUN on a device. Merged-tree gate green (run 42371949597). |
+| 2026-11-08 | **Stage 3 — L0/L1 onboarding ladder in the apps** ([#6](https://github.com/Ping-2o/carry-on/pull/6)): mac «Carry File» ⇄ A04 «Receive» over LAN TLS 1.3, the file opened in a real Android app — `OBSERVED (PHYSICAL)`. Claim row: `apps/README.md`. |
+| 2026-11-08 | **Stage 4 — engine-side discovery, NET-003** ([#7](https://github.com/Ping-2o/carry-on/pull/7)): the §18.3 TXT contract is owned and validated by the engine; mac `mdns-sd` ⇄ A04 NSD — **PASS** both directions (537 ms / 177 ms, gate < 10 s), `OBSERVED (PHYSICAL)`. Evidence: `docs/evidence/20261108-net003-discovery/`. |
+| 2026-11-08 | **Stage 5 — PIN/QR pairing (§18.4) + PLAT-002** ([#8](https://github.com/Ping-2o/carry-on/pull/8)): fresh pair mac ⇄ A04, verification string matched on both screens; identities + trust sealed in Keystore/Keychain — `OBSERVED (PHYSICAL)`. Evidence: `apps/android/evidence/20261108-a04-pairing/`. |
+| 2026-11-08 | **Stage 6 — cross-device handoff in the UI** ([#10](https://github.com/Ping-2o/carry-on/pull/10)): discovery → pairing → import → action on real devices; discovery 308 ms, paired transfer 989 ms (500 KB) — `OBSERVED (PHYSICAL)`. Evidence: `docs/evidence/20261108-xdevice-handoff/`. |
+| 2026-11-08 | **Stage 8 — §30 acceptance harness** ([#9](https://github.com/Ping-2o/carry-on/pull/9)): engine-scope harness, LOCAL, with an honest DEFERRED matrix. The real-hardware §30 run on both platforms is still `TARGET`; no platform is "supported". |
 | 2026-11-08 | **Stage 11 (RESEARCH) — block-sum theorem in the engine**: the sealed cut's authoritative sizes are encoded by the proved all-but-one-child construction (`crates/carryon-core/src/checkpoint.rs`, opt-in `blocksum-checkpoint`; the C ABI/apps never enable it). Real 60-tile PhotoCraft pyramid: q=4, bound q+1=**5**, measured single-tile-update max **5**, min 1, mean **3.466**; views match the independent reference; a 6-tile change is 12 (not the theorem's unit). Kani model harnesses 4/4. Honest boundary: update cost ≠ delivery — no transfer path consumes the index. Evidence: `docs/evidence/20261108-blocksum-checkpoint/`. |
+| 2026-11-08 | **Stage 9 — distributable SDKs** ([#11](https://github.com/Ping-2o/carry-on/pull/11)): Swift Package (`sdk/swift`) + Kotlin AAR (`apps/android/carryon-kit`), SDK semver follows the ABI (now ABI 1.3 → SDK 1.3.0); ABI + contract-parity suites green in CI — `IMPLEMENTED`. Publishing is `TARGET`. |
 | 2026-11-08 | **Stage 10 desktop flagship (PhotoCraft) in the product** (branch `flagship/photocraft-ux`): the macOS app's PhotoCraft pane drives a LIVE PhotoCraft over its loopback **JSON control channel** (not MCP), captures the session into the adapter, and carries it into a second live PhotoCraft — **OBSERVED (LOCAL)**, two instances on ONE Mac. 51 sealed objects (48 PhotoCraft tiles) moved in 17 §6.8 budget windows (256 KiB, widened for the 4.16 MB dirty snapshot); destination engine oracle AGREED; tool/zoom/selected layers restored. ABI 1.3 (`carryon_photocraft_inspect/_register/_restore`, append-only). No fork; no physical/§30 claim. Evidence: `docs/evidence/20261108-photocraft-ux-local/`. |
+| 2026-11-08 | **Kiwix companion reader — mobile half (stage 10) — PHYSICAL mac⇄A04.** The Android app's Kiwix tab opens a real 27 MB ZIM through the compiled-in libzim backend (rendered Main Page), and the reading position carried both ways over LAN TLS 1.3: mac→A04 recv 45,522 B → `bytes_before_first_action=45,522` (D/A 0.1685 % of 27,010,448 B), restore `index @ 42`, authority epoch 1, on-device navigate; A04→mac recv 45,526 B, restore `index @ 0`, authority, mac navigates to «Эйнштейн, Альберт» @ 321. `time_to_action_ready` 2,392 ms (app side). The ZIM itself never crossed (strategy D). Evidence: `docs/evidence/20261108-kiwix-companion/`. Engine needs `--features kiwix`; text-first render (assets not served). NOT "supported" (§30 unrun). |
 
