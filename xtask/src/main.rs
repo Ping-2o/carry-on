@@ -15,6 +15,8 @@ use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+mod blocksum;
+
 mod acceptance;
 
 fn main() {
@@ -24,6 +26,7 @@ fn main() {
         "handoff-evidence" => run_handoff_evidence(),
         "ffi-demo" => run_ffi_demo(),
         "bench" => run_bench(),
+        "bench-blocksum" => blocksum::run(),
         "fault-injection" => run_fault_injection(),
         "bench-aggregate" => run_bench_aggregate(),
         "demo" => run_demo(),
@@ -48,8 +51,8 @@ fn main() {
         }
         _ => {
             eprintln!(
-                "usage: xtask <evidence|handoff-evidence|ffi-demo|bench|fault-injection|\
-                 bench-aggregate|demo|acceptance> [out_dir]"
+                "usage: xtask <evidence|handoff-evidence|ffi-demo|bench|bench-blocksum|\
+                 fault-injection|bench-aggregate|demo|acceptance> [out_dir]"
             );
             std::process::exit(2);
         }
@@ -133,6 +136,14 @@ const DEMOS: &[Demo] = &[
         run: "cargo run -q -p carryon-adapter-photocraft --features inprocess --example edit_stream -- \
                <photo.jpg> docs/artcraft-bridge/evidence/edit-stream.json",
         evidence: "docs/artcraft-bridge/evidence/edit-stream.json",
+    },
+    Demo {
+        name: "blocksum-checkpoint",
+        scope: "RESEARCH; OBSERVED, LOCAL",
+        proves: "endpoint Hamming dilation of the block-sum checkpoint index over the real 60-tile PhotoCraft pyramid (q=4, bound 5, attained 5)",
+        features: "(none — xtask enables carryon-core/blocksum-checkpoint)",
+        run: "cargo run -q -p xtask -- bench-blocksum",
+        evidence: "docs/evidence/20261108-blocksum-checkpoint/benchmark.json",
     },
 ];
 
