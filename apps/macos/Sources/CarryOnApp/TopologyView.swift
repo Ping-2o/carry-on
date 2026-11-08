@@ -1,7 +1,8 @@
 /*
  * TopologyView.swift — live device topology (plan.md §3): local node card,
- * trust records with revoke, §16.2 session states, the app-level discovery
- * pilot (labeled), and the ASCII device graph with TLS links + counters.
+ * trust records with revoke, §16.2 session states, the ENGINE-side discovery
+ * section (stage 4 — §18.3 TXT owned by the engine), and the ASCII device
+ * graph with TLS links + counters.
  */
 
 import CarryOnKit
@@ -115,43 +116,57 @@ struct TopologyView: View {
         }
     }
 
-    // MARK: discovery pilot
+    // MARK: engine discovery (stage 4)
 
     private var discoverySection: some View {
-        @Bindable var d = app.topology.discovery
-        return GroupBox("Discovery pilot") {
+        let d = app.discovery
+        return GroupBox("Discovery (engine-side, §18.3)") {
             VStack(alignment: .leading, spacing: 8) {
-                Text(DiscoveryPilot.pilotLabel)
+                Text("The engine advertises and browses _carryon._tcp; the §18.3 minimal TXT (pm id pr dc ch) is\nconstructed and validated by the engine — foreign keys are ignored, malformed records are dropped.")
                     .font(Theme.monoSmall)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 16) {
-                    Toggle("Advertise _carryon._tcp",
-                           isOn: Binding(get: { d.advertising },
-                                         set: { on in
-                                             if on { d.startAdvertising(name: Host.current().localizedName ?? "mac") }
-                                             else { d.stopAdvertising() }
-                                         }))
-                    Toggle("Browse", isOn: Binding(get: { d.browsing },
-                                                   set: { on in
-                                                       if on { d.startBrowsing() }
-                                                       else { d.stopBrowsing() }
-                                                   }))
+                    Toggle("Advertise presence", isOn: Binding(
+                        get: { d.advertising },
+                        set: { on in
+                            if on { d.startAdvertising() } else { d.stopAdvertising() }
+                        }))
+                    Toggle("Browse", isOn: Binding(
+                        get: { d.browsing },
+                        set: { on in
+                            if on { d.startBrowsing() } else { d.stopBrowsing() }
+                        }))
                     if d.advertising {
-                        Text("port=\(d.advertisedPort)").font(Theme.monoSmall).foregroundStyle(.secondary)
+                        Text(d.advertisedName).font(Theme.monoSmall).foregroundStyle(.secondary)
                     }
                 }
                 if !d.lastError.isEmpty {
                     Text(d.lastError).font(Theme.monoSmall).foregroundStyle(Theme.skipped)
                 }
                 if d.peers.isEmpty {
-                    Text("no instances discovered (TXT: pm, id, pr, dc, ch — §18.3 minimal metadata only)")
-                        .font(Theme.monoSmall).foregroundStyle(.secondary)
+                    Text(d.browsing
+                         ? "no instances discovered (foreground-only; peers age out after the engine's TTL)"
+                         : "browsing off")
+                        .font(Theme.monoSmall)
+                        .foregroundStyle(.secondary)
                 } else {
                     ForEach(d.peers) { p in
-                        Text("◦ \(p.id)  pm=\(p.protocolMajor) pr=\(p.pairingRequired ? "true" : "false") dc=\(p.deviceClass) ch=\(p.connectionHint)")
+                        Text("◦ \(p.instanceName)  pm=\(p.txt.protocol_major) pr=\(p.txt.pairing_required ? "true" : "false") dc=\(p.txt.device_class) ch=\(p.txt.connection_hint)  →  \(p.address)")
                             .font(Theme.mono)
                             .textSelection(.enabled)
                     }
+                }
+                if !d.rejections.isEmpty {
+                    Text("filtered (fail-closed): \(d.rejections.joined(separator: " · "))")
+                        .font(Theme.monoSmall)
+                        .foregroundStyle(Theme.pending)
+                        .textSelection(.enabled)
+                }
+                if let ms = d.firstPeerLatencyMs {
+                    Text(String(format: "NET-003: first peer in %.0f ms (gate < 10 s)", ms))
+                        .font(Theme.monoSmall)
+                        .foregroundStyle(ms < 10_000 ? Theme.ok : Theme.failed)
+                        .textSelection(.enabled)
                 }
             }
             .padding(6)

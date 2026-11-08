@@ -1,7 +1,7 @@
 # Carry-On for Android
 
 Native-feeling app wrapper over the **real** Carry-On engine C ABI
-(`crates/carryon-ffi/include/carryon.h`, ABI 1.1, append-only). Kotlin,
+(`crates/carryon-ffi/include/carryon.h`, ABI 1.2 — 1.1 plus the stage-4 discovery entries, append-only). Kotlin,
 Jetpack Compose, Material 3 (dynamic color on API 31+), minSdk 29 (spec §9),
 targetSdk 35. One Kotlin module (`:app`), manual DI (no Hilt), coroutines +
 StateFlow MVVM.
@@ -18,7 +18,7 @@ StateFlow MVVM.
 | Engine binary (`libcarryon_ffi.so`, arm64-v8a) | `OBSERVED` | Cross-compiled by `Scripts/fetch_engine_lib.sh` from this checkout (cargo, aarch64-linux-android). Fetched artifact — gitignored, never committed. |
 | Demo Mode (two cores, loopback TLS 1.3, full 8-stage pipeline) | `OBSERVED (LOCAL)` — **once run on a device** | One device, loopback TLS, two in-app cores. NOT physical cross-device evidence (spec §2/§30). The UI shows the verbatim disclosure footer on every run. |
 | **"Receive" tab — L0/L1 ladder (stage 3, manual-IP)** | `OBSERVED (PHYSICAL)` against a real mac; `OBSERVED (LOCAL — device-local)` in the loopback instrumented test | Arm on open (binds listener, shows this device's addr + full pin), source pin field (fail-closed validation), destination-controlled chunk size (§18.6 clamp 4096..8 MiB), accept → import → CORE-004 integrity gate (measured sha256 == declared, else `E_OBJECT_DIGEST_MISMATCH … REFUSED`) → engine `document.open` → MediaStore + ACTION_VIEW with the exact mime. Physical evidence: [`evidence/20261108-a04-l0l1/`](evidence/20261108-a04-l0l1/). |
-| Physical cross-device handoff, discovery, signing | `TARGET` / `UNSUPPORTED` | No signed APK (PLAT-006), no §30 platform acceptance — no platform is "supported". NSD here is an **app-level pilot**; engine-side discovery is `TARGET` (FRONTIER Phase 2). |
+| Engine-side discovery | `OBSERVED (PHYSICAL)` for the stage-4 contract run | The §18.3 TXT is built and validated by the ENGINE (`DiscoveryContract` over JNI; ABI 1.2); NSD registers/browses natively. NET-003 PHYSICAL: the A04's browse found the engine-advertised mac in 177 ms (2026-11-08, `docs/evidence/20261108-net003-discovery/`). No signed APK (PLAT-006), no §30 platform acceptance — no platform is "supported". |
 
 Secrets: the identity key DER is SECRET (§22.3, EVD-006) — never logged,
 displayed, or persisted by this app. Only the SHA-256 pin hex may be shown,
@@ -85,8 +85,10 @@ optional.
 3. **Topology** — local node card (identity pin truncated, ABI version,
    listener address), trust records with revoke (`carryon_trust_revoke`,
    persisted via `carryon_trust_to_json`/`from_json`), an ASCII device graph,
-   and the **labeled** NSD discovery pilot (`_carryon._tcp`, TXT `pm id pr dc
-   ch` per §18.3 — never user/session/app names or keys).
+   and the **engine-contract** NSD discovery section (stage 4: `_carryon._tcp`,
+   TXT built by `DiscoveryContract.encode` and validated by
+   `DiscoveryContract.validate` — §18.3 `pm id pr dc ch` only; foreign keys
+   ignored, malformed records dropped fail-closed; NET-003 timing shown).
 4. **Sessions** — observed sessions with exact §16.2/plan.md readiness states
    (`Idle, Preparing, CutProposed, CutSealed, Importing, ActionReady,
    ReadOnlyActive, Failed, Inconclusive, Aborted`) — never the bare "Ready" —

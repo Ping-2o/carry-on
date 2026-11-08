@@ -23,6 +23,7 @@
  */
 package com.carryon.app.ffi
 
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.Closeable
 
@@ -131,6 +132,7 @@ object Err {
         E_PLATFORM_BASE + 2 -> "E_PLATFORM_BACKGROUND"
         E_PLATFORM_BASE + 3 -> "E_PLATFORM_SECURE_STORAGE"
         E_PLATFORM_BASE + 4 -> "E_PLATFORM_PACKAGE"
+        E_PLATFORM_BASE + 5 -> "E_PLATFORM_DISCOVERY" // ABI 1.2 (§18.3 stage 4)
         else -> if (code > 0) "E_UNKNOWN($code)" else "ERR_UNKNOWN($code)"
     }
 }
@@ -607,7 +609,9 @@ class Session private constructor(internal val handle: Long) : Closeable {
 
 /* ---- free functions ---------------------------------------------------------- */
 
-/** Check the engine ABI at load: expect 1.2 (append-only within major 1). */
+/** Check the engine ABI at load: expect 1.2 (append-only within major 1;
+ * 1.2 added the §18.3 discovery contract entries, stage 4, and the §18.4
+ * QR-pairing/provisional-channel entries, stage 5). */
 fun abiVersion(): AbiVersion {
     val v = CarryOnFfi.abiVersion()
         ?: throw CoreException(Err.UNKNOWN, "abi_version returned null")
@@ -701,3 +705,63 @@ fun Core.requestAuthorityTransfer(
 ): String = requireOut(
     CarryOnFfi.requestAuthorityTransfer(handle, session.handle, mirrorSessionId, adapterId)
 )
+
+/* ---- discovery contract (spec §18.3, stage 4; ABI 1.2) --------------------- */
+
+/** The engine-validated fields of a §18.3 TXT record. Mirrors the engine's
+ * canonical JSON (protocol_major, instance_id, pairing_required, device_class,
+ * connection_hint). */
+data class DiscoveryTxt(
+    val protocolMajor: Int,
+    val instanceId: String,
+    val pairingRequired: Boolean,
+    val deviceClass: String,
+    val connectionHint: String,
+)
+
+/**
+ * The §18.3 TXT contract as owned by the ENGINE. Android's NSD responder does
+ * the actual registering/browsing (app layer), but TXT construction and every
+ * received record go through here: [encode] can only ever emit the five
+ * minimal keys, and [validate] fails CLOSED on a malformed record (throws —
+ * the caller MUST drop the peer, never repair it); foreign keys are returned
+ * as ignored diagnostics, never interpreted.
+ */
+object DiscoveryContract {
+    /** Field values -> canonical wire pairs "[[key,value],…]" (engine-validated;
+     * throws on a contract violation, e.g. a non-coarse device class). */
+    fun encode(txt: DiscoveryTxt): String {
+        val fields = JSONObject().apply {
+            put("protocol_major", txt.protocolMajor)
+            put("instance_id", txt.instanceId)
+            put("pairing_required", txt.pairingRequired)
+            put("device_class", txt.deviceClass)
+            put("connection_hint", txt.connectionHint)
+        }
+        return requireOut(CarryOnFfi.discoveryTxtEncode(fields.toString()))
+    }
+
+    /**
+     * Validate RECEIVED pairs (ALL of them, foreign keys included — the engine
+     * reports what it ignored). Returns the validated fields + ignored keys.
+     * @throws CoreException code E_PLATFORM_DISCOVERY (1105) on ANY missing or
+     * malformed required key — the peer MUST be dropped (fail closed, §18.3).
+     */
+    fun validate(pairs: List<Pair<String, String>>): Pair<DiscoveryTxt, List<String>> {
+        val arr = JSONArray().apply {
+            pairs.forEach { (k, v) -> put(JSONArray().put(k).put(v)) }
+        }
+        val reply = JSONObject(requireOut(CarryOnFfi.discoveryTxtValidate(arr.toString())))
+        val txt = reply.getJSONObject("txt")
+        val ignored = reply.optJSONArray("ignored_keys")
+            ?.let { a -> List(a.length()) { a.getString(it) } }
+            ?: emptyList()
+        return DiscoveryTxt(
+            protocolMajor = txt.getInt("protocol_major"),
+            instanceId = txt.getString("instance_id"),
+            pairingRequired = txt.getBoolean("pairing_required"),
+            deviceClass = txt.getString("device_class"),
+            connectionHint = txt.optString("connection_hint"),
+        ) to ignored
+    }
+}

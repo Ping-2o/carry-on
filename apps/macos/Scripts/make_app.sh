@@ -88,7 +88,7 @@ cat > "$bundle/Contents/Info.plist" <<'PLIST'
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Carry-On advertises and browses local Carry-On devices (_carryon._tcp) for the app-level discovery pilot. Advertisements carry only minimal metadata (protocol version, instance id, pairing flag, device class, connection hint) — never user, session, or key material.</string>
+	<string>Carry-On advertises and browses local Carry-On devices (_carryon._tcp) — engine-side discovery over the local network. Advertisements carry only minimal metadata (protocol version, instance id, pairing flag, device class, connection hint) — never user, session, or key material.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_carryon._tcp</string>

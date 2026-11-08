@@ -107,6 +107,8 @@ pub enum PlatformCode {
     Background,
     SecureStorage,
     Package,
+    /// Discovery-contract violation (§18.3 fail-closed receive filter; stage 4).
+    Discovery,
 }
 
 /// The core error type. Each variant maps to a spec §24 family.

@@ -7,7 +7,9 @@ Android** (Kotlin, Jetpack Compose, Material 3, `apps/android/`). Both bind the
 existing C ABI only — no Rust changes, no new `#[no_mangle]` symbols — and ship
 the same feature parity: Continuity onboarding, one-device **Demo Mode** that
 drives the real engine end-to-end (8 stages incl. L4 authority transfer), Live
-Device Topology with an app-level discovery pilot, an evidence viewer, and
+Device Topology with **engine-contract discovery** (stage 4: the engine owns the
+§18.3 TXT; macOS advertises/browses engine-side, Android answers with the
+platform NSD responder), an evidence viewer, and
 ASCII art + animations that honor Reduce Motion.
 
 > **Labels are law (spec §2).** Nothing in either app upgrades a label anywhere
@@ -25,7 +27,7 @@ ASCII art + animations that honor Reduce Motion.
 | One-device demo = physical cross-device | **NO — `OBSERVED (LOCAL)` only** | Loopback TLS 1.3 on one machine, two in-process cores (spec §2/§30) — true on the A04 exactly as on the mac |
 | Any platform "supported" | **NO** | §30 acceptance never run on real hardware |
 | Signed APK / distribution signing | `UNSUPPORTED` here | PLAT-006 out of scope; macOS ad-hoc codesign is LOCAL-ONLY |
-| Engine-side discovery | `TARGET` (FRONTIER Phase 2) | The Bonjour/NSD pilot is **app-level only**, §18.3 minimal TXT |
+| **Engine-side discovery, NET-003 (stage 4): mac engine (mdns-sd) ⇄ A04 NSD, same LAN, TXT contract owned by the engine** | `OBSERVED (PHYSICAL)` | 2026-11-08, two machines: the mac's engine browse found the NSD-advertised Galaxy A04 in **537 ms**; the A04's NSD browse found the engine-advertised mac in **177 ms** (NET-003 gate < 10 s — PASS both directions). Fail-closed receive filter provable in the UI (rejected records never become peers); a full L0/L1 handoff served to the `discovered` address (192.168.3.3:36017, never typed on the mac) completed with verify `ok:true`. Evidence: [`docs/evidence/20261108-net003-discovery/`](../docs/evidence/20261108-net003-discovery/). Discovery is evidence-class LOCAL when self-advertised on one machine. NOT a "supported" platform (§30 unrun); pairing UX (typed pin) stays manual until stage 5 — discovery never replaces pairing |
 | Process/memory migration | `UNSUPPORTED` | Typed continuation only (spec §1) |
 
 Fixed footer every demo run ends with (verbatim, `plan.md`):
@@ -103,7 +105,9 @@ engine pipeline, NOT physical cross-device transfer or a supported platform (spe
   one connected device; 5 tests: FFI load + baseline/all-toggles editor +
   baseline/all-toggles graph + engine-level budget refusal). JVM units cover
   the pure logic of every fix; run in CI via `:app:testDebugUnitTest`.
-- Engine-side discovery, signed packaging, and §30 platform acceptance are all
-  still `TARGET` in [`docs/FRONTIER.md`](../docs/FRONTIER.md). These wrappers
-  are pilots: the Swift binding and the Kotlin/JNI shim are the first slices of
-  the Phase-4 SDK items — the SDKs themselves remain unchecked.
+- Engine-side discovery is `OBSERVED (PHYSICAL)` for the stage-4 contract run
+  (see the claim table above; pairing UX stays manual until stage 5). Signed
+  packaging and §30 platform acceptance are still `TARGET` in
+  [`docs/FRONTIER.md`](../docs/FRONTIER.md). The Swift binding and the
+  Kotlin/JNI shim are the first slices of the Phase-4 SDK items — the SDKs
+  themselves remain unchecked.

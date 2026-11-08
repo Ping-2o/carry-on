@@ -234,10 +234,15 @@ public struct FileHandoffConfig: Sendable {
     /// Destination chunk size for in-process (loopback/test) runs only;
     /// over the wire the DESTINATION controls chunking (§18.6).
     public var loopbackChunkSize: UInt64 = 0
+    /// NET-003 measurement from the discovery source, when a discovered peer
+    /// was used: wall time from browse start to the first validated peer
+    /// (monotonic clock, §18.10). Recorded into the evidence bundle.
+    public var discoveryFirstPeerMS: Double? = nil
 
     public init(fileURL: URL, receiverAddr: String, receiverPin: String,
                 identity: DeviceIdentity? = nil, integrityNegative: Bool = false,
-                workRoot: String? = nil, loopbackChunkSize: UInt64 = 0) {
+                workRoot: String? = nil, loopbackChunkSize: UInt64 = 0,
+                discoveryFirstPeerMS: Double? = nil) {
         self.fileURL = fileURL
         self.receiverAddr = receiverAddr
         self.receiverPin = receiverPin
@@ -245,6 +250,7 @@ public struct FileHandoffConfig: Sendable {
         self.integrityNegative = integrityNegative
         self.workRoot = workRoot
         self.loopbackChunkSize = loopbackChunkSize
+        self.discoveryFirstPeerMS = discoveryFirstPeerMS
     }
 }
 
@@ -310,7 +316,7 @@ public actor FileHandoffPipeline {
 
         // ---- validate the hand-made configuration (fail BEFORE any engine call)
         guard HandoffValidation.isValidReceiverAddr(config.receiverAddr) else {
-            throw CarryonError(code: -2, message: "receiver address must be IPv4:port (e.g. 192.168.1.20:48961) — discovery arrives at stage 4")
+            throw CarryonError(code: -2, message: "receiver address must be IPv4:port (e.g. 192.168.1.20:48961) — pick an engine-discovered peer or use the manual fallback")
         }
         guard HandoffValidation.isValidPinHex(config.receiverPin) else {
             throw CarryonError(code: -2, message: "receiver pin must be the 64-hex fingerprint shown on its Receive screen")
@@ -426,7 +432,9 @@ public actor FileHandoffPipeline {
         emit(.ladder(.l1Open, .skipped("on receiver")))
 
         // ---- evidence for the source session
-        let extra: AnyJSON = .object([
+        // Evidence for the source session. NET-003 rides along when the peer
+        // came from the engine browser (manual-fallback runs carry no claim).
+        var fields: [String: AnyJSON] = [
             "level": .string("L0-file-carry"),
             "l1_note": .string("launcher activation on receiver"),
             "source_session_id": .string(session),
@@ -441,9 +449,14 @@ public actor FileHandoffPipeline {
             "bytes_transferred_recv": .number(Double(recv)),
             "adapter": .string("org.carryon.file"),
             "authority_transfer": .string("none — L0/L1 is activation-only (honest: no unsaved app state claimed, §10.7)"),
-        ])
+        ]
+        if let ms = config.discoveryFirstPeerMS {
+            fields["discovery_first_peer_ms"] = .number(ms)
+            fields["discovery_gate_ms"] = .number(10_000)
+        }
+        let extraMetrics: AnyJSON = .object(fields)
         let bundleJSON = try await det("export_evidence_with") {
-            try engine.exportEvidence(sessionID: session, extraMetricsJSON: extra.jsonEncoded)
+            try engine.exportEvidence(sessionID: session, extraMetricsJSON: extraMetrics.jsonEncoded)
         }
         let evidencePath = srcDir + "/handoff-evidence.json"
         try bundleJSON.write(toFile: evidencePath, atomically: true, encoding: .utf8)

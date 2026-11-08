@@ -139,6 +139,20 @@ object CarryOnFfi {
     external fun sessionServerNegotiate(session: Long, featuresJson: String): ByteArray?
     external fun sessionFree(session: Long)
 
+    // ---- Discovery (spec §18.3, stage 4; ABI 1.2) -------------------------------
+    // The ENGINE owns the TXT contract. Android's NSD responder registers and
+    // browses natively (app layer), but the TXT it ADVERTISES is built by
+    // discoveryTxtEncode and every record it RECEIVES is validated by
+    // discoveryTxtValidate — fail closed: on CoreException the peer is dropped,
+    // never repaired. The engine's own mdns advertise/browse entries are the
+    // desktop path and stay unbridged here.
+
+    /** fields JSON -> canonical "[[key,value],...]" pairs (pm id pr dc ch). */
+    external fun discoveryTxtEncode(fieldsJson: String): ByteArray?
+
+    /** received "[[key,value],...]" -> {"txt":{...},"ignored_keys":[...]}. */
+    external fun discoveryTxtValidate(pairsJson: String): ByteArray?
+
     // ---- Transfer (handoff) -----------------------------------------------------
 
     /** BLOCKING: serves until the peer's import completes. Dispatchers.IO only. */

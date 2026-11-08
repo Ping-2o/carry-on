@@ -21,6 +21,11 @@ pub const CARRYON_ERR_BAD_JSON: i32 = -4;
 pub const CARRYON_ERR_BAD_HANDLE: i32 = -5;
 pub const CARRYON_ERR_BUFFER_TOO_SMALL: i32 = -6;
 
+/// `E_PLATFORM_DISCOVERY` (1105) — a discovery-contract violation: a received
+/// TXT record failed the §18.3 fail-closed filter, or an advertise/browse
+/// contract input was invalid. The caller MUST drop the peer (never guess).
+pub const CARRYON_E_PLATFORM_DISCOVERY: i32 = PLATFORM_BASE + 5;
+
 // Family bases (positive).
 const ADAPTER_BASE: i32 = 100;
 const SCHEMA_BASE: i32 = 200;
@@ -139,6 +144,7 @@ pub fn code_of(e: &CoreError) -> i32 {
                     PlatformCode::Background => 2,
                     PlatformCode::SecureStorage => 3,
                     PlatformCode::Package => 4,
+                    PlatformCode::Discovery => 5,
                 }
         }
     }

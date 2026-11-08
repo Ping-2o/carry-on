@@ -34,6 +34,6 @@ class FfiSmokeTest {
     fun engineLoadsOnDeviceAndReportsAbi_1_2() {
         val abi = CarryOnFfi.abiVersion()
         assertEquals("CARRYON ABI major (append-only within a major)", 1, abi[0])
-        assertEquals("CARRYON ABI minor (engine 1.2 — stage 5 pairing entries)", 2, abi[1])
+        assertEquals("CARRYON ABI minor (engine 1.2 — discovery + pairing entries)", 2, abi[1])
     }
 }

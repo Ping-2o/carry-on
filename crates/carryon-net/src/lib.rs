@@ -18,10 +18,11 @@
 //!
 //! Loopback between two in-process cores on `127.0.0.1` is **local evidence**, not
 //! physical cross-device evidence. No platform is "supported" until Section 30
-//! passes on real hardware. Live mDNS discovery is a shell TARGET (see
-//! [`discovery`]).
+//! passes on real hardware. Live mDNS discovery is engine-side as of stage 4
+//! (see [`discovery`] for the contract and [`discovery_mdns`] for the backend).
 
 pub mod discovery;
+pub mod discovery_mdns;
 pub mod error;
 pub mod frame;
 pub mod identity;
@@ -31,7 +32,11 @@ pub mod transport;
 pub mod trust;
 pub mod wire;
 
-pub use discovery::{DeviceClass, DiscoveredPeer, Discovery, StaticDiscovery, TxtRecord};
+pub use discovery::{
+    DeviceClass, DiscoveredPeer, Discovery, StaticDiscovery, TxtError, TxtRecord, SERVICE_TYPE,
+    TXT_KEYS,
+};
+pub use discovery_mdns::{MdnsAdvertiser, MdnsBrowser, PEER_CACHE_TTL};
 pub use error::{AuthCode, NetError, ProtoCode, Result, TransferCode};
 pub use identity::{DeviceIdentity, Pin};
 pub use pairing::{pair_devices, pairing_code, verification_string, PairingData, PairingPayload};

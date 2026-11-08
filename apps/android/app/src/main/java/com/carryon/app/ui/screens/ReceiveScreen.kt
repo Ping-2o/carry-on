@@ -26,6 +26,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -58,9 +59,23 @@ fun ReceiveScreen(runner: ReceiveRunner = AppGraph.receiveRunner) {
     var chunkSize by remember { mutableStateOf(0L) }
     val clipboard = LocalClipboardManager.current
 
-    // Arm on first composition: the source needs THIS device's address + pin
-    // before it serves (manual mode's honest human channel).
+    // Arm on first composition: the source needs THIS device's pin BEFORE it
+    // serves (the manual channel stays as fallback).
     LaunchedEffect(Unit) { runner.arm() }
+    val discovery by AppGraph.discovery.state.collectAsState()
+    // Advertise the ARMED listener over NSD the moment its port exists: the
+    // ENGINE builds the §18.3 TXT (DiscoveryContract.encode); the source's
+    // engine browse finds this device by name, no address typing.
+    LaunchedEffect(state.displayAddr) {
+        val port = state.displayAddr.substringAfterLast(':').toIntOrNull()
+        if (state.armed && port != null && port > 0) {
+            AppGraph.discovery.advertise(port = port)
+        }
+    }
+    // Foreground-first (battery): stop advertising when the screen leaves.
+    DisposableEffect(Unit) {
+        onDispose { AppGraph.discovery.stop() }
+    }
 
     Column(
         modifier = Modifier
@@ -96,9 +111,15 @@ fun ReceiveScreen(runner: ReceiveRunner = AppGraph.receiveRunner) {
             }
         }
         Text(
-            "The pin is a certificate fingerprint (public, not a secret). The source pairs it,\nyou type its pin below — manual mode until discovery (stage 4).",
+            "The pin is a certificate fingerprint (public, not a secret). The source pairs it,\nyou type its pin below. This receiver is advertised via NSD (§18.3 engine TXT) so the\nsource can discover it; the address below stays as the manual fallback.",
             style = ConsoleTextStyle,
             color = MaterialTheme.colorScheme.secondary,
+        )
+        KeyValueLine(
+            "nsd",
+            if (discovery.advertising) "advertising ${discovery.advertisedName} (_carryon._tcp)"
+            else if (discovery.lastError != null) "advertise: ${discovery.lastError}"
+            else "advertise: idle (arming…)",
         )
 
         // ---- the source's pin ----

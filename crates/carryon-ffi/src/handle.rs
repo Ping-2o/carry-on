@@ -18,6 +18,10 @@ pub type CarryonTrust = TrustStore;
 pub type CarryonSession = Session;
 /// Boxed `TcpListener` (the FFI binds it; `accept` consumes connections from it).
 pub type CarryonListener = TcpListener;
+/// Boxed engine-side mDNS advertiser (§18.3, stage 4).
+pub type CarryonDiscoveryAdvertiser = carryon_core::carryon_net::MdnsAdvertiser;
+/// Boxed engine-side mDNS browser with a TTL cache (§18.3, stage 4).
+pub type CarryonDiscoveryBrowser = carryon_core::carryon_net::MdnsBrowser;
 
 /// Box a value and leak it to a raw pointer for C ownership.
 pub fn to_handle<T>(value: T) -> *mut T {

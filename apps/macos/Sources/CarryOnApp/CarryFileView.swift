@@ -1,8 +1,9 @@
 /*
- * CarryFileView.swift — the "Carry File" screen (stage 3, L0/L1 onboarding
- * ladder, manual-IP mode): NSOpenPanel file pick (last directory cached),
- * hand-entered receiver address (cached; discovery is stage 4), the receiver's
- * pin, the honest L0/L1 ladder, and the engine console + dynamic disclosure.
+ * CarryFileView.swift — the "Carry File" screen (stage 4): NSOpenPanel file
+ * pick (last directory cached), the ENGINE-side discovered receiver (stage-4
+ * §18.3 discovery; hand-entered address stays as the MANUAL FALLBACK), the
+ * receiver's pin (trust pinning; PIN/QR pairing UX is stage 5), the honest
+ * L0/L1 ladder, and the engine console + dynamic disclosure.
  *
  * Labels (§2 law): a run's evidence class is derived from the dialled address
  * (loopback → LOCAL, LAN → PHYSICAL) and shown per run — never a static claim.
@@ -45,6 +46,9 @@ struct CarryFileView: View {
             .frame(maxWidth: 900, alignment: .leading)
         }
         .navigationTitle("Carry File")
+        // Foreground-first (battery): browse only while this screen is up.
+        .onAppear { app.discovery.startBrowsing() }
+        .onDisappear { app.discovery.stopBrowsing() }
     }
 
     private var header: some View {
@@ -60,7 +64,7 @@ struct CarryFileView: View {
                 .keyboardShortcut("s", modifiers: [.command, .shift])
                 .disabled(model.running || !model.configValid)
             }
-            Text("Manual IP until discovery (stage 4): the receiver binds a listener and shows its\naddress + pin; you dial it here. Chunk size is destination-controlled (§18.6) — set it on the receiver.")
+            Text("The engine discovers receivers on the LAN (_carryon._tcp, §18.3 — the TXT contract is\nvalidated by the engine); pick one below, or use the manual fallback. The receiver's pin still\npins the TLS trust (PIN/QR pairing UX is stage 5). Chunk size is destination-controlled (§18.6).")
                 .font(Theme.monoSmall)
                 .foregroundStyle(.secondary)
             Text("L0 = file carried + verified · L1 = opened in a real app (on the receiver). Honest per-run label below the console.")
@@ -104,6 +108,49 @@ struct CarryFileView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 12) {
                     Text("Receiver").font(Theme.monoSmall).foregroundStyle(.secondary).frame(width: 110, alignment: .leading)
+                    Text(app.discovery.browsing ? "discovering (engine browse)…" : "browse off")
+                        .font(Theme.monoSmall)
+                        .foregroundStyle(app.discovery.browsing ? Theme.wire : Theme.pending)
+                    Spacer()
+                    if let ms = app.discovery.firstPeerLatencyMs {
+                        Text(String(format: "NET-003: first peer %.0f ms", ms))
+                            .font(Theme.monoSmall)
+                            .foregroundStyle(ms < 10_000 ? Theme.ok : Theme.failed)
+                            .textSelection(.enabled)
+                    }
+                }
+                // ---- engine-discovered receivers (§18.3) ----
+                if app.discovery.peers.isEmpty {
+                    Text("no receivers discovered yet — make sure the receiver's app is on its Receive screen (it advertises); or dial it manually below")
+                        .font(Theme.monoSmall)
+                        .foregroundStyle(Theme.pending)
+                } else {
+                    ForEach(app.discovery.peers) { peer in
+                        let selected = model.receiverAddr == peer.address
+                        Button {
+                            model.receiverAddr = peer.address
+                            // NET-003 rides with the run (monotonic, §18.10).
+                            model.discoveryLatencyMS = app.discovery.firstPeerLatencyMs
+                        } label: {
+                            HStack(spacing: 8) {
+                                Text(selected ? "◉" : "○").font(Theme.mono)
+                                    .foregroundStyle(selected ? Theme.wire : Theme.pending)
+                                Text(peer.instanceName).font(Theme.mono)
+                                Text("dc=\(peer.txt.device_class) pr=\(peer.txt.pairing_required ? "1" : "0")")
+                                    .font(Theme.monoSmall).foregroundStyle(.secondary)
+                                Spacer()
+                                Text(peer.address).font(Theme.monoSmall).foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(model.running)
+                    }
+                }
+                // ---- manual fallback (stage-3 path, kept) ----
+                HStack(spacing: 12) {
+                    Text("Manual").font(Theme.monoSmall).foregroundStyle(.secondary).frame(width: 110, alignment: .leading)
                     TextField("192.168.1.20:48961", text: $model.receiverAddr)
                         .textFieldStyle(.roundedBorder)
                         .font(Theme.mono)
@@ -112,6 +159,9 @@ struct CarryFileView: View {
                     Text(model.addrValid ? "IPv4:port ✓" : "IPv4:port required")
                         .font(Theme.monoSmall)
                         .foregroundStyle(model.addrValid ? Theme.ok : Theme.pending)
+                    Text("(fallback)")
+                        .font(Theme.monoSmall)
+                        .foregroundStyle(.secondary)
                 }
                 HStack(spacing: 12) {
                     Text("Receiver pin").font(Theme.monoSmall).foregroundStyle(.secondary).frame(width: 110, alignment: .leading)
@@ -141,7 +191,7 @@ struct CarryFileView: View {
                         .font(Theme.monoSmall)
                         .foregroundStyle(.secondary)
                 }
-                Text("The receiver's pin is a certificate fingerprint (public, not a secret) — typed/pasted in full, or filled from its pairing payload.")
+                Text("The receiver's pin is a certificate fingerprint (public, not a secret) — typed/pasted in full, or filled from its pairing payload.\nDiscovery yields the address; the pin still pins the TLS trust (§18.5) until pairing has pinned it once.")
                     .font(Theme.monoSmall)
                     .foregroundStyle(.secondary)
             }

@@ -10,6 +10,9 @@
 //   CarryOnApp         SwiftUI executable.
 //   carryon-demo-smoke headless verification executable (exits 0 iff evidence
 //                      verifies ok:true).
+//   carryon-filehandoff-smoke — headless source side of the L0/L1 handoff.
+//   carryon-discovery-smoke — headless NET-003 gate: engine advertise+browse
+//                      on the real LAN, time to first validated peer (§18.3).
 import PackageDescription
 import Foundation
 
@@ -50,6 +53,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "carryon-pairing-smoke",
+            dependencies: ["CarryOnKit"]
+        ),
+        .executableTarget(
+            name: "carryon-discovery-smoke",
             dependencies: ["CarryOnKit"]
         ),
         .testTarget(
