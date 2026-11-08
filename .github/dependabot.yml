@@ -1,4 +1,4 @@
-# Dependabot version updates: weekly, grouped, labeled.
+# Dependabot version updates: monthly, grouped, labeled (fewer PRs, fewer CI runs).
 # Security updates are switched on separately (Settings → Code security →
 # Dependabot security updates).
 version: 2
@@ -6,8 +6,7 @@ updates:
   - package-ecosystem: cargo
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: "06:00"
       timezone: Asia/Almaty
     open-pull-requests-limit: 5
@@ -25,8 +24,7 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: "06:00"
       timezone: Asia/Almaty
     labels: [dependencies, "area: ci"]
@@ -39,8 +37,7 @@ updates:
   - package-ecosystem: gradle
     directory: /apps/android
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: "06:00"
       timezone: Asia/Almaty
     open-pull-requests-limit: 5
@@ -50,3 +47,13 @@ updates:
     groups:
       android-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      # Android toolchain bumps need one coordinated migration (#46):
+      # AGP 9 (built-in Kotlin, new DSL), Kotlin 2.4, compileSdk 36 for newer
+      # AndroidX / Compose. Patch updates still flow. Drop these with #46.
+      - dependency-name: "com.android.application"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "org.jetbrains.kotlin*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "androidx.*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]

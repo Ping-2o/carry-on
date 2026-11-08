@@ -2,12 +2,14 @@
 # Results land in Security → Code scanning. Rust uses build-mode none (no
 # build step of ours), so this job does not need libzim, the NDK or Xcode.
 #
-# Cost control — the Rust scan is the slowest check in the repo:
-# - PRs and pushes trigger only when Rust sources, manifests or workflows
-#   change; docs-only and app-only PRs skip CodeQL entirely.
+# Cost control — the Rust scan is the slowest check in the repo (~6–7 min):
+# - Rust is scanned on pushes to main, weekly and on demand — never on PRs,
+#   so a PR never waits for it. Findings land in Security → Code scanning
+#   right after the merge (and the weekly run re-scans everything).
+# - PRs trigger CodeQL only for workflow changes (the Actions scan, < 1 min).
 # - Each language runs only when its own inputs changed (`changes` job);
 #   the weekly schedule and manual runs scan both, so nothing goes unscanned.
-# - A new push to a PR cancels the superseded scan.
+# - A newer run of the same event on the same ref cancels the superseded one.
 # - The Rust extractor drives cargo itself (dependency resolution, build
 #   scripts and proc macros for macro expansion); its registry, git db and
 #   target dir are cached between runs.
@@ -24,17 +26,14 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "**/*.rs"
-      - "**/Cargo.toml"
-      - "Cargo.lock"
       - ".github/workflows/**"
   schedule:
     - cron: "41 3 * * 1"
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -48,10 +47,10 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      rust: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || steps.filter.outputs.rust == 'true' }}
+      rust: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && steps.filter.outputs.rust == 'true') }}
       actions: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || steps.filter.outputs.actions == 'true' }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v3
         id: filter
         if: github.event_name == 'push' || github.event_name == 'pull_request'
@@ -77,11 +76,11 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Point the extractor's cargo at a cacheable target dir
         run: echo "CODEQL_EXTRACTOR_RUST_OPTION_CARGO_TARGET_DIR=$HOME/codeql-cargo-target" >> "$GITHUB_ENV"
       - name: Cache cargo registry + git db + extractor target dir
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index
@@ -110,7 +109,7 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: github/codeql-action/init@v4
         with:
           languages: actions
