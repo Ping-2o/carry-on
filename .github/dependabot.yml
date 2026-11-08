@@ -52,7 +52,7 @@ updates:
       # AGP 9 (built-in Kotlin, new DSL), Kotlin 2.4, compileSdk 36 for newer
       # AndroidX / Compose. Patch updates still flow. Drop these with #46.
       - dependency-name: "com.android.application"
-        update-types: ["version-update:semver-major"]
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
       - dependency-name: "org.jetbrains.kotlin*"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
       - dependency-name: "androidx.*"
