@@ -24,10 +24,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.carryon.app.demo.DemoRunner
+import com.carryon.app.kiwix.KiwixRunner
 import com.carryon.app.discovery.NsdDiscovery
 import com.carryon.app.handoff.ReceiveRunner
 import com.carryon.app.ui.screens.DemoScreen
 import com.carryon.app.ui.screens.EvidenceScreen
+import com.carryon.app.ui.screens.KiwixScreen
 import com.carryon.app.ui.screens.OnboardingScreen
 import com.carryon.app.ui.screens.PairingScreen
 import com.carryon.app.ui.screens.ReceiveScreen
@@ -52,6 +54,8 @@ object AppGraph {
         private set
     lateinit var receiveRunner: ReceiveRunner
         private set
+    lateinit var kiwixRunner: KiwixRunner
+        private set
     lateinit var discovery: NsdDiscovery
         private set
     lateinit var topology: TopologyStore
@@ -68,6 +72,12 @@ object AppGraph {
             )
             topology = TopologyStore(appContext)
             receiveRunner = ReceiveRunner(
+                scope = kotlinx.coroutines.MainScope(),
+                context = appContext,
+                baseDir = appContext.cacheDir,
+                topology = topology,
+            )
+            kiwixRunner = KiwixRunner(
                 scope = kotlinx.coroutines.MainScope(),
                 context = appContext,
                 baseDir = appContext.cacheDir,
@@ -131,6 +141,12 @@ fun CarryOnApp() {
                             label = { Text("Sessions") },
                         )
                         NavigationBarItem(
+                            selected = route == "kiwix",
+                            onClick = { navController.navigateTab("kiwix") },
+                            icon = { Text("▤", style = androidx.compose.material3.MaterialTheme.typography.titleMedium) },
+                            label = { Text("Kiwix") },
+                        )
+                        NavigationBarItem(
                             selected = route == "evidence",
                             onClick = { navController.navigateTab("evidence") },
                             icon = { Text("☰", style = androidx.compose.material3.MaterialTheme.typography.titleMedium) },
@@ -161,6 +177,7 @@ fun CarryOnApp() {
                 composable("pairing") { PairingScreen() }
                 composable("topology") { TopologyScreen() }
                 composable("sessions") { SessionsScreen() }
+                composable("kiwix") { KiwixScreen() }
                 composable("evidence") { EvidenceScreen() }
             }
         }
