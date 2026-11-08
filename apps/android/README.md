@@ -1,7 +1,7 @@
 # Carry-On for Android
 
 Native-feeling app wrapper over the **real** Carry-On engine C ABI
-(`crates/carryon-ffi/include/carryon.h`, ABI 1.2 — 1.1 plus the stage-4 discovery entries, append-only). Kotlin,
+(`crates/carryon-ffi/include/carryon.h`, ABI 1.3 — 1.2 plus the PhotoCraft entries, append-only; the SDK `carryon-kit` wraps it). Kotlin,
 Jetpack Compose, Material 3 (dynamic color on API 31+), minSdk 29 (spec §9),
 targetSdk 35. One Kotlin module (`:app`), manual DI (no Hilt), coroutines +
 StateFlow MVVM.

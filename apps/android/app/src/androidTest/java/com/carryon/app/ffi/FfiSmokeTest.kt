@@ -33,9 +33,9 @@ class FfiSmokeTest {
     /** Class-load loads libcarryon_jni.so + its engine dependency — the exact
      *  call path that crashed at the first device run. */
     @Test
-    fun engineLoadsOnDeviceAndReportsAbi_1_2() {
+    fun engineLoadsOnDeviceAndReportsAbi_1_3() {
         val abi = CarryOnFfi.abiVersion()
         assertEquals("CARRYON ABI major (append-only within a major)", 1, abi[0])
-        assertEquals("CARRYON ABI minor (engine 1.2 — discovery + pairing entries)", 2, abi[1])
+        assertEquals("CARRYON ABI minor (engine 1.3 — discovery + pairing + PhotoCraft entries)", 3, abi[1])
     }
 }
