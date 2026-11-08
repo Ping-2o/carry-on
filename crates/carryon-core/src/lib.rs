@@ -24,6 +24,11 @@ pub mod recovery;
 pub mod store;
 pub mod transfer;
 
+/// RESEARCH (stage 11): view-pure block-sum checkpoints over a sealed cut.
+/// Off by default — `carryon-ffi` (and therefore the apps) never enables it.
+#[cfg(feature = "blocksum-checkpoint")]
+pub mod checkpoint;
+
 pub use crate::authority_xfer::{AuthorityReceiptSet, SourcePending};
 pub use crate::core::{Core, CreateSessionReq};
 pub use crate::transfer::{ImportOutcome, ImportResume, PartialImport};

@@ -1,0 +1,14 @@
+warning: linker stderr: ld: __eh_frame section too large (max 16MB) to encode dwarf unwind offsets in compact unwind table, performance of exception handling might be affected
+  |
+  = note: `#[warn(linker_messages)]` on by default
+
+bfa split=5930649 B (manifest 15376 B + 60 tiles + 1 blobs = 5914792 B + journal 103 B + meta 378 B)
+bfa monolithic=6868017 B (zip 6867536 B + journal 103 B + meta 378 B)
+window 1 (budget 65536 B): published 7 objects (+65108 B logical, 120784 B wire, 0.469s), deferred 57 objects (5865541 B)
+window 2 (budget 262144 B): published 3 objects (+260747 B logical, 380352 B wire, 0.404s), deferred 54 objects (5604794 B)
+window 3 (budget 18446744073709551615 B): COMPLETED mirror cut 0 (7522178 B wire, 3.239s)
+monolith @64 KiB: partial (2 tiny objects banked, document deferred=true); @256 KiB retry: refused=true (BUDGET_Network: object photocraft.document.v1 (6867536 deferred bytes over 1 objects) exceeds import budget (262144 bytes))
+re-carry after 1 stroke: 6 of 67 content objects changed (122041 B)
+observed dedup re-carry: 222413 B wire in 0.270s (mirror cut 0)
+composite oracle: src b5bdb593d26676f01cac37288efae39c29e0028fe310c0b20583a73b6a2b05ec == dst b5bdb593d26676f01cac37288efae39c29e0028fe310c0b20583a73b6a2b05ec: true
+evidence: /tmp/tile-progressive-blocksum.json

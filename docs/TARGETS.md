@@ -29,6 +29,10 @@ cargo run -p xtask -- bench docs/benchmark --reps 30
 cargo test -p carryon-authority-model                            # stateright exhaustive interleavings
 cargo kani -p carryon-authority-model --no-default-features      # Kani proofs (11 harnesses)
 
+# 2c. Block-sum checkpoint index (RESEARCH, stage 11; off the prod path):
+cargo run -q -p xtask -- bench-blocksum      # -> docs/evidence/20261108-blocksum-checkpoint/benchmark.json
+cargo kani -p carryon-math-core              # 4 model-level harnesses (PROVED construction)
+
 # 3. Real Mac->Android campaign (needs NDK, MAC_IP, one adb device on the same LAN):
 NDK=<ndk> MAC_IP=<this host lan ip> crates/carryon-ffi/shells/android-cli/bench_xdev.sh
 #   -> docs/evidence/<stamp>/RESULTS-xdevice.md + summary-xdevice.json
@@ -45,6 +49,11 @@ crates/carryon-ffi/shells/android-cli/collect_evidence.sh docs/evidence/<stamp>
 
 - No signed APK / code signing; no §30 platform acceptance — **no platform is "supported"**
   (PLAT-006 out of scope).
+- The stage-11 block-sum checkpoint index is a **derived research view** of a
+  sealed cut (`blocksum-checkpoint`, not enabled by `carryon-ffi` or the apps).
+  Its `q+1` figure is an **endpoint update cost** (changed persistent symbols),
+  not wire bytes, latency, or a delivery win; no transfer path consumes it. The
+  Kani harnesses cover the construction model, not the Rust encoder.
 - `carryon-authority-model` is **MODEL-level evidence**: it machine-checks the
   protocol's pure transitions and two-device interleavings (incl. crash windows,
   loss, duplication), NOT the `rusqlite`/TLS implementation — those remain
