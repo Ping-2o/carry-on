@@ -31,7 +31,7 @@ extern "C" {
 
 /* ABI version. Check against carryon_abi_version() at load. */
 #define CARRYON_ABI_MAJOR 1u
-#define CARRYON_ABI_MINOR 1u
+#define CARRYON_ABI_MINOR 2u
 
 /* Result codes. */
 #define CARRYON_OK                    0
@@ -62,6 +62,7 @@ extern "C" {
 #define CARRYON_E_TRANSFER_RESUME_FAILURE  (CARRYON_E_TRANSFER_BASE + 5)
 #define CARRYON_E_BUDGET_NETWORK           (CARRYON_E_BUDGET_BASE + 0)
 #define CARRYON_E_AUTH_PERMISSION          (CARRYON_E_AUTH_BASE + 0)
+#define CARRYON_E_PLATFORM_DISCOVERY       (CARRYON_E_PLATFORM_BASE + 5)
 
 /* Opaque handles. */
 typedef struct CarryonCore CarryonCore;
@@ -69,6 +70,8 @@ typedef struct CarryonIdentity CarryonIdentity;
 typedef struct CarryonTrust CarryonTrust;
 typedef struct CarryonSession CarryonSession;
 typedef struct CarryonListener CarryonListener;
+typedef struct CarryonDiscoveryAdvertiser CarryonDiscoveryAdvertiser;
+typedef struct CarryonDiscoveryBrowser CarryonDiscoveryBrowser;
 
 /* ---- ABI / lifetime ---- */
 void    carryon_abi_version(uint32_t *major, uint32_t *minor);
@@ -133,6 +136,25 @@ int32_t carryon_session_client_negotiate(CarryonSession *session, const char *fe
 int32_t carryon_session_server_negotiate(CarryonSession *session, const char *features_json,
                                          char **out_features_json);
 void    carryon_session_free(CarryonSession *session);
+
+/* ---- Discovery (spec 18.3, stage 4; ABI 1.2) ----
+ * The ENGINE owns the TXT contract. TXT pairs JSON is "[[key,value],...]":
+ *   encode   — field values -> canonical wire pairs (pm id pr dc ch, that order)
+ *   validate — received pairs -> {"txt":{...},"ignored_keys":[...]} or
+ *              E_PLATFORM_DISCOVERY; a shell MUST drop the peer on that code.
+ * Advertise/browse run engine-side on the desktop; Android shells answer the
+ * call with the platform NSD responder but still route TXT through encode/validate.
+ */
+int32_t carryon_discovery_txt_encode(const char *fields_json, char **out_pairs_json);
+int32_t carryon_discovery_txt_validate(const char *pairs_json, char **out_json);
+CarryonDiscoveryAdvertiser *carryon_discovery_advertise_start(const char *instance_name,
+                                                              uint16_t port,
+                                                              const char *txt_pairs_json);
+void    carryon_discovery_advertise_stop(CarryonDiscoveryAdvertiser *adv);
+CarryonDiscoveryBrowser *carryon_discovery_browse_start(void);
+int32_t carryon_discovery_browse_snapshot(const CarryonDiscoveryBrowser *browser,
+                                          char **out_json);
+void    carryon_discovery_browse_stop(CarryonDiscoveryBrowser *browser);
 
 /* ---- Transfer (handoff) ---- */
 int32_t carryon_serve_cut(CarryonCore *core, CarryonSession *session);

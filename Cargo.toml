@@ -47,6 +47,10 @@ thiserror = "1"
 # no C toolchain surprise vs aws-lc-rs default).
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 rcgen = "0.13"
+# Engine-side mDNS/DNS-SD (§18.3 discovery): no async runtime dependency, pure Rust
+# — advertise + browse `_carryon._tcp` from the engine on desktop targets. Android
+# uses the platform NSD responder through the app layer instead (see apps/).
+mdns-sd = "0.21"
 # Dev-only
 tempfile = "3"
 proptest = "1"

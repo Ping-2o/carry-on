@@ -20,6 +20,7 @@
 //! foreign-binary execution, JIT, or arbitrary plugins exist on this surface.
 
 pub mod abi_core;
+pub mod abi_discovery;
 pub mod abi_net;
 pub mod abi_transfer;
 pub mod errors;
@@ -31,8 +32,12 @@ pub mod strings;
 /// 1.1: `carryon_import_cut` / `carryon_resume_import` result JSON gains the
 /// additive `partial_budget` shape (§6.8 progressive budget admission); no
 /// signature changes.
+/// 1.2: stage-4 discovery (§18.3): `carryon_discovery_txt_encode`,
+/// `carryon_discovery_txt_validate`, `carryon_discovery_advertise_start/stop`,
+/// `carryon_discovery_browse_start/snapshot/stop`; new code
+/// `E_PLATFORM_DISCOVERY` (1105). Append-only — no signature changes.
 pub const CARRYON_ABI_MAJOR: u32 = 1;
-pub const CARRYON_ABI_MINOR: u32 = 1;
+pub const CARRYON_ABI_MINOR: u32 = 2;
 
 /// Write the ABI version into the out-params. Lets a shell check compatibility at
 /// load time against the header's `#define`s.
