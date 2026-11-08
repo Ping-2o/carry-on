@@ -37,7 +37,7 @@ carryon-core = { path = "crates/carryon-core" }
 carryon-net = { path = "crates/carryon-net" }
 # External, pinned, minimal.
 rusqlite = { version = "0.41", features = ["bundled"] }
-sha2 = "0.10"
+sha2 = "0.11"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4", "v5", "serde"] }
