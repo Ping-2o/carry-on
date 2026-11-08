@@ -32,7 +32,7 @@
 //!   [`crate::model::Workspace`] needs.
 
 use crate::driver::{DriverError, EditOutcome, PhotocraftDriver, Step};
-use crate::model::{PhotocraftMeta, UnsavedMode, Viewport, Workspace};
+use crate::model::{DocumentBundle, PhotocraftMeta, UnsavedMode, Viewport, Workspace};
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
@@ -342,7 +342,19 @@ impl ControlChannelDriver {
             ));
         }
         let _ = std::fs::create_dir_all(self.cfg.write_root.join("carry"));
-        let rel = format!("carry/scratch-{tag}.pcraft");
+        // Name the scratch snapshot after the document so the destination shows
+        // the carried document's own name after `app.open`. It lives in
+        // `carry/`, never over the user's saved file.
+        let doc_name = self
+            .active_session_row()
+            .ok()
+            .and_then(|r| {
+                r.get("name")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
+            .unwrap_or_else(|| format!("carryon-{tag}"));
+        let rel = format!("carry/{}.pcraft", sanitize_name(&doc_name));
         self.call("app.save", &serde_json::json!({ "path": rel }))?;
         let full = self.cfg.write_root.join(&rel);
         let bytes = std::fs::read(&full)
@@ -485,6 +497,361 @@ impl ControlChannelDriver {
     pub fn inspect(&mut self) -> Result<serde_json::Value, DriverError> {
         self.call("ui.inspect", &serde_json::json!({}))
     }
+
+    // ---- Stage-10 desktop UX: capture a live session / restore into one ------
+
+    /// A compact, secret-free view of the connected app (the "live session"
+    /// card in the Carry-On app). One `session.inspect` + one `ui.inspect`.
+    pub fn live_summary(&mut self) -> Result<LiveSessionSummary, DriverError> {
+        let row = self.active_session_row()?;
+        let inspect = self.inspect()?;
+        let active = row.get("index").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+        let document = inspect.get("document").cloned().unwrap_or_default();
+        let selected = Self::selected_layer_targets(
+            document.get("layers").unwrap_or(&serde_json::Value::Null),
+        );
+        let view = inspect
+            .get("views")
+            .and_then(|v| v.get(active as usize))
+            .cloned()
+            .unwrap_or_default();
+        Ok(LiveSessionSummary {
+            documents: inspect
+                .pointer("/session/documents")
+                .and_then(|v| v.as_array())
+                .map(|a| a.len())
+                .unwrap_or(0),
+            active,
+            name: row
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            path: row
+                .get("path")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            revision: row.get("revision").and_then(|v| v.as_u64()).unwrap_or(0),
+            dirty: row.get("dirty").and_then(|v| v.as_bool()).unwrap_or(false),
+            tool: inspect
+                .get("tool")
+                .and_then(|v| v.as_str())
+                .unwrap_or("move")
+                .to_string(),
+            zoom: view.get("zoom").and_then(|v| v.as_f64()).unwrap_or(1.0),
+            rotation: view.get("rotation").and_then(|v| v.as_f64()).unwrap_or(0.0),
+            selected_layers: selected.len(),
+        })
+    }
+
+    /// Capture the live session into carryable state: the saved base document
+    /// bytes (a `.pcraft` ZIP on this machine), the dirty-state snapshot (only
+    /// when dirty; produced non-destructively with `image.duplicate` +
+    /// `app.save` + `file.close`, see [`Self::snapshot_scratch`]), the
+    /// ephemeral working position and the meta. With `split`, the base ZIP is
+    /// also split into the parent-linked tile/blob bundle — the exact bytes
+    /// PhotoCraft wrote, previews dropped (TILE-SPLITTING.md §2).
+    ///
+    /// The capture is a **point-in-time snapshot**: the caller creates the cut
+    /// immediately after, so what the UI showed and what the cut seals are the
+    /// same moment.
+    pub fn capture(&mut self, split: bool) -> Result<LiveCapture, DriverError> {
+        let document = self.document_bytes()?;
+        let unsaved = self.unsaved_bytes()?;
+        let meta = self.meta()?;
+        let workspace: Workspace = serde_json::from_slice(&self.workspace_bytes()?)
+            .map_err(|e| DriverError::Failed(format!("decode workspace: {e}")))?;
+        let bundle = if split {
+            Some(crate::zipbundle::split_pcraft_zip(&document).map_err(DriverError::Failed)?)
+        } else {
+            None
+        };
+        let parts = bundle.as_ref().map(|b| b.parts.len()).unwrap_or(0);
+        let report = LiveCaptureReport {
+            documents: 1,
+            name: meta.document_name.clone(),
+            revision: meta.revision,
+            dirty: meta.dirty,
+            path: meta.original_path.clone(),
+            encoding: if split { "split" } else { "monolithic" }.into(),
+            document_bytes: document.len() as u64,
+            unsaved_bytes: unsaved.len() as u64,
+            parts,
+            total_bytes: (document.len() + unsaved.len()) as u64,
+            tool: workspace.active_tool.clone(),
+            zoom: workspace.viewport.zoom,
+            rotation: workspace.viewport.rotation,
+            selected_layers: workspace.selected_layers.len(),
+        };
+        Ok(LiveCapture {
+            document,
+            bundle,
+            unsaved,
+            workspace,
+            meta,
+            report,
+        })
+    }
+
+    /// Restore carried state into the LIVE app behind this connection: write the
+    /// payload under the app's automation read root (a `.pcraft` ZIP or a
+    /// directory bundle — PhotoCraft opens both natively), `app.open` it, bring
+    /// the working position back (tool, viewport, layer selection) on the NOW
+    /// ACTIVE document, and optionally capture a screenshot for evidence.
+    ///
+    /// Prefers the dirty-state snapshot when one was carried: it is the exact
+    /// current state (document + edits in one file), so the live app shows what
+    /// the source showed. A clean carry opens the saved document itself.
+    pub fn restore_into_live(
+        &mut self,
+        zip: Option<&[u8]>,
+        bundle: Option<&DocumentBundle>,
+        workspace: &Workspace,
+        name_hint: &str,
+        screenshot: Option<&str>,
+    ) -> Result<LiveRestoreReport, DriverError> {
+        let safe = sanitize_name(name_hint);
+        let tag = crate::model::hex_sha256(
+            zip.or_else(|| bundle.map(|b| b.manifest.as_slice()))
+                .unwrap_or(b"empty"),
+        );
+        let tag = &tag[..8];
+        // One subdirectory per carried capture: the opened document keeps its
+        // own display name (`<name>.pcraft`), and repeated restores never
+        // overwrite each other.
+        let ingress = self.cfg.read_root.join("carryon-ingress").join(tag);
+        std::fs::create_dir_all(&ingress)
+            .map_err(|e| DriverError::Failed(format!("create ingress dir: {e}")))?;
+
+        let rel = if let Some(bytes) = zip {
+            let file = format!("{safe}.pcraft");
+            std::fs::write(ingress.join(&file), bytes)
+                .map_err(|e| DriverError::Failed(format!("write carried document: {e}")))?;
+            format!("carryon-ingress/{tag}/{file}")
+        } else if let Some(bundle) = bundle {
+            let dir = format!("{safe}.pcraft");
+            let full = ingress.join(&dir);
+            let _ = std::fs::remove_dir_all(&full);
+            for sub in ["tiles", "blobs"] {
+                std::fs::create_dir_all(full.join(sub))
+                    .map_err(|e| DriverError::Failed(format!("create bundle dir: {e}")))?;
+            }
+            for (path, bytes) in &bundle.parts {
+                let (sub, name) = path
+                    .split_once('/')
+                    .ok_or_else(|| DriverError::Failed(format!("bad part path {path}")))?;
+                std::fs::write(full.join(sub).join(name), bytes)
+                    .map_err(|e| DriverError::Failed(format!("write part {path}: {e}")))?;
+            }
+            std::fs::write(full.join("manifest.json"), &bundle.manifest)
+                .map_err(|e| DriverError::Failed(format!("write manifest: {e}")))?;
+            format!("carryon-ingress/{tag}/{dir}")
+        } else {
+            return Err(DriverError::Failed(
+                "restore: no carried document bytes (neither a snapshot nor a bundle)".into(),
+            ));
+        };
+
+        self.call("app.open", &serde_json::json!({ "path": rel }))?;
+        let active = {
+            let inspect = self.inspect()?;
+            inspect
+                .pointer("/session/active")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32
+        };
+        // Working position on the now-active carried document. Activating by the
+        // SOURCE's document index would be wrong here (the destination's window
+        // order is its own); the opened document is already active.
+        self.call(
+            "ui.set",
+            &serde_json::json!({
+                "tool": workspace.active_tool,
+                "zoom": workspace.viewport.zoom,
+                "center": workspace.viewport.center,
+                "rotation": workspace.viewport.rotation,
+            }),
+        )?;
+        for target in &workspace.selected_layers {
+            self.execute(
+                "layer.select",
+                &serde_json::json!({
+                    "name": target.name,
+                    "occurrence": target.occurrence,
+                    "mode": "replace",
+                }),
+            )?;
+        }
+        // Evidence screenshot is best-effort: a backgrounded window may present
+        // no frame and time out inside the app. The restore itself must not fail
+        // because a screenshot did (the state proof is the engine oracle + the
+        // independent inspect below).
+        let mut shot = None;
+        let mut shot_error = None;
+        if let Some(path) = screenshot {
+            let mut err = String::new();
+            for attempt in 0..3 {
+                match self.call("ui.screenshot", &serde_json::json!({ "path": path })) {
+                    Ok(_) => {
+                        shot = Some(path.to_string());
+                        err.clear();
+                        break;
+                    }
+                    Err(e) => {
+                        err = e.to_string();
+                        if attempt < 2 {
+                            std::thread::sleep(Duration::from_millis(800));
+                        }
+                    }
+                }
+            }
+            if shot.is_none() {
+                shot_error = Some(err);
+            }
+        }
+        let row = self.active_session_row()?;
+        let inspect = self.inspect()?;
+        let view = inspect
+            .get("views")
+            .and_then(|v| v.get(active as usize))
+            .cloned()
+            .unwrap_or_default();
+        let selected = Self::selected_layer_targets(
+            inspect
+                .pointer("/document/layers")
+                .unwrap_or(&serde_json::Value::Null),
+        );
+        Ok(LiveRestoreReport {
+            opened_path: rel,
+            active,
+            name: row
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            revision: row.get("revision").and_then(|v| v.as_u64()).unwrap_or(0),
+            dirty: row.get("dirty").and_then(|v| v.as_bool()).unwrap_or(false),
+            tool: inspect
+                .get("tool")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            zoom: view.get("zoom").and_then(|v| v.as_f64()).unwrap_or(0.0),
+            rotation: view.get("rotation").and_then(|v| v.as_f64()).unwrap_or(0.0),
+            selected_layers: selected.len(),
+            screenshot: shot,
+            screenshot_error: shot_error,
+        })
+    }
+
+    /// Apply the carried working position to the CURRENT active document — the
+    /// destination-side `session.restore` step (the carried document is already
+    /// open and active; no source index is trusted).
+    pub fn restore_live_current(&mut self, workspace: &Workspace) -> Result<(), DriverError> {
+        self.call(
+            "ui.set",
+            &serde_json::json!({
+                "tool": workspace.active_tool,
+                "zoom": workspace.viewport.zoom,
+                "center": workspace.viewport.center,
+                "rotation": workspace.viewport.rotation,
+            }),
+        )?;
+        for target in &workspace.selected_layers {
+            self.execute(
+                "layer.select",
+                &serde_json::json!({
+                    "name": target.name,
+                    "occurrence": target.occurrence,
+                    "mode": "replace",
+                }),
+            )?;
+        }
+        Ok(())
+    }
+}
+
+/// `LiveCapture` report: sizes and session facts only, no bytes, no token.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LiveCaptureReport {
+    pub documents: usize,
+    pub name: String,
+    pub revision: u64,
+    pub dirty: bool,
+    pub path: Option<String>,
+    pub encoding: String,
+    pub document_bytes: u64,
+    pub unsaved_bytes: u64,
+    pub parts: usize,
+    pub total_bytes: u64,
+    pub tool: String,
+    pub zoom: f64,
+    pub rotation: f64,
+    pub selected_layers: usize,
+}
+
+/// Captured live session (source side) — everything a cut needs.
+pub struct LiveCapture {
+    /// Saved base document bytes (`.pcraft` ZIP).
+    pub document: Vec<u8>,
+    /// Split encoding of `document` when requested (`None` = monolithic).
+    pub bundle: Option<DocumentBundle>,
+    /// Dirty-state snapshot ZIP (`image.duplicate` + `app.save`; empty when clean).
+    pub unsaved: Vec<u8>,
+    pub workspace: Workspace,
+    pub meta: PhotocraftMeta,
+    pub report: LiveCaptureReport,
+}
+
+/// Restored live session (destination side).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LiveRestoreReport {
+    pub opened_path: String,
+    pub active: u32,
+    pub name: String,
+    pub revision: u64,
+    pub dirty: bool,
+    pub tool: String,
+    pub zoom: f64,
+    pub rotation: f64,
+    pub selected_layers: usize,
+    pub screenshot: Option<String>,
+    /// Why the evidence screenshot is absent, when it is (never a restore failure).
+    pub screenshot_error: Option<String>,
+}
+
+/// Compact live-session card (source or destination), token-free.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LiveSessionSummary {
+    pub documents: usize,
+    pub active: u32,
+    pub name: String,
+    pub path: Option<String>,
+    pub revision: u64,
+    pub dirty: bool,
+    pub tool: String,
+    pub zoom: f64,
+    pub rotation: f64,
+    pub selected_layers: usize,
+}
+
+/// Keep an app-provided document name safe for a file under the ingress dir:
+/// no path separators, no traversal, bounded length, always non-empty.
+fn sanitize_name(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let trimmed = cleaned.trim_matches('.').trim_matches('_');
+    let stem = trimmed.strip_suffix(".pcraft").unwrap_or(trimmed);
+    let out = if stem.is_empty() { "carried" } else { stem };
+    out.chars().take(64).collect()
 }
 
 /// Keep transcript entries small: big results become a sha256 + length.
@@ -501,12 +868,31 @@ fn summarize(v: &serde_json::Value) -> serde_json::Value {
 
 impl PhotocraftDriver for ControlChannelDriver {
     fn document_bytes(&mut self) -> Result<Vec<u8>, DriverError> {
-        std::fs::read(&self.cfg.base_document).map_err(|e| {
-            DriverError::Failed(format!(
-                "read base document {}: {e}",
-                self.cfg.base_document.display()
-            ))
-        })
+        // The saved base document: the configured path, else the live document's
+        // own saved path as the app reports it (`session.inspect` → `path`,
+        // relative to the automation read root). Reading the user's selected
+        // document is the adapter's declared `read_selected_workspace` permission.
+        let mut candidates = vec![self.cfg.base_document.clone()];
+        if let Ok(row) = self.active_session_row() {
+            if let Some(p) = row.get("path").and_then(|v| v.as_str()) {
+                let path = Path::new(p);
+                candidates.push(if path.is_absolute() {
+                    path.to_path_buf()
+                } else {
+                    self.cfg.read_root.join(path)
+                });
+            }
+        }
+        for path in candidates {
+            if let Ok(bytes) = std::fs::read(&path) {
+                return Ok(bytes);
+            }
+        }
+        Err(DriverError::Failed(
+            "the live document has no readable saved base (save it in PhotoCraft first: \
+             a carry needs the document object)"
+                .into(),
+        ))
     }
 
     fn unsaved_bytes(&mut self) -> Result<Vec<u8>, DriverError> {
@@ -636,7 +1022,10 @@ impl PhotocraftDriver for ControlChannelDriver {
     }
 
     fn restore(&mut self, workspace: &Workspace) -> Result<(), DriverError> {
-        self.restore_live(workspace)
+        // Destination-side `session.restore`: the carried document is already
+        // open and active in this app; apply the working position to the ACTIVE
+        // document (a source document index means nothing in this window).
+        self.restore_live_current(workspace)
     }
 }
 

@@ -321,7 +321,7 @@ public actor DemoPipeline {
         // ---- header -----------------------------------------------------
         logPlain("== Carry-On macOS demo — \(config.scenario.title) ==")
         log("abi", AbiVersion.current().description)
-        log("binding", "CarryOnKit (Swift over C ABI 1.2)")
+        log("binding", "CarryOnKit (Swift over C ABI 1.3)")
         log("label", demoModeLabel)
 
         // ---- 1. OPEN ----------------------------------------------------

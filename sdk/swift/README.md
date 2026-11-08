@@ -1,7 +1,7 @@
 # CarryOnKit — the Swift SDK (stage 9)
 
 The distributable Swift Package over the real Carry-On engine C ABI
-(`carryon.h`, **ABI 1.2**, append-only within major 1). This is the same
+(`carryon.h`, **ABI 1.3**, append-only within major 1). This is the same
 binding the macOS app uses (`apps/macos/Sources/CarryOnKit`), carried as a
 distribution surface: `Scripts/sync_from_app.sh` keeps the sources identical
 (drift-checked), and the ABI compatibility suite pins the three-way contract
@@ -42,8 +42,8 @@ Use it from a client package:
 
 ## Versioning (semver, follows the ABI)
 
-The SDK version **follows the engine ABI major.minor** — ABI 1.2 → SDK
-**1.2.0** (see `Sources/CarryOnKit/KitVersion.swift`). Major tracks the ABI
+The SDK version **follows the engine ABI major.minor** — ABI 1.3 → SDK
+**1.3.0** (see `Sources/CarryOnKit/KitVersion.swift`). Major tracks the ABI
 major (breaking), minor tracks the ABI minor (append-only additions), patch is
 SDK-only fixes. `CarryOnSDK.requireCompatibleEngine()` is the startup gate: an
 engine older than the SDK's ABI minor fails with a clear message.

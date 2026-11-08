@@ -1,7 +1,7 @@
 # carryon-kit — the Android SDK (stage 9)
 
 The distributable **AAR** over the real Carry-On engine C ABI
-(`carryon.h`, **ABI 1.2**, append-only within major 1). It packages:
+(`carryon.h`, **ABI 1.3**, append-only within major 1). It packages:
 
 - the JNI shim (`src/main/cpp/carryon_jni.c` — pure translation over the ABI),
 - the engine `libcarryon_ffi.so` for arm64-v8a (fetched, never committed —
@@ -48,8 +48,8 @@ Core.open(dataDir).use { core ->
 
 ## Versioning (semver, follows the ABI)
 
-The SDK version **follows the engine ABI major.minor** — ABI 1.2 → SDK
-**1.2.0** (`version` in `build.gradle.kts`, `CarryOnKit.SDK_VERSION`, and the
+The SDK version **follows the engine ABI major.minor** — ABI 1.3 → SDK
+**1.3.0** (`version` in `build.gradle.kts`, `CarryOnKit.SDK_VERSION`, and the
 manifest metadata). Major tracks the ABI major (breaking), minor tracks the
 ABI minor (append-only additions), patch is SDK-only fixes.
 

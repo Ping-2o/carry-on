@@ -3,7 +3,7 @@
  * CarryOnKit's KitVersion.swift).
  *
  * Version policy (plan.md stage 9): the SDK version FOLLOWS the engine ABI
- * major.minor — ABI 1.2 → SDK 1.2.x. Major tracks the ABI major (breaking);
+ * major.minor — ABI 1.3 → SDK 1.3.x. Major tracks the ABI major (breaking);
  * minor tracks the ABI minor (append-only additions); patch is SDK-only fixes.
  *
  * The gate: call [CarryOnKit.requireCompatibleEngine] once at startup (the
@@ -17,11 +17,11 @@ package dev.carryon.kit
 /** The Kotlin SDK identity + the runtime ABI gate. */
 object CarryOnKit {
     /** SDK version (semver, follows the engine ABI major.minor). */
-    const val SDK_VERSION = "1.2.0"
+    const val SDK_VERSION = "1.3.0"
 
     /** The engine ABI this AAR was built against (vendored carryon.h). */
     const val ABI_MAJOR = 1
-    const val ABI_MINOR = 2
+    const val ABI_MINOR = 3
 
     /** Human-readable requirement string for error messages. */
     val abiRequirement: String

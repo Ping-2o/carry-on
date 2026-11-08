@@ -47,7 +47,11 @@ pub mod inprocess;
 pub use inprocess::{authorize_policy, InProcessConfig, InProcessDriver};
 pub mod control;
 pub mod driver;
+pub mod live;
 pub mod model;
+/// Split a `.pcraft` ZIP into the split document bundle without the pinned
+/// engine (the control channel's own bytes; see the module docs).
+pub mod zipbundle;
 
 pub use control::{ControlChannelConfig, ControlChannelConfigFile, ControlChannelDriver, Secret};
 pub use driver::{DriverError, EditOutcome, PhotocraftDriver, Step, StubDriver};

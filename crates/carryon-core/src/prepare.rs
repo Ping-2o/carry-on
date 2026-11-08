@@ -194,6 +194,40 @@ impl Core {
         .unwrap_or_default()
     }
 
+    /// The authoritative object versions sealed into a cut **with their content
+    /// digests** (read-only). A destination shell uses this to re-materialize a
+    /// carried adapter state from its own store after an import — the same
+    /// (object id, generation) → digest mapping the engine itself uses for
+    /// closure checks, never a path or executable reference (§3.8).
+    pub fn cut_object_digests(&self, cut: CutId) -> Result<Vec<(String, u64, String)>> {
+        let conn = self.db_shared().conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT c.object_id, c.generation, o.content_hash FROM cut_objects c \
+                 JOIN objects o ON o.object_id=c.object_id AND o.generation=c.generation \
+                 WHERE c.session_id=?1 AND c.cut_number=?2 AND c.role='authoritative' \
+                 ORDER BY c.ordinal",
+            )
+            .map_err(|e| CoreError::internal(InternalCode::Invariant, e.to_string()))?;
+        let rows = stmt
+            .query_map(
+                rusqlite::params![cut.session.to_string(), cut.number as i64],
+                |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, i64>(1)?,
+                        r.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .and_then(|it| it.collect::<std::result::Result<Vec<_>, _>>())
+            .map_err(|e| CoreError::internal(InternalCode::Invariant, e.to_string()))?;
+        Ok(rows
+            .into_iter()
+            .map(|(id, gen, hash)| (id, gen as u64, hash))
+            .collect())
+    }
+
     /// Execute a declared action at a sealed cut (read-only; no authority change).
     /// The adapter is the session's recorded one. For an imported **mirror** session
     /// (recorded adapter id `imported`), use [`Core::execute_action_as`] to name the

@@ -16,6 +16,9 @@ public struct CarryonError: Error, CustomStringConvertible, Sendable {
         "carryon error \(code) [\(CarryonError.name(of: code))]: \(message)"
     }
 
+    /// The stable family name for this code (`BUDGET_NETWORK`, `TRANSFER_CANCELLED`, …).
+    public var name: String { CarryonError.name(of: code) }
+
     /// Capture the thread-local last error from the engine (the `*len` query
     /// protocol: pass a null buffer to learn the required size first).
     init(code: Int32, message fallback: String) {
