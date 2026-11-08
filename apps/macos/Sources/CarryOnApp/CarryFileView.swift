@@ -1,12 +1,13 @@
 /*
- * CarryFileView.swift — the "Carry File" screen (stage 4): NSOpenPanel file
- * pick (last directory cached), the ENGINE-side discovered receiver (stage-4
- * §18.3 discovery; hand-entered address stays as the MANUAL FALLBACK), the
- * receiver's pin (trust pinning; PIN/QR pairing UX is stage 5), the honest
- * L0/L1 ladder, and the engine console + dynamic disclosure.
+ * CarryFileView.swift — the "Transfer session" screen (stage 6): PREPARE an
+ * armed session («активная сессия», §16.2 CutSealed) from a chosen file, then
+ * TRANSFER it to the ENGINE-DISCOVERED receiver (stage 4) using the PAIRED
+ * Keychain trust (stage 5) — the manual typed-pin path stays the fallback.
+ * The honest L0/L1 ladder + engine console + dynamic disclosure live below.
  *
  * Labels (§2 law): a run's evidence class is derived from the dialled address
  * (loopback → LOCAL, LAN → PHYSICAL) and shown per run — never a static claim.
+ * Interrupted ≠ success (§19.3.9): a failed leg never shows as transferred.
  */
 
 import AppKit
@@ -27,13 +28,14 @@ struct CarryFileView: View {
             VStack(alignment: .leading, spacing: 14) {
                 header
                 fileRow
+                sessionsRow
                 receiverRow
                 identityRow
                 advancedRow
                 ladderRow
                 countersRow
                 if let err = model.lastError {
-                    Text("handoff failed:  \(err)")
+                    Text("transfer failed:  \(err)")
                         .font(Theme.monoSmall)
                         .foregroundStyle(Theme.failed)
                         .textSelection(.enabled)
@@ -45,7 +47,7 @@ struct CarryFileView: View {
             .padding(20)
             .frame(maxWidth: 900, alignment: .leading)
         }
-        .navigationTitle("Carry File")
+        .navigationTitle("Transfer Session")
         // Foreground-first (battery): browse only while this screen is up.
         .onAppear { app.discovery.startBrowsing() }
         .onDisappear { app.discovery.stopBrowsing() }
@@ -54,17 +56,23 @@ struct CarryFileView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Continue a file — L0/L1 ladder").font(.title3.weight(.semibold))
+                Text("Transfer a session — L0/L1 cross-device").font(.title3.weight(.semibold))
                 Spacer()
                 Button {
-                    Task { await model.run() }
+                    Task { await model.prepareSession() }
                 } label: {
-                    Label(model.running ? "Serving…" : "Serve to receiver", systemImage: "paperplane")
+                    Label(model.preparing ? "Preparing…" : "1 · Prepare session", systemImage: "doc.badge.plus")
+                }
+                .disabled(model.preparing || !model.prepareValid)
+                Button {
+                    Task { await model.transfer() }
+                } label: {
+                    Label(model.running ? "Transferring…" : "2 · Transfer to receiver", systemImage: "paperplane")
                 }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
-                .disabled(model.running || !model.configValid)
+                .disabled(model.running || !model.transferValid)
             }
-            Text("The engine discovers receivers on the LAN (_carryon._tcp, §18.3 — the TXT contract is\nvalidated by the engine); pick one below, or use the manual fallback. The receiver's pin still\npins the TLS trust (PIN/QR pairing UX is stage 5). Chunk size is destination-controlled (§18.6).")
+            Text("1 · Prepare seals a cut (an \"активная сессия\", §16.2 CutSealed — the engine session waits, transferable).\n2 · Transfer discovers receivers on the LAN (_carryon._tcp, §18.3 — the engine validates the TXT), picks one, and\nserves over TLS 1.3 with the PAIRED trust (stage 5; unpaired/revoked fails the handshake closed §18.5).\nChunk size is destination-controlled (§18.6) — the receiver sets it.")
                 .font(Theme.monoSmall)
                 .foregroundStyle(.secondary)
             Text("L0 = file carried + verified · L1 = opened in a real app (on the receiver). Honest per-run label below the console.")
@@ -79,7 +87,7 @@ struct CarryFileView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Button("Choose file…") { pickFile() }
-                        .disabled(model.running)
+                        .disabled(model.preparing || model.running)
                     if let url = model.fileURL {
                         Text(url.lastPathComponent)
                             .font(Theme.mono)
@@ -100,6 +108,58 @@ struct CarryFileView: View {
             }
             .padding(6)
         }
+    }
+
+    /// The armed sessions («активные сессии») — §16.2 CutSealed, selectable.
+    private var sessionsRow: some View {
+        GroupBox("Active sessions (§16.2 CutSealed)") {
+            VStack(alignment: .leading, spacing: 8) {
+                if model.armedSessions.isEmpty {
+                    Text("none yet — pick a file and press «1 · Prepare session»")
+                        .font(Theme.monoSmall)
+                        .foregroundStyle(Theme.pending)
+                } else {
+                    ForEach(model.armedSessions) { s in
+                        let selected = model.selectedArmedID == s.id
+                        Button {
+                            model.selectedArmedID = s.id
+                        } label: {
+                            HStack(spacing: 8) {
+                                Text(selected ? "◉" : "○").font(Theme.mono)
+                                    .foregroundStyle(selected ? Theme.wire : Theme.pending)
+                                Text(s.title).font(Theme.mono)
+                                Text(s.subtitle).font(Theme.monoSmall).foregroundStyle(.secondary)
+                                Spacer()
+                                stateBadge(s.state)
+                                if let r = s.servedResult {
+                                    Text(r.serveLegsUsed > 1
+                                         ? "transferred (\(r.serveLegsUsed) legs, resumed §11.2)"
+                                         : "transferred")
+                                        .font(Theme.monoSmall).foregroundStyle(Theme.ok)
+                                }
+                                Button("Discard") { model.discard(s) }
+                                    .controlSize(.small)
+                                    .disabled(model.running || s.servedResult != nil)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(model.running)
+                    }
+                }
+            }
+            .padding(6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private func stateBadge(_ s: SessionState) -> some View {
+        // §16.2 names are the law — never the bare word "Ready".
+        Text(s.rawValue)
+            .font(Theme.monoSmall)
+            .foregroundStyle(s == .actionReady ? Theme.ok : (s == .failed ? Theme.failed : Theme.accent))
     }
 
     private var receiverRow: some View {
@@ -148,7 +208,32 @@ struct CarryFileView: View {
                         .disabled(model.running)
                     }
                 }
-                // ---- manual fallback (stage-3 path, kept) ----
+                // ---- trust: the PAIRED store (stage 5) or the typed pin ----
+                HStack(spacing: 12) {
+                    Toggle("Paired trust (stage-5 Keychain store)", isOn: $model.usePairedTrust)
+                        .disabled(model.running)
+                    Text(model.usePairedTrust
+                         ? (model.hasPairedRecords ? "pinned records found" : "NO paired records — pair first or fall back")
+                         : "manual fallback")
+                        .font(Theme.monoSmall)
+                        .foregroundStyle(model.usePairedTrust
+                                         ? (model.hasPairedRecords ? Theme.ok : Theme.failed)
+                                         : Theme.pending)
+                }
+                if !model.usePairedTrust {
+                    HStack(spacing: 12) {
+                        Text("Receiver pin").font(Theme.monoSmall).foregroundStyle(.secondary).frame(width: 110, alignment: .leading)
+                        TextField("64-hex pin from its Receive screen", text: $model.receiverPin)
+                            .textFieldStyle(.roundedBorder)
+                            .font(Theme.mono)
+                            .frame(width: 220)
+                            .disabled(model.running)
+                        Text(model.pinValid ? "64 hex ✓" : "64 hex required")
+                            .font(Theme.monoSmall)
+                            .foregroundStyle(model.pinValid ? Theme.ok : Theme.pending)
+                    }
+                }
+                // ---- manual address fallback (stage-3 path, kept) ----
                 HStack(spacing: 12) {
                     Text("Manual").font(Theme.monoSmall).foregroundStyle(.secondary).frame(width: 110, alignment: .leading)
                     TextField("192.168.1.20:48961", text: $model.receiverAddr)
@@ -163,35 +248,7 @@ struct CarryFileView: View {
                         .font(Theme.monoSmall)
                         .foregroundStyle(.secondary)
                 }
-                HStack(spacing: 12) {
-                    Text("Receiver pin").font(Theme.monoSmall).foregroundStyle(.secondary).frame(width: 110, alignment: .leading)
-                    TextField("64-hex pin from its Receive screen", text: $model.receiverPin)
-                        .textFieldStyle(.roundedBorder)
-                        .font(Theme.mono)
-                        .frame(width: 220)
-                        .disabled(model.running)
-                    Text(model.pinValid ? "64 hex ✓" : "64 hex required")
-                        .font(Theme.monoSmall)
-                        .foregroundStyle(model.pinValid ? Theme.ok : Theme.pending)
-                }
-                // Stage-5 UX fix: paste the receiver's QR pairing payload (the
-                // carryon://pair URI shown under its QR) instead of typing the
-                // 64-hex pin by hand. Typing stays as the honest fallback.
-                HStack(spacing: 12) {
-                    Button("Paste pairing payload…") {
-                        if let s = NSPasteboard.general.string(forType: .string),
-                           let payload = try? parsePairingPayload(s.trimmingCharacters(in: .whitespacesAndNewlines)),
-                           payload.version == 1 {
-                            model.receiverAddr = payload.addr
-                            model.receiverPin = payload.pinHex
-                        }
-                    }
-                    .disabled(model.running)
-                    Text("fills addr + pin from the receiver's `carryon://pair` QR payload (stage 5); manual entry stays the fallback")
-                        .font(Theme.monoSmall)
-                        .foregroundStyle(.secondary)
-                }
-                Text("The receiver's pin is a certificate fingerprint (public, not a secret) — typed/pasted in full, or filled from its pairing payload.\nDiscovery yields the address; the pin still pins the TLS trust (§18.5) until pairing has pinned it once.")
+                Text("Discovery yields the address; the trust is the stage-5 pairing (fail-closed §18.5) or the typed pin.\nChunk/budget are the receiver's knobs (§18.6) — see its Receive screen.")
                     .font(Theme.monoSmall)
                     .foregroundStyle(.secondary)
             }
@@ -199,22 +256,21 @@ struct CarryFileView: View {
         }
     }
 
-    /// This Mac's pre-armed identity: truncated for display (§22.3 style), the
-    /// full pin available to the CLIPBOARD only (the receiver needs it in full
-    /// to pin this Mac — manual mode's honest human channel).
+    /// This Mac's DURABLE identity (stage-5 Keychain): truncated for display
+    /// (§22.3 style), the full pin available to the CLIPBOARD only.
     private var identityRow: some View {
         HStack(spacing: 8) {
-            Text("this Mac's pin:  \(model.sourcePinTruncated.isEmpty ? "…" : model.sourcePinTruncated)")
+            Text("this Mac's pin:  \(model.durablePinTruncated)")
                 .font(Theme.monoSmall)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
             Button("Copy full pin") {
                 NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(model.sourcePinHex, forType: .string)
+                NSPasteboard.general.setString(model.sourcePinHex.isEmpty
+                                               ? (app.topology.localPin) : model.sourcePinHex,
+                                               forType: .string)
             }
-            .disabled(model.sourcePinHex.isEmpty)
-            Button("Re-arm") { model.rearmIdentity() }
-                .disabled(model.running)
+            .disabled(app.topology.localPin.isEmpty)
             Spacer()
             if let s = model.sessionState {
                 Text("state:  \(s.rawValue)")
@@ -231,7 +287,7 @@ struct CarryFileView: View {
         GroupBox {
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("Integrity negative test (CORE-004)", isOn: $model.integrityNegative)
-                    .disabled(model.running)
+                    .disabled(model.running || model.preparing)
                 Text("declares a TAMPERED content hash — the receiver's gate must REFUSE (visible FAIL, fail closed);\nthe engine still carries and verifies the real bytes against the manifest.")
                     .font(Theme.monoSmall)
                     .foregroundStyle(.secondary)
@@ -259,8 +315,9 @@ struct CarryFileView: View {
             ByteCounter(label: "recv", value: model.bytesRecv)
             Spacer()
             if let r = model.lastResult {
-                Text(String(format: "done:  %.1f ms, verify ok=%@ (%@)",
-                            r.elapsedMS, r.verifyOK ? "true" : "false", r.verifyMessage))
+                Text(String(format: "done:  %.1f ms, verify ok=%@, legs=%d, trust=%@",
+                            r.elapsedMS, r.verifyOK ? "true" : "false", r.serveLegsUsed,
+                            r.pairedTrust ? "paired" : "typed"))
                     .font(Theme.monoSmall)
                     .foregroundStyle(r.verifyOK ? Theme.ok : Theme.failed)
                     .textSelection(.enabled)

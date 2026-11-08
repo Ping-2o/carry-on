@@ -33,7 +33,7 @@ stays relevant if iOS ever returns; the artcraft engine and libzim already
 cross-compile for aarch64-apple-ios (compile-level only, OBSERVED labels dropped
 with the scope).
 
-### Phase 2 — Real discovery · partially `OBSERVED` (2026-11-08, stage 4)
+### Phase 2 — Real discovery + pairing · `OBSERVED` (2026-11-08, stages 4–6)
 
 - [x] **Engine-side mDNS advertise/browse on macOS** — `mdns-sd` in `carryon-net`
       behind the C ABI (TXT contract owned + fail-closed-filtered by the engine);
@@ -46,11 +46,25 @@ with the scope).
       (`carryon_discovery_txt_validate`, fail closed; foreign keys ignored).
       OBSERVED (PHYSICAL): the A04's NSD browse found the engine-advertised mac in
       **177 ms**. Evidence: `docs/evidence/20261108-net003-discovery/`.
-- [ ] PIN/QR pairing UX (stage 5 — the trust pin is still typed by hand; discovery
-      never replaces pairing). Zero-config timing itself: NET-003 **PASS** both
-      directions (177 ms / 537 ms, both ≪ 10 s gate).
+- [x] **PIN/QR pairing (stage 5)** — QR payload (text paste; no camera scanner in
+      the pilot) or the six-digit code; provisional channel; mutual verification
+      string; Keystore/Keychain-sealed identities + trust (PLAT-002).
+      OBSERVED (PHYSICAL): fresh pair mac⇄A04, verification string matched on
+      both screens. Evidence: `apps/android/evidence/20261108-a04-pairing/`.
+- [x] **Cross-device handoff in the UI (stage 6)** — mac «Transfer session»
+      (prepare a CutSealed session → discovery → paired trust → serve) ⇄ A04
+      «Receive» (durable identity → NSD advertise → paired accept → import →
+      CORE-004 → ACTION_VIEW), §16.2 states, bytes_before_first_action,
+      cooperative suspend/resume (§11.2) with source resume legs.
+      OBSERVED (PHYSICAL): discovery 308 ms, paired transfer 989 ms (500 KB),
+      suspend drill legs=2 (5 MB), kill -9 = interrupted ≠ success; evidence
+      `docs/evidence/20261108-xdevice-handoff/`. Zero-config timing: NET-003
+      **PASS** both directions (177 ms / 537 ms — stage-4 bundle).
 
-### Phase 3 — Packaging + §30 × 2 platforms (macOS, Android) · `TARGET` (not started)
+### Phase 3 — Packaging + §30 × 2 platforms (macOS, Android) · partially `OBSERVED`
+
+- [x] PLAT-002 secure storage: Android Keystore + macOS Keychain for device
+      credentials and the trust store (stage 5, OBSERVED on the A04 + mac).
 
 - [ ] Signed APK, identities recorded (PLAT-006).
 - [ ] PLAT-002 secure storage: Android Keystore for device credentials.

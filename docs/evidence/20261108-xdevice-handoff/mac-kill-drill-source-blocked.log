@@ -1,0 +1,26 @@
+discovery:  browsing _carryon._tcp for a receiver…
+discovery:  carryon-f9a74546  dc=mobile pm=1 → 192.168.3.3:44077  (first peer 1517 ms, NET-003 PASS)
+trust:      PERSISTED paired store (2 record(s)) — unpaired/revoked receivers fail the handshake closed (§18.5)
+source_pin:  48ec632e3b3949779cb2fd3aac053f4d3955299a47fb338d508f30f72a7d3235  (durable — Keychain, PLAT-002)
+== Carry-On macOS — prepare session (§16.2 Preparing ⇒ CutSealed) ==
+    file:          /tmp/xdevice-suspend.png  (5000008 bytes)
+    sha256:        b5fd50f50668af4e59eaed3c3f4c1fd0ffce2438c673e6f5910cbb8cb01ef743  (declared)
+state:  Preparing
+    source_dir:    /var/folders/bf/h1qkc_4s2xqfxh4q2xk4wtg40000gn/T/carryon-filehandoff-1794133485/source
+    adapter:       org.carryon.file  (compiled-in, §10.7 L1 content-hash identity)
+state:  CutProposed
+state:  CutSealed
+    session:       49896f6f-347e-4fd2-ab80-3e2b7a541b46
+    cut:           {session: 49896f6f-347e-4fd2-ab80-3e2b7a541b46, number: 0}  (two-phase publish, CORE-004)
+    state:         CutSealed — armed; pick a receiver to transfer (the session stays transferable)
+    trust:         PERSISTED paired store (2 record(s), stage-5 Keychain) — unpaired/revoked receivers fail the handshake closed (§18.5)
+    source_pin:    48ec632e3b39…  (truncated; full pin copied/emitted for the receiver)
+== Carry-On macOS — transfer session (L0/L1) ==
+    evidence_class:  PHYSICAL — cross-device LAN TLS 1.3 (two machines, two NICs)
+    session:       49896f6f-347e-4fd2-ab80-3e2b7a541b46 cut=0  (5000008 bytes, object 1/1)
+state:  Importing
+    connect:       leg 1: 192.168.3.3:44077  (TLS 1.3, mutual certificate pinning §18.5)
+    negotiate:     descriptor sent (7 features, data only §3.8); theirs: 
+    serve_leg:     leg 1 closed mid-transfer (carryon error 1001 [PROTO_FRAMING]: PROTO_Framing: connection closed) — the destination may have suspended (§11.2); serving a resume leg
+    connect:       leg 2: 192.168.3.3:44077  (TLS 1.3, mutual certificate pinning §18.5)
+    negotiate:     descriptor sent (7 features, data only §3.8); theirs: 

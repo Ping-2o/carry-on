@@ -1,0 +1,6 @@
+QR payload pinned SM-A045F (2681dfde7bb034f7…) — normal pinned connect
+verification string: 297c20 — confirm on BOTH devices (§18.4.4-5)
+identity_pin:  48ec632e3b3949779cb2fd3aac053f4d3955299a47fb338d508f30f72a7d3235  (durable — Keychain, PLAT-002)
+dest_pin: 2681dfde7bb034f7…
+verify:   297c20  ← compare with the DESTINATION screen (auto-confirm in smoke)
+paired:  2681dfde7bb034f7… pinned, trust persisted (Keychain)

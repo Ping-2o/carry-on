@@ -140,14 +140,41 @@ final class DemoModel {
     }
 }
 
-/// The L0/L1 "Carry File" model (manual-IP mode, pre-discovery): the chosen
-/// file, the hand-entered receiver address (cached), a pre-armed source
-/// identity (so the receiver can pin this Mac BEFORE the serve starts), and
-/// the live handoff state applied from pipeline events on the main actor.
+/// One PREPARED session in the "Transfer session" flow (stage 6): a sealed
+/// cut («активная сессия», §16.2 CutSealed) waiting to be transferred, or its
+/// post-transfer record once served.
+@MainActor
+@Observable
+final class ArmedSession: Identifiable {
+    let id = UUID()
+    let prepared: PreparedHandoff
+    let preparedAt = Date()
+    /// Exact §16.2 state of the SOURCE side: .cutSealed while armed;
+    /// .importing while a transfer leg runs; .actionReady after ImportComplete;
+    /// .failed when the transfer failed (interrupted ≠ success, §19.3.9).
+    var state: SessionState = .cutSealed
+    var servedResult: FileHandoffResult?
+
+    var title: String { prepared.fileName }
+    var subtitle: String { "cut=\(prepared.cutNumber) · \(prepared.fileBytes) B" }
+
+    init(prepared: PreparedHandoff) {
+        self.prepared = prepared
+    }
+}
+
+/// The "Transfer session" model (stage 6): PREPARE an armed session from a
+/// chosen file (§16.2 Preparing⇒CutSealed), then TRANSFER it to a discovered
+/// receiver with the PAIRED Keychain trust (stage 5) — the manual typed pin
+/// stays the fallback. Live states + console lines are applied from pipeline
+/// events on the main actor; counters are sampled only between completed
+/// wire ops; the serve runs with resume legs (cooperative §11.2 suspend on
+/// the destination re-serves on a fresh connection).
 @MainActor
 @Observable
 final class CarryModel {
     var running = false
+    var preparing = false
     var consoleLines: [ConsoleLine] = []
     var ladderStates: [HandoffLadderStep: StageOutcome] = [:]
     var sessionState: SessionState?
@@ -156,8 +183,15 @@ final class CarryModel {
     var lastResult: FileHandoffResult?
     var lastError: String?
     var evidenceClass: String?
+    /// The armed sessions ("активные сессии") — CutSealed, transferable.
+    var armedSessions: [ArmedSession] = []
+    /// The armed session selected for transfer.
+    var selectedArmedID: UUID?
+    /// The durable identity's full pin (public fingerprint; clipboard only,
+    /// never logged — EVD-006 excludes only private keys).
+    var sourcePinHex = ""
 
-    // ---- hand-made configuration (persisted where the task asks for caching)
+    // ---- hand-made configuration (persisted caching, stage-3/4 kept) ----
     var fileURL: URL? {
         didSet { UserDefaults.standard.set(fileURL?.path, forKey: "carryon.handoff.lastFile") }
     }
@@ -169,20 +203,25 @@ final class CarryModel {
             discoveryLatencyMS = nil
         }
     }
-    /// The receiver's 64-hex pin (typed/pasted from its Receive screen).
+    /// The receiver's 64-hex pin — the MANUAL FALLBACK only. Ignored when
+    /// `usePairedTrust` (the stage-5 Keychain store owns the trust then).
     var receiverPin = ""
+    /// Transfer with the PERSISTED paired trust (stage 5) instead of the
+    /// typed pin. Connects fail closed on unpaired/revoked receivers (§18.5).
+    var usePairedTrust = true
     /// Integrity negative test toggle (declares a tampered hash; the receiver
     /// MUST refuse — the visible-failure counterpart of the §6.8 showcase).
     var integrityNegative = false
     /// NET-003 measurement when the receiver was picked from the engine's
     /// discovered list (nil on the manual fallback — no claim rides along).
     var discoveryLatencyMS: Double?
-    /// Pre-armed identity: created once so its pin exists before serving.
-    private(set) var sourceIdentity: DeviceIdentity?
-    private(set) var sourcePinHex = ""
-    private(set) var sourcePinTruncated = ""
 
     private var runToken = UUID()
+    /// The pipeline of the CURRENT transfer (per-transfer console).
+    private var pipeline = FileHandoffPipeline()
+
+    /// Set by AppState at construction (one-directional: model → topology).
+    var appTopology: TopologyModel?
 
     init() {
         let d = UserDefaults.standard
@@ -191,64 +230,113 @@ final class CarryModel {
             fileURL = URL(fileURLWithPath: p)
         }
         receiverAddr = d.string(forKey: "carryon.handoff.lastAddr") ?? ""
-        Task { await makeIdentity() }
     }
 
-    /// A fresh identity per arm (honest: pins are per-handoff fingerprints;
-    /// long-lived device identities + revocation are stage-5 pairing).
-    func rearmIdentity() {
-        Task { await makeIdentity() }
+    var selectedArmed: ArmedSession? {
+        armedSessions.first { $0.id == selectedArmedID }
     }
 
-    private func makeIdentity() async {
-        do {
-            let id = try DeviceIdentity.generate(name: "carryon-mac-carry")
-            sourceIdentity = id
-            sourcePinHex = try id.pinHex()
-            sourcePinTruncated = String(sourcePinHex.prefix(12)) + "…"
-        } catch {
-            sourcePinHex = ""
-            sourcePinTruncated = ""
-        }
+    var hasPairedRecords: Bool {
+        let count = (try? SecureStore.loadTrust()?.records().count) ?? 0
+        return count > 0
     }
 
-    var configValid: Bool {
+    var prepareValid: Bool {
         guard let file = fileURL,
-              HandoffValidation.isValidReceiverAddr(receiverAddr),
-              HandoffValidation.isValidPinHex(receiverPin) else { return false }
-        return FileManager.default.fileExists(atPath: file.path)
+              FileManager.default.fileExists(atPath: file.path) else { return false }
+        return true
+    }
+
+    var transferValid: Bool {
+        guard selectedArmed != nil,
+              HandoffValidation.isValidReceiverAddr(receiverAddr) else { return false }
+        return usePairedTrust ? hasPairedRecords : HandoffValidation.isValidPinHex(receiverPin)
     }
 
     var addrValid: Bool { HandoffValidation.isValidReceiverAddr(receiverAddr) }
     var pinValid: Bool { HandoffValidation.isValidPinHex(receiverPin) }
-
-    func reset() {
-        guard !running else { return }
-        consoleLines = []
-        ladderStates = [:]
-        sessionState = nil
-        bytesSent = 0
-        bytesRecv = 0
-        lastResult = nil // per-run state: a failed handoff must not inherit a prior result (§2/EVD-003)
-        lastError = nil
-        evidenceClass = nil
+    /// The durable device pin, truncated §22.3-style, for the identity row.
+    var durablePinTruncated: String {
+        guard let pin = appTopology?.localPin, !pin.isEmpty else { return "…" }
+        return String(pin.prefix(12)) + "…"
     }
 
-    /// Serve the chosen file to the manually-entered receiver. Blocking FFI
-    /// is inside the pipeline (Task.detached); events are marshaled here.
-    func run() async {
-        guard !running, configValid, let file = fileURL, let identity = sourceIdentity else { return }
+    // ---- 1 · PREPARE: a sealed-cut "активная сессия" (§16.2 CutSealed) ----
+
+    func prepareSession() async {
+        guard !preparing, prepareValid, let file = fileURL else { return }
+        preparing = true
+        defer { preparing = false }
+        let config = FileHandoffConfig(
+            fileURL: file, receiverAddr: "", receiverPin: "",
+            identity: appTopology?.localIdentity, integrityNegative: integrityNegative)
         reset()
+        do {
+            let prepared = try await FileHandoffPipeline().prepare(config) { [weak self] event in
+                Task { @MainActor [weak self] in self?.apply(event, token: self?.runToken ?? UUID()) }
+            }
+            let armed = ArmedSession(prepared: prepared)
+            armedSessions.append(armed)
+            selectedArmedID = armed.id
+        } catch {
+            lastError = "prepare: \(error.localizedDescription)"
+            sessionState = .failed
+        }
+    }
+
+    // ---- 2 · TRANSFER: discovery → paired trust → serve (resume legs in) --
+
+    func transfer() async {
+        guard !running, let armed = selectedArmed else { return }
         running = true
         let token = UUID()
         runToken = token
+        // Per-transfer state (§2/EVD-003: a failed transfer inherits nothing).
+        pipeline = FileHandoffPipeline()
+        ladderStates = [:]
+        bytesSent = 0
+        bytesRecv = 0
+        lastResult = nil
+        lastError = nil
+        evidenceClass = nil
+        armed.state = .importing
+        sessionState = .importing
         defer { if runToken == token { running = false } }
-        let config = FileHandoffConfig(
-            fileURL: file, receiverAddr: receiverAddr, receiverPin: receiverPin,
-            identity: identity, integrityNegative: integrityNegative,
-            discoveryFirstPeerMS: discoveryLatencyMS)
+
+        let identity = appTopology?.localIdentity ?? armed.prepared.identity
+
+        let trustJSON: String?
+        if usePairedTrust {
+            guard let store = SecureStore.loadTrust() else {
+                armed.state = .failed
+                lastError = "no paired trust in the Keychain store — pair first (the Pairing pane, stage 5) or fall back to the typed pin"
+                return
+            }
+            guard let json = try? store.toJSON() else {
+                armed.state = .failed
+                lastError = "the persisted trust store could not be serialized"
+                return
+            }
+            trustJSON = json
+        } else {
+            guard HandoffValidation.isValidPinHex(receiverPin) else {
+                armed.state = .failed
+                lastError = "manual fallback requires the receiver's 64-hex pin"
+                return
+            }
+            trustJSON = nil
+        }
+
         do {
-            let result = try await FileHandoffPipeline().run(config) { [weak self] event in
+            let prepared = armed.prepared
+            prepared.identity = identity
+            let result = try await pipeline.serve(
+                prepared: prepared,
+                receiverAddr: receiverAddr,
+                receiverPin: usePairedTrust ? "" : receiverPin,
+                trustJSON: trustJSON,
+                discoveryFirstPeerMS: discoveryLatencyMS,
+                serveLegs: 3) { [weak self] event in
                 let s = self
                 let t = token
                 Task { @MainActor in
@@ -256,13 +344,17 @@ final class CarryModel {
                 }
             }
             guard runToken == token else { return }
+            armed.state = .actionReady
+            armed.servedResult = result
             lastResult = result
             evidenceClass = result.evidenceClass
         } catch is CancellationError {
             guard runToken == token else { return }
-            lastError = "handoff cancelled"
+            armed.state = .failed
+            lastError = "transfer cancelled"
         } catch {
             guard runToken == token else { return }
+            armed.state = .failed
             lastError = error.localizedDescription
             // Mark the first not-yet-settled ladder step failed (honest UI).
             if let step = HandoffLadderStep.allCases.first(where: { ladderStates[$0] == nil }) {
@@ -273,13 +365,33 @@ final class CarryModel {
         }
     }
 
+    /// Discard an armed (never-served) session; served records stay listed.
+    func discard(_ session: ArmedSession) {
+        guard !running else { return }
+        session.prepared.discard()
+        armedSessions.removeAll { $0.id == session.id }
+        if selectedArmedID == session.id { selectedArmedID = armedSessions.first?.id }
+    }
+
+    func reset() {
+        guard !running else { return }
+        consoleLines = []
+        ladderStates = [:]
+        sessionState = nil
+        bytesSent = 0
+        bytesRecv = 0
+        lastResult = nil // per-run state: a failed transfer must not inherit a prior result (§2/EVD-003)
+        lastError = nil
+        evidenceClass = nil
+    }
+
     private func apply(_ event: HandoffEvent, token: UUID) {
         guard token == runToken else { return } // drop superseded runs' events
         switch event {
         case .console(let line):
             consoleLines.append(line)
-        case .sourcePin:
-            break // the pre-armed identity's pin is already in sourcePinHex
+        case .sourcePin(let pin):
+            sourcePinHex = pin // public fingerprint (EVD-006 honors it)
         case .ladder(let step, let outcome):
             ladderStates[step] = outcome
         case .state(let s):
@@ -295,6 +407,7 @@ final class CarryModel {
         }
     }
 }
+
 
 @MainActor
 @Observable
@@ -547,6 +660,13 @@ final class AppState {
     let discovery = EngineDiscovery()
     /// The last evidence bundle text (from a run or a loaded file) for the viewer.
     var evidenceJSON: String?
+
+    init() {
+        // Stage-6 wiring: the transfer model rides on the durable identity
+        // (Keychain, stage 5) the topology model owns. One direction only.
+        carry.appTopology = topology
+    }
+
 
     /// Run the demo, then feed the pairing into the topology (trust records
     /// hold pins only — no secrets, EVD-006-clean).

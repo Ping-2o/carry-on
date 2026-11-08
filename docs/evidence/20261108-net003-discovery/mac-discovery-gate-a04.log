@@ -1,0 +1,8 @@
+engine discovery — _carryon._tcp (§18.3; TXT built + validated by the engine)
+advertise:  carryon-b54a62ae (desktop, presence; ch=none)
+browse:     started (monotonic clock; NET-003 gate < 10 s)
+net003:    first peer in 537 ms (gate < 10000 ms) — PASS
+peers:     
+◦  carryon-6062162c  dc=mobile pm=1 pr=true ch=43597  →  192.168.3.3:43597
+json:      {"net003_ms":537,"gate_ms":10000,"passed":true,"peers":[{"instance":"carryon-6062162c","address":"192.168.3.3:43597","dc":"mobile","pm":1}]}
+net003:    first peer in 537 ms — PASS (monotonic clock, §18.10)

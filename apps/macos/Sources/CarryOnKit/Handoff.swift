@@ -214,17 +214,19 @@ public enum HandoffEvent: Sendable {
     case failed(String)
 }
 
-/// Demo knobs for the file handoff (manual-IP mode, pre-discovery).
+/// Demo knobs for the file handoff (stage 6: discovery address + paired trust
+/// with the manual typed-pin fallback).
 public struct FileHandoffConfig: Sendable {
     /// The real file to carry (picked with NSOpenPanel; last dir cached).
     public var fileURL: URL
-    /// Receiver address as entered by hand: `IPv4:port` (cached last entry).
+    /// Receiver address: engine-discovered (stage 4) or entered by hand
+    /// (`IPv4:port`, the manual fallback, cached).
     public var receiverAddr: String
-    /// The receiver's pairing pin (read off its Receive screen; 64 hex).
+    /// The receiver's pairing pin (manual fallback; 64 hex). Ignored when
+    /// `trustJSON` is set — the persisted paired store owns the trust then.
     public var receiverPin: String
-    /// Pre-generated source identity — the UI arms it BEFORE serving so the
-    /// receiver can pin this Mac first (manual mode; the smoke binary makes
-    /// its own when nil).
+    /// Pre-generated source identity — the DURABLE Keychain identity (stage 5)
+    /// or a caller-made one for tests/smoke.
     public var identity: DeviceIdentity?
     /// Integrity negative test: declare the hash of TAMPERED bytes so the
     /// receiver's CORE-004 gate must refuse (fail closed, visible FAIL).
@@ -238,11 +240,22 @@ public struct FileHandoffConfig: Sendable {
     /// was used: wall time from browse start to the first validated peer
     /// (monotonic clock, §18.10). Recorded into the evidence bundle.
     public var discoveryFirstPeerMS: Double? = nil
+    /// The PERSISTED trust store JSON (stage-5 pairing, Keychain-sealed).
+    /// When set, the connect pins the receiver from the PAIRED trust and
+    /// `receiverPin` is not needed — an unpaired/revoked receiver fails the
+    /// handshake closed (§18.5) and the UI says so. Nil = manual typed pin.
+    public var trustJSON: String? = nil
+    /// How many serve legs the source may run (stage-6 cooperative
+    /// suspend/resume, §11.2): a destination that suspends mid-import closes
+    /// the wire at a chunk boundary and resumes on a FRESH connection — the
+    /// source re-serves. 1 = classic single leg (no resume support).
+    public var serveLegs: Int = 1
 
     public init(fileURL: URL, receiverAddr: String, receiverPin: String,
                 identity: DeviceIdentity? = nil, integrityNegative: Bool = false,
                 workRoot: String? = nil, loopbackChunkSize: UInt64 = 0,
-                discoveryFirstPeerMS: Double? = nil) {
+                discoveryFirstPeerMS: Double? = nil,
+                trustJSON: String? = nil, serveLegs: Int = 1) {
         self.fileURL = fileURL
         self.receiverAddr = receiverAddr
         self.receiverPin = receiverPin
@@ -251,6 +264,78 @@ public struct FileHandoffConfig: Sendable {
         self.workRoot = workRoot
         self.loopbackChunkSize = loopbackChunkSize
         self.discoveryFirstPeerMS = discoveryFirstPeerMS
+        self.trustJSON = trustJSON
+        self.serveLegs = max(1, serveLegs)
+    }
+}
+
+/// Pure multi-leg serve decision (stage-6 crash/resume drill, §11.2).
+///
+/// After one serve leg returns, decide: the transfer completed cleanly, the
+/// destination COOPERATIVELY suspended (wire closed at a chunk boundary → a
+/// resume leg is warranted while legs remain), or the transfer failed with
+/// no legs left. Pure so it is unit-testable; the pipeline applies it.
+public enum ServeLegPlanner {
+    public enum Action: Equatable, Sendable {
+        /// ImportComplete arrived — the transfer is done.
+        case complete
+        /// The leg failed; re-serve for the destination's resume (§11.2).
+        case retryLeg(reason: String)
+        /// The leg failed and no legs remain — the transfer fails closed.
+        case fail(reason: String)
+    }
+
+    /// - Parameters:
+    ///   - completedCleanly: the leg ended with the receiver's ImportComplete.
+    ///   - legsRemaining: additional legs available after this one.
+    ///   - failure: the leg's error message when it did not complete cleanly.
+    public static func plan(completedCleanly: Bool, legsRemaining: Int,
+                            failure: String?) -> Action {
+        if completedCleanly { return .complete }
+        guard let failure else { return .complete } // defensive: no error, treat as done
+        guard legsRemaining > 0 else { return .fail(reason: failure) }
+        return .retryLeg(reason: failure)
+    }
+}
+
+/// One PREPARED, sealed-cut session waiting to be transferred ("активная
+/// сессия", stage 6): the engine + session + cut stay armed in this object
+/// until served (or discarded). §16.2 state at this point: `CutSealed`.
+public final class PreparedHandoff: @unchecked Sendable {
+    /// The armed engine core (one per prepared session).
+    public let engine: Engine
+    public let session: String
+    public let cutNumber: UInt64
+    public let fileName: String
+    public let mimeType: String
+    /// sha256 of the real bytes (the manifest truth).
+    public let trueHash: String
+    /// The declared hash (differs from trueHash on the integrity negative).
+    public let declaredHash: String
+    public let fileBytes: Int
+    public let workRoot: String
+    /// The source identity used for the cut (the caller may reuse the durable
+    /// identity at serve time; nil = serve() generates one).
+    public var identity: DeviceIdentity?
+
+    init(engine: Engine, session: String, cutNumber: UInt64, fileName: String,
+         mimeType: String, trueHash: String, declaredHash: String, fileBytes: Int,
+         workRoot: String, identity: DeviceIdentity?) {
+        self.engine = engine
+        self.session = session
+        self.cutNumber = cutNumber
+        self.fileName = fileName
+        self.mimeType = mimeType
+        self.trueHash = trueHash
+        self.declaredHash = declaredHash
+        self.fileBytes = fileBytes
+        self.workRoot = workRoot
+        self.identity = identity
+    }
+
+    /// Discard the prepared session (engine closed; the cut is never served).
+    public func discard() {
+        try? engine.close()
     }
 }
 
@@ -273,6 +358,12 @@ public struct FileHandoffResult: Sendable {
     public var elapsedMS: Double
     public var evidenceClass: String
     public var failure: String?
+    /// Stage 6: how many serve legs this transfer used (1 = clean single leg;
+    /// >1 = the destination cooperatively suspended and resumed, §11.2).
+    public var serveLegsUsed: Int = 1
+    /// Stage 6: the receiver's TLS trust came from the persisted PAIRED store
+    /// (stage-5 pairing) rather than a manually typed pin.
+    public var pairedTrust: Bool = false
 
     /// The honest footer for a handoff run — distinct from the demo footer
     /// (a handoff can be PHYSICAL; the demo is always LOCAL).
@@ -289,20 +380,40 @@ public struct FileHandoffResult: Sendable {
     }
 }
 
-/// The source side of the L0/L1 file handoff (this Mac serves; the receiver
-/// accepts — manual-IP mode). Blocking FFI runs on Task.detached, exactly like
-/// DemoPipeline; counters are sampled only between completed wire ops.
+/// The source side of the L0/L1 file handoff (stage 6: the "Transfer session"
+/// flow — PREPARE a sealed-cut session ("активная сессия"), then SERVE it to a
+/// discovered receiver with the PAIRED trust; manual typed-pin stays the
+/// fallback). Blocking FFI runs on Task.detached, exactly like DemoPipeline;
+/// counters are sampled only between completed wire ops.
 public actor FileHandoffPipeline {
     public private(set) var lines: [ConsoleLine] = []
 
     public init() {}
 
+    /// The classic one-shot path (smoke binary, tests, the manual fallback):
+    /// prepare + serve composed.
     @discardableResult
     public func run(_ config: FileHandoffConfig,
                     emit: @escaping @Sendable (HandoffEvent) -> Void = { _ in }) async throws -> FileHandoffResult {
-        lines = []
-        let t0 = nowMs()
+        let prepared = try await prepare(config, emit: emit)
+        return try await serve(
+            prepared: prepared,
+            receiverAddr: config.receiverAddr,
+            receiverPin: config.receiverPin,
+            trustJSON: config.trustJSON,
+            discoveryFirstPeerMS: config.discoveryFirstPeerMS,
+            serveLegs: config.serveLegs,
+            emit: emit)
+    }
 
+    // ---- PREPARE (§16.2: Preparing → CutProposed → CutSealed; no network) --
+
+    /// Register the file adapter, create the session, seal the cut. Leaves the
+    /// engine + cut ARMED on the returned `PreparedHandoff` — an "активная
+    /// сессия" the UI lists and may serve (or discard) later.
+    @discardableResult
+    public func prepare(_ config: FileHandoffConfig,
+                        emit: @escaping @Sendable (HandoffEvent) -> Void = { _ in }) async throws -> PreparedHandoff {
         func log(_ key: String, _ value: String, indent: Int = 1) {
             let line = ConsoleLine(indent: indent, key: key, value: value)
             lines.append(line)
@@ -314,13 +425,7 @@ public actor FileHandoffPipeline {
             emit(.console(line))
         }
 
-        // ---- validate the hand-made configuration (fail BEFORE any engine call)
-        guard HandoffValidation.isValidReceiverAddr(config.receiverAddr) else {
-            throw CarryonError(code: -2, message: "receiver address must be IPv4:port (e.g. 192.168.1.20:48961) — pick an engine-discovered peer or use the manual fallback")
-        }
-        guard HandoffValidation.isValidPinHex(config.receiverPin) else {
-            throw CarryonError(code: -2, message: "receiver pin must be the 64-hex fingerprint shown on its Receive screen")
-        }
+        // ---- validate the chosen file (fail BEFORE any engine call)
         let fileData = try Data(contentsOf: config.fileURL)
         guard !fileData.isEmpty else {
             throw CarryonError(code: -2, message: "refusing to carry an empty file")
@@ -331,7 +436,6 @@ public actor FileHandoffPipeline {
             throw CarryonError(code: -2, message: "file exceeds the file adapter's 16 MiB object limit (§26.5.3)")
         }
 
-        let evidenceClass = HandoffValidation.evidenceClass(dialing: config.receiverAddr)
         let fileName = config.fileURL.lastPathComponent
         let mime = HandoffValidation.mime(forExtension: config.fileURL.pathExtension)
         let trueHash = HandoffValidation.sha256Hex(of: fileData)
@@ -343,15 +447,12 @@ public actor FileHandoffPipeline {
             ? HandoffValidation.sha256Hex(of: fileData + [0x00])
             : trueHash
 
-        logPlain("== Carry-On macOS file handoff — L0/L1 (manual IP, pre-discovery) ==")
+        logPlain("== Carry-On macOS — prepare session (§16.2 Preparing ⇒ CutSealed) ==")
         log("file", "\(config.fileURL.path)  (\(fileData.count) bytes)")
         log("sha256", "\(trueHash)  (declared)")
         if config.integrityNegative {
             log("integrity_test", "NEGATIVE — declared hash deliberately tampered; receiver MUST refuse (CORE-004)")
         }
-        log("evidence_class", evidenceClass == "physical"
-            ? "PHYSICAL — cross-device LAN TLS 1.3 (two machines, two NICs)"
-            : "LOCAL — loopback within one device")
 
         // ---- engine: register the file adapter, create session + sealed cut
         emit(.state(.preparing))
@@ -383,10 +484,79 @@ public actor FileHandoffPipeline {
         emit(.state(.cutSealed))
         log("session", session)
         log("cut", "{session: \(cut.session), number: \(cut.number)}  (two-phase publish, CORE-004)")
+        log("state", "CutSealed — armed; pick a receiver to transfer (the session stays transferable)")
+        return PreparedHandoff(
+            engine: engine, session: session, cutNumber: cut.number, fileName: fileName,
+            mimeType: mime, trueHash: trueHash, declaredHash: declaredHash,
+            fileBytes: fileData.count, workRoot: root, identity: config.identity)
+    }
 
-        // ---- identity + trust: pair the hand-entered receiver pin
+    // ---- TRANSFER (CutSealed → Importing → ActionReady, the source view) ----
+
+    /// Serve a prepared session to `receiverAddr`:
+    /// - `trustJSON` set → the PERSISTED paired store (stage-5 Keychain)
+    ///   pins the receiver (unpaired/revoked fails the handshake closed);
+    /// - else `receiverPin` (manual fallback) must be the 64-hex pin typed
+    ///   from the receiver's screen.
+    /// `serveLegs` > 1 supports the destination's cooperative suspend/resume
+    /// (§11.2): a suspend closes the wire at a chunk boundary and the source
+    /// re-serves for the destination's `resume_import`.
+    @discardableResult
+    public func serve(prepared: PreparedHandoff,
+                      receiverAddr: String,
+                      receiverPin: String,
+                      trustJSON: String?,
+                      discoveryFirstPeerMS: Double? = nil,
+                      serveLegs: Int = 1,
+                      emit: @escaping @Sendable (HandoffEvent) -> Void = { _ in }) async throws -> FileHandoffResult {
+        lines = []
+        let t0 = nowMs()
+        let maxLegs = max(1, serveLegs)
+
+        func log(_ key: String, _ value: String, indent: Int = 1) {
+            let line = ConsoleLine(indent: indent, key: key, value: value)
+            lines.append(line)
+            emit(.console(line))
+        }
+        func logPlain(_ value: String) {
+            let line = ConsoleLine(indent: 0, value: value)
+            lines.append(line)
+            emit(.console(line))
+        }
+
+        let engine = prepared.engine
+        let session = prepared.session
+        let fileName = prepared.fileName
+        let declaredHash = prepared.declaredHash
+        let evidenceClass = HandoffValidation.evidenceClass(dialing: receiverAddr)
+        let srcDir = prepared.workRoot + "/source"
+
+        // ---- validate the receiver choice (fail BEFORE any engine call)
+        guard HandoffValidation.isValidReceiverAddr(receiverAddr) else {
+            throw CarryonError(code: -2, message: "receiver address must be IPv4:port (e.g. 192.168.1.20:48961) — pick an engine-discovered peer or use the manual fallback")
+        }
+
+        // ---- trust: the PAIRED store (stage 5) or the typed pin (fallback)
+        let trust: TrustStore
+        let paired: Bool
+        if let trustJSON {
+            trust = try TrustStore.fromJSON(trustJSON)
+            paired = true
+            let count = (try? trust.records().count) ?? 0
+            log("trust", "PERSISTED paired store (\(count) record(s), stage-5 Keychain) — unpaired/revoked receivers fail the handshake closed (§18.5)")
+        } else {
+            guard HandoffValidation.isValidPinHex(receiverPin) else {
+                throw CarryonError(code: -2, message: "receiver pin must be the 64-hex fingerprint shown on its Receive screen (or pair once — stage 5 — and use the paired store)")
+            }
+            trust = try TrustStore.fromJSON("{\"peers\":{}}")
+            try trust.pair(name: "receiver", pinHex: receiverPin, utc: nowUTC())
+            paired = false
+            log("trust", "receiver pin \(receiverPin.prefix(12))… paired  (manual fallback, mutual pin §18.4)")
+        }
+
+        // ---- identity: the durable device identity, or a run-scoped one
         let identity: DeviceIdentity
-        if let pre = config.identity {
+        if let pre = prepared.identity {
             identity = pre
         } else {
             identity = try await det("identity_generate") {
@@ -396,33 +566,81 @@ public actor FileHandoffPipeline {
         let sourcePin = try identity.pinHex()
         emit(.sourcePin(sourcePin))
         log("source_pin", "\(sourcePin.prefix(12))…  (truncated; full pin copied/emitted for the receiver)")
-        let trust = try TrustStore.fromJSON("{\"peers\":{}}")
-        try trust.pair(name: "receiver", pinHex: config.receiverPin, utc: nowUTC())
-        log("trust", "receiver pin \(config.receiverPin.prefix(12))… paired  (mutual pin, §18.4)")
 
-        // ---- connect to the manually-entered receiver (client side)
-        log("connect", "\(config.receiverAddr)  (TLS 1.3, mutual certificate pinning §18.5)")
-        let wire = try await det("session_connect") {
-            try NetSession.connect(addr: config.receiverAddr, identity: identity, trust: trust)
-        }
-        // The descriptor travels in the engine's Hello/Welcome negotiation —
-        // data only (§3.8): session, cut, declared hash, name, mime, class.
-        let descriptor = HandoffDescriptor(
-            session: session, cut: cut.number, contentHash: declaredHash,
-            fileName: fileName, mimeType: mime, evidenceClass: evidenceClass)
-        let theirs = try await det("client_negotiate") {
-            try wire.clientNegotiate(features: descriptor.features)
-        }
-        log("negotiate", "descriptor sent (\(descriptor.features.count) features, data only §3.8); theirs: \(theirs.joined(separator: ","))")
+        logPlain("== Carry-On macOS — transfer session (L0/L1) ==")
+        log("evidence_class", evidenceClass == "physical"
+            ? "PHYSICAL — cross-device LAN TLS 1.3 (two machines, two NICs)"
+            : "LOCAL — loopback within one device")
+        log("session", "\(session) cut=\(prepared.cutNumber)  (\(prepared.fileBytes) bytes, object 1/1)")
 
-        // ---- serve the sealed cut (BLOCKING until ImportComplete)
+        // ---- multi-leg serve: connect → negotiate → serveCut until
+        // ImportComplete. Leg N+1 exists so a cooperative §11.2 suspend on the
+        // destination can resume; the planner decides after each leg.
         emit(.state(.importing))
-        try await det("serve_cut") { try engine.serveCut(session: wire) }
-        let (sent, recv) = try wire.byteCounters() // between completed ops only
+        var legsUsed = 0
+        var sent: UInt64 = 0
+        var recv: UInt64 = 0
+        var lastLegError: String?
+        var completedCleanly = false
+
+        serve_loop: while legsUsed < maxLegs + 1 {
+            legsUsed += 1
+            log("connect", "leg \(legsUsed): \(receiverAddr)  (TLS 1.3, mutual certificate pinning §18.5)")
+            let wire = try await det("session_connect") {
+                try NetSession.connect(addr: receiverAddr, identity: identity, trust: trust)
+            }
+            do {
+                // The descriptor travels in the engine's Hello/Welcome
+                // negotiation — data only (§3.8): session, cut, declared
+                // hash, name, mime, class.
+                let descriptor = HandoffDescriptor(
+                    session: session, cut: prepared.cutNumber, contentHash: declaredHash,
+                    fileName: fileName, mimeType: prepared.mimeType, evidenceClass: evidenceClass)
+                let theirs = try await det("client_negotiate") {
+                    try wire.clientNegotiate(features: descriptor.features)
+                }
+                log("negotiate", "descriptor sent (\(descriptor.features.count) features, data only §3.8); theirs: \(theirs.joined(separator: ","))")
+                try await det("serve_cut") { try engine.serveCut(session: wire) }
+                // Counters ONLY between completed wire ops (never during one).
+                let (legSent, legRecv) = try wire.byteCounters()
+                sent += legSent
+                recv += legRecv
+                wire.teardown()
+                completedCleanly = true
+                break serve_loop
+            } catch {
+                lastLegError = "\(error)"
+                // Sample what the leg carried before it closed (between
+                // completed ops only), then decide the next leg.
+                let (legSent, legRecv) = (try? wire.byteCounters()) ?? (0, 0)
+                sent += legSent
+                recv += legRecv
+                wire.teardown()
+                let plan = ServeLegPlanner.plan(completedCleanly: false,
+                                                legsRemaining: maxLegs - legsUsed,
+                                                failure: lastLegError)
+                switch plan {
+                case .complete:
+                    break serve_loop
+                case .retryLeg(let reason):
+                    log("serve_leg", "leg \(legsUsed) closed mid-transfer (\(reason)) — the destination may have suspended (§11.2); serving a resume leg")
+                    continue serve_loop
+                case .fail(let reason):
+                    throw CarryonError(code: -1, message: "serve failed after \(legsUsed) leg(s): \(reason)")
+                }
+            }
+        }
+
+        if !completedCleanly {
+            throw CarryonError(code: -1, message: "serve did not reach ImportComplete (\(lastLegError ?? "no legs ran"))")
+        }
+        log("serve", "ImportComplete — the destination reported the import finished (\(legsUsed) leg(s) used)")
         emit(.counters(sent: sent, recv: recv))
-        log("serve", "cut served — destination reported ImportComplete")
-        log("bytes", "sent=\(sent) recv=\(recv)")
         emit(.ladder(.l0Carry, .ok))
+        if legsUsed > 1 {
+            log("resume", "the transfer survived a cooperative suspend and resumed on a fresh connection (§11.2)")
+        }
+        log("bytes", "sent=\(sent) recv=\(recv)")
         emit(.state(.actionReady))
 
         // ---- L1 happens on the RECEIVER (its engine action + ACTION_VIEW);
@@ -431,26 +649,28 @@ public actor FileHandoffPipeline {
         log("L1", note)
         emit(.ladder(.l1Open, .skipped("on receiver")))
 
-        // ---- evidence for the source session
-        // Evidence for the source session. NET-003 rides along when the peer
-        // came from the engine browser (manual-fallback runs carry no claim).
+        // ---- evidence for the source session.
+        // NET-003 rides along when the peer came from the engine browser
+        // (manual-fallback runs carry no claim).
         var fields: [String: AnyJSON] = [
             "level": .string("L0-file-carry"),
             "l1_note": .string("launcher activation on receiver"),
             "source_session_id": .string(session),
-            "source_cut": .number(Double(cut.number)),
+            "source_cut": .number(Double(prepared.cutNumber)),
             "file_name": .string(fileName),
-            "file_bytes": .number(Double(fileData.count)),
+            "file_bytes": .number(Double(prepared.fileBytes)),
             "content_sha256_declared": .string(declaredHash),
-            "content_sha256_true": .string(trueHash),
-            "integrity_negative_test": .bool(config.integrityNegative),
+            "content_sha256_true": .string(prepared.trueHash),
+            "integrity_negative_test": .bool(prepared.declaredHash != prepared.trueHash),
             "evidence_class": .string(evidenceClass),
             "bytes_transferred_sent": .number(Double(sent)),
             "bytes_transferred_recv": .number(Double(recv)),
             "adapter": .string("org.carryon.file"),
             "authority_transfer": .string("none — L0/L1 is activation-only (honest: no unsaved app state claimed, §10.7)"),
+            "serve_legs_used": .number(Double(legsUsed)),
+            "paired_trust": .bool(paired),
         ]
-        if let ms = config.discoveryFirstPeerMS {
+        if let ms = discoveryFirstPeerMS {
             fields["discovery_first_peer_ms"] = .number(ms)
             fields["discovery_gate_ms"] = .number(10_000)
         }
@@ -468,21 +688,22 @@ public actor FileHandoffPipeline {
 
         let elapsed = nowMs() - t0
         logPlain("")
-        logPlain(String(format: "done:  file handoff served in %.1f ms", elapsed))
+        logPlain(String(format: "done:  session transferred in %.1f ms (%d leg(s))", elapsed, legsUsed))
         for l in FileHandoffResult.disclosureLines(class_: evidenceClass) {
             logPlain(l)
         }
 
-        try await det("session_teardown") { wire.teardown() }
-        try await det("core_free") { engine.close() }
-
-        let result = FileHandoffResult(
-            ok: verify.ok, workRoot: root, evidencePath: evidencePath,
+        // The engine stays with the caller (the UI's sessions list may read
+        // it); `discard()` closes it when the prepared session is dropped.
+        var result = FileHandoffResult(
+            ok: verify.ok, workRoot: prepared.workRoot, evidencePath: evidencePath,
             bundleJSON: bundleJSON, verifyOK: verify.ok, verifyMessage: verify.message,
-            sessionID: session, cutNumber: cut.number, declaredHash: declaredHash,
-            tampered: config.integrityNegative, sourcePin: sourcePin,
-            receiverPin: config.receiverPin, bytesSent: sent, bytesRecv: recv,
+            sessionID: session, cutNumber: prepared.cutNumber, declaredHash: declaredHash,
+            tampered: prepared.declaredHash != prepared.trueHash, sourcePin: sourcePin,
+            receiverPin: receiverPin, bytesSent: sent, bytesRecv: recv,
             elapsedMS: elapsed, evidenceClass: evidenceClass, failure: nil)
+        result.serveLegsUsed = legsUsed
+        result.pairedTrust = paired
         emit(.finished(result))
         return result
     }
