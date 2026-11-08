@@ -1,0 +1,40 @@
+name: 🚀 Feature or roadmap item
+description: Propose a capability, an adapter or an improvement.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can't be carried, or what is painful today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Link the spec section / requirement id if one applies.
+    validations:
+      required: true
+  - type: dropdown
+    id: label
+    attributes:
+      label: Claim label once delivered
+      description: Labels are law (spec §2). What could honestly be claimed when this ships?
+      options:
+        - IMPLEMENTED
+        - OBSERVED (LOCAL)
+        - OBSERVED (physical)
+        - PROVED
+        - RESEARCH
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence plan
+      description: How will we know it works? Tests, xtask runs, a physical campaign, an evidence bundle under docs/evidence/.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

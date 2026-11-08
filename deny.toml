@@ -1,0 +1,52 @@
+# cargo-deny: supply-chain gate (https://embarkstudios.github.io/cargo-deny/).
+# Run locally: cargo install cargo-deny && cargo deny check
+
+[graph]
+# Default features only. The opt-in PhotoCraft `inprocess` engine crates are
+# pinned git dependencies reviewed by hand (docs/artcraft-bridge/PHOTOCRAFT-PIN.md).
+all-features = false
+
+[advisories]
+# RustSec advisory database. To accept a known advisory, add
+# { id = "RUSTSEC-YYYY-NNNN", reason = "why it does not apply" }.
+ignore = []
+
+[licenses]
+# Every license here is compatible with shipping the engine as
+# MIT OR Apache-2.0. Copyleft (GPL / LGPL / AGPL) is NOT allowed in the Rust
+# graph. The GPL-2.0 libzim used by Kiwix builds is a C++ library linked
+# outside Cargo; see the License section of the README.
+allow = [
+  "MIT",
+  "MIT-0",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  "0BSD",
+  "BSL-1.0",
+  "CC0-1.0",
+  "Unlicense",
+  "Unicode-3.0",
+  "Unicode-DFS-2016",
+  "CDLA-Permissive-2.0",
+  "MPL-2.0",
+]
+confidence-threshold = 0.8
+unused-allowed-license = "allow"
+
+[licenses.private]
+# Unpublished workspace crates are ours (license.workspace = true).
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = ["https://github.com/storytold/photocraft"]

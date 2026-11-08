@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Report a security vulnerability
+    url: https://github.com/Ping-2o/carry-on/security/advisories/new
+    about: Please report vulnerabilities privately, never in a public issue.
+  - name: 📖 Specification
+    url: https://github.com/Ping-2o/carry-on/blob/main/CROSS-PLATFORM-ENGINE-SPEC.md
+    about: Requirement ids (CORE-*, AUTH-*, NET-*, PLAT-*) and the § sections referenced everywhere.
