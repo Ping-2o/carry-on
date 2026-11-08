@@ -11,13 +11,12 @@
  */
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
     namespace = "com.carryon.app"
-    compileSdk = 35
+    compileSdk = 36
 
     // The NDK the prebuilt engine was cross-compiled with (r27c; proven by
     // Scripts/fetch_engine_lib.sh). Kept so the engine ABI and the NDK the
@@ -27,7 +26,7 @@ android {
     defaultConfig {
         applicationId = "com.carryon.app"
         minSdk = 29          // spec §9: Android 10 floor for the frontier target
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
 
@@ -59,9 +58,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    // No kotlinOptions {}: AGP 9 built-in Kotlin derives jvmTarget from
+    // compileOptions.targetCompatibility (17).
 
     buildFeatures {
         compose = true
@@ -80,14 +78,14 @@ dependencies {
     // The Android SDK (stage 9): the same AAR a third-party consumer gets.
     implementation(project(":carryon-kit"))
 
-    val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
+    val composeBom = platform("androidx.compose:compose-bom:2026.09.00")
     implementation(composeBom)
 
-    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.core:core-ktx:1.19.1")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
-    implementation("androidx.navigation:navigation-compose:2.8.5")
+    implementation("androidx.navigation:navigation-compose:2.10.2")
 
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
@@ -96,7 +94,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 
     // Stage 5 (§18.4.1): QR RENDERING ONLY (pure-Java encoder, no camera, no
     // permission). Scanning on this pilot is the honest manual fallback — the

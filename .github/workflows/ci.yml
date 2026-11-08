@@ -224,7 +224,7 @@ jobs:
             tar -czf "$HOME/ndk-cache.tgz" -C "$ANDROID_HOME/ndk" "$NDK_VERSION"
           fi
           # AGP needs these; licenses are pre-accepted on the runner image.
-          yes | "$SDKM" --install "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" > /dev/null
+          yes | "$SDKM" --install "platforms;android-36" "build-tools;36.0.0" "cmake;3.22.1" > /dev/null
       - name: Cross-compile + fetch the engine .so (NDK r27c, arm64-v8a)
         run: apps/android/Scripts/fetch_engine_lib.sh
         env:
