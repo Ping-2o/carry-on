@@ -29,6 +29,7 @@ import com.carryon.app.handoff.ReceiveRunner
 import com.carryon.app.ui.screens.DemoScreen
 import com.carryon.app.ui.screens.EvidenceScreen
 import com.carryon.app.ui.screens.OnboardingScreen
+import com.carryon.app.ui.screens.PairingScreen
 import com.carryon.app.ui.screens.ReceiveScreen
 import com.carryon.app.ui.screens.SessionsScreen
 import com.carryon.app.ui.screens.TopologyScreen
@@ -111,6 +112,12 @@ fun CarryOnApp() {
                             label = { Text("Receive") },
                         )
                         NavigationBarItem(
+                            selected = route == "pairing",
+                            onClick = { navController.navigateTab("pairing") },
+                            icon = { Text("⚿", style = androidx.compose.material3.MaterialTheme.typography.titleMedium) },
+                            label = { Text("Pairing") },
+                        )
+                        NavigationBarItem(
                             selected = route == "topology",
                             onClick = { navController.navigateTab("topology") },
                             icon = { Text("⌂", style = androidx.compose.material3.MaterialTheme.typography.titleMedium) },
@@ -150,6 +157,7 @@ fun CarryOnApp() {
                 }
                 composable("demo") { DemoScreen() }
                 composable("receive") { ReceiveScreen() }
+                composable("pairing") { PairingScreen() }
                 composable("topology") { TopologyScreen() }
                 composable("sessions") { SessionsScreen() }
                 composable("evidence") { EvidenceScreen() }

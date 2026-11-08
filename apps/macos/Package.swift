@@ -52,6 +52,10 @@ let package = Package(
             dependencies: ["CarryOnKit"]
         ),
         .executableTarget(
+            name: "carryon-pairing-smoke",
+            dependencies: ["CarryOnKit"]
+        ),
+        .executableTarget(
             name: "carryon-discovery-smoke",
             dependencies: ["CarryOnKit"]
         ),

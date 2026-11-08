@@ -174,7 +174,24 @@ struct CarryFileView: View {
                         .font(Theme.monoSmall)
                         .foregroundStyle(model.pinValid ? Theme.ok : Theme.pending)
                 }
-                Text("The receiver's pin is a certificate fingerprint (public, not a secret) — type or paste the full 64 hex.\nDiscovery yields the address; the pin still pins the TLS trust (§18.5) until stage-5 pairing.")
+                // Stage-5 UX fix: paste the receiver's QR pairing payload (the
+                // carryon://pair URI shown under its QR) instead of typing the
+                // 64-hex pin by hand. Typing stays as the honest fallback.
+                HStack(spacing: 12) {
+                    Button("Paste pairing payload…") {
+                        if let s = NSPasteboard.general.string(forType: .string),
+                           let payload = try? parsePairingPayload(s.trimmingCharacters(in: .whitespacesAndNewlines)),
+                           payload.version == 1 {
+                            model.receiverAddr = payload.addr
+                            model.receiverPin = payload.pinHex
+                        }
+                    }
+                    .disabled(model.running)
+                    Text("fills addr + pin from the receiver's `carryon://pair` QR payload (stage 5); manual entry stays the fallback")
+                        .font(Theme.monoSmall)
+                        .foregroundStyle(.secondary)
+                }
+                Text("The receiver's pin is a certificate fingerprint (public, not a secret) — typed/pasted in full, or filled from its pairing payload.\nDiscovery yields the address; the pin still pins the TLS trust (§18.5) until pairing has pinned it once.")
                     .font(Theme.monoSmall)
                     .foregroundStyle(.secondary)
             }

@@ -206,6 +206,81 @@ public struct PairingResult: Sendable {
     public var remoteTrustJSON: String
 }
 
+/// The parsed §18.4.1-2 pairing payload — all data, nothing executable (§3.8).
+public struct PairingPayload: Sendable, Equatable {
+    public var version: Int
+    public var deviceName: String
+    public var addr: String
+    public var pinHex: String
+    public var code: String
+
+    public init(version: Int, deviceName: String, addr: String, pinHex: String, code: String) {
+        self.version = version
+        self.deviceName = deviceName
+        self.addr = addr
+        self.pinHex = pinHex
+        self.code = code
+    }
+}
+
+/// §18.4.2: strict, fail-closed parse of a scanned/entered payload.
+public func parsePairingPayload(_ uri: String) throws -> PairingPayload {
+    let json: String = try uri.withCString { s in
+        try outString("carryon_pairing_payload_parse") { out in
+            carryon_pairing_payload_parse(s, out)
+        }
+    }
+    guard let v = parseAnyJSON(json), case .object(let o) = v else {
+        throw CarryonError(code: -4, message: "pairing payload unparseable/refused: \(uri.prefix(120))")
+    }
+    func str(_ k: String) -> String? {
+        if case .string(let s)? = o[k] { return s }
+        return nil
+    }
+    guard let version = (o["version"]?.numberValue).map(Int.init),
+          let name = str("device_name"), let addr = str("addr"),
+          let pin = str("pin_hex"), let code = str("code") else {
+        throw CarryonError(code: -4, message: "pairing payload fields missing: \(json.prefix(200))")
+    }
+    return PairingPayload(version: version, deviceName: name, addr: addr, pinHex: pin, code: code)
+}
+
+/// §18.4.1: format the destination's QR payload URI from its parts.
+public func formatPairingPayload(deviceName: String, addr: String, pinHex: String, code: String) throws -> String {
+    try outString("carryon_pairing_payload_format") { out in
+        deviceName.withCString { n in
+            addr.withCString { a in
+                pinHex.withCString { k in
+                    code.withCString { r in
+                        carryon_pairing_payload_format(n, a, k, r, out)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// §18.4.4: the short verification string (6 hex) both pairing devices display
+/// and the user confirms matches. Order-independent; a swapped cert changes it.
+public func pairingVerificationString(_ pinAHex: String, _ pinBHex: String) throws -> String {
+    try outString("carryon_pairing_verification_string") { out in
+        pinAHex.withCString { a in
+            pinBHex.withCString { b in
+                carryon_pairing_verification_string(a, b, out)
+            }
+        }
+    }
+}
+
+/// §18.4.1-2: the six-digit pairing code displayed beside the destination's QR.
+public func pairingCode(pinHex: String, seed: UInt64) throws -> String {
+    try outString("carryon_pairing_code") { out in
+        pinHex.withCString { p in
+            carryon_pairing_code(p, seed, out)
+        }
+    }
+}
+
 /// Pair two in-process identities (loopback/testing convenience, §18.4): each
 /// side gets a TrustStore pinning the other. `utc` labels the pairing record.
 public func pairDevices(_ a: DeviceIdentity, _ b: DeviceIdentity, utc: String) throws -> PairingResult {
@@ -280,6 +355,44 @@ public final class NetSession: @unchecked Sendable {
         let h = carryon_session_accept(listener.handle, identity.handle, trust.handle)
         guard let handle = h else { throw CarryonError.nullReturn("carryon_session_accept") }
         return NetSession(handle: handle)
+    }
+
+    /// §18.4.3 provisional pairing channel (client): the destination's pin is
+    /// recorded, not pre-trusted; content on this session is refused (§18.5).
+    public static func connectPairing(addr: String, identity: DeviceIdentity) throws -> NetSession {
+        let h = addr.withCString { a in
+            carryon_session_connect_pairing(a, identity.handle)
+        }
+        guard let handle = h else { throw CarryonError.nullReturn("carryon_session_connect_pairing") }
+        return NetSession(handle: handle)
+    }
+
+    /// §18.4.3 provisional accept: the connecting source's pin is recorded for
+    /// the pairing exchange only; content is refused (§18.5).
+    public static func acceptPairing(listener: NetListener, identity: DeviceIdentity) throws -> NetSession {
+        let h = carryon_session_accept_pairing(listener.handle, identity.handle)
+        guard let handle = h else { throw CarryonError.nullReturn("carryon_session_accept_pairing") }
+        return NetSession(handle: handle)
+    }
+
+    /// The peer pin recorded on this session (public fingerprint, §18.4.6).
+    public func peerPinHex() throws -> String {
+        guard let handle else { throw CarryonError.nullReturn("carryon_session_peer_pin_hex") }
+        return try outString("carryon_session_peer_pin_hex") { out in
+            carryon_session_peer_pin_hex(handle, out)
+        }
+    }
+
+    /// Whether this is the provisional pairing channel (§18.4.3): pairing
+    /// traffic only; serve/import are refused closed (§18.5).
+    public func isPairing() throws -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let handle else { return false }
+        var out = false
+        try CarryonError.check(carryon_session_is_pairing(handle, &out),
+                               "carryon_session_is_pairing")
+        return out
     }
 
     init(handle: OpaquePointer) {

@@ -123,6 +123,14 @@ int32_t carryon_trust_is_trusted(const CarryonTrust *trust, const char *pin_hex,
 int32_t carryon_trust_revoke(CarryonTrust *trust, const char *pin_hex, bool *out);
 void    carryon_trust_free(CarryonTrust *trust);
 
+/* ---- Net: QR pairing payload + provisional pairing channel (ABI 1.2, §18.4) ---- */
+int32_t carryon_pairing_payload_format(const char *device_name, const char *addr,
+                                       const char *pin_hex, const char *code, char **out_uri);
+int32_t carryon_pairing_payload_parse(const char *uri, char **out_json);
+int32_t carryon_pairing_verification_string(const char *pin_a_hex, const char *pin_b_hex,
+                                            char **out_vs);
+int32_t carryon_pairing_code(const char *pin_hex, uint64_t seed, char **out_code);
+
 /* ---- Net: listener / session ---- */
 CarryonListener *carryon_listener_bind(const char *addr);
 int32_t carryon_listener_addr(const CarryonListener *listener, char **out_addr);
@@ -131,6 +139,13 @@ CarryonSession *carryon_session_connect(const char *addr, const CarryonIdentity 
                                         const CarryonTrust *trust);
 CarryonSession *carryon_session_accept(const CarryonListener *listener,
                                        const CarryonIdentity *id, const CarryonTrust *trust);
+/* Provisional pairing channel (§18.4.3): pin recorded, not pre-trusted;
+ * content refused (§18.5). */
+CarryonSession *carryon_session_connect_pairing(const char *addr, const CarryonIdentity *id);
+CarryonSession *carryon_session_accept_pairing(const CarryonListener *listener,
+                                               const CarryonIdentity *id);
+int32_t carryon_session_peer_pin_hex(const CarryonSession *session, char **out_hex);
+int32_t carryon_session_is_pairing(const CarryonSession *session, bool *out);
 int32_t carryon_session_client_negotiate(CarryonSession *session, const char *features_json,
                                          char **out_features_json);
 int32_t carryon_session_server_negotiate(CarryonSession *session, const char *features_json,

@@ -162,6 +162,136 @@ impl ClientCertVerifier for PinVerifier {
     }
 }
 
+/// A **provisional** verifier for the pairing channel (§18.4.3): it accepts any
+/// certificate for which the peer proves possession (the rustls provider still
+/// verifies the TLS handshake signatures), records the presented pin, and
+/// defers the trust decision to the user's confirmation of the verification
+/// string (§18.4.4-5). It NEVER marks the pin trusted — a provisional session
+/// carries pairing traffic only; content flows on a later, pinned connection
+/// (§18.5).
+#[derive(Debug)]
+struct ProvisionalVerifier {
+    provider: Arc<CryptoProvider>,
+    accepted_pin: std::sync::Mutex<Option<Pin>>,
+}
+
+impl ProvisionalVerifier {
+    fn new(provider: Arc<CryptoProvider>) -> Arc<Self> {
+        Arc::new(ProvisionalVerifier {
+            provider,
+            accepted_pin: std::sync::Mutex::new(None),
+        })
+    }
+
+    fn record(&self, end_entity: &CertificateDer<'_>) {
+        *self.accepted_pin.lock().unwrap() = Some(Pin::of_cert(end_entity.as_ref()));
+    }
+}
+
+impl ServerCertVerifier for ProvisionalVerifier {
+    fn verify_server_cert(
+        &self,
+        end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
+        _ocsp: &[u8],
+        _now: UnixTime,
+    ) -> std::result::Result<ServerCertVerified, rustls::Error> {
+        self.record(end_entity);
+        Ok(ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+        verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+        verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        self.provider
+            .signature_verification_algorithms
+            .supported_schemes()
+    }
+}
+
+impl ClientCertVerifier for ProvisionalVerifier {
+    fn root_hint_subjects(&self) -> &[DistinguishedName] {
+        &[]
+    }
+
+    fn verify_client_cert(
+        &self,
+        end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _now: UnixTime,
+    ) -> std::result::Result<ClientCertVerified, rustls::Error> {
+        self.record(end_entity);
+        Ok(ClientCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+        verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+        verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        self.provider
+            .signature_verification_algorithms
+            .supported_schemes()
+    }
+}
+
+impl PeerPin for ProvisionalVerifier {
+    fn accepted_pin(&self) -> Option<Pin> {
+        *self.accepted_pin.lock().unwrap()
+    }
+}
+
 /// Our own identity as rustls cert+key, cloned per config.
 fn own_cert_and_key(
     id: &DeviceIdentity,
@@ -198,6 +328,42 @@ pub fn server_config(
 ) -> Result<(Arc<rustls::ServerConfig>, Arc<dyn PeerPin>)> {
     let provider = provider();
     let verifier = PinVerifier::new(trust, provider.clone());
+    let (certs, key) = own_cert_and_key(id)?;
+    let cfg = rustls::ServerConfig::builder_with_provider(provider)
+        .with_protocol_versions(&[&rustls::version::TLS13])
+        .map_err(|e| NetError::auth(AuthCode::Handshake, format!("tls13 only: {e}")))?
+        .with_client_cert_verifier(verifier.clone())
+        .with_single_cert(certs, key)
+        .map_err(|e| NetError::auth(AuthCode::Handshake, format!("server cert: {e}")))?;
+    Ok((Arc::new(cfg), verifier))
+}
+
+/// Build a **provisional** (pairing-channel) client config: TLS 1.3 with real
+/// signature verification, but no pre-registered pin (§18.4.3). The presented
+/// pin is recorded for the app's user-confirmation step.
+pub fn pairing_client_config(
+    id: &DeviceIdentity,
+) -> Result<(Arc<rustls::ClientConfig>, Arc<dyn PeerPin>)> {
+    let provider = provider();
+    let verifier = ProvisionalVerifier::new(provider.clone());
+    let (certs, key) = own_cert_and_key(id)?;
+    let cfg = rustls::ClientConfig::builder_with_provider(provider)
+        .with_protocol_versions(&[&rustls::version::TLS13])
+        .map_err(|e| NetError::auth(AuthCode::Handshake, format!("tls13 only: {e}")))?
+        .dangerous()
+        .with_custom_certificate_verifier(verifier.clone())
+        .with_client_auth_cert(certs, key)
+        .map_err(|e| NetError::auth(AuthCode::Handshake, format!("client auth cert: {e}")))?;
+    Ok((Arc::new(cfg), verifier))
+}
+
+/// Build a **provisional** (pairing-channel) server config: accepts the
+/// connecting source's cert for the pairing exchange only (§18.4.3).
+pub fn pairing_server_config(
+    id: &DeviceIdentity,
+) -> Result<(Arc<rustls::ServerConfig>, Arc<dyn PeerPin>)> {
+    let provider = provider();
+    let verifier = ProvisionalVerifier::new(provider.clone());
     let (certs, key) = own_cert_and_key(id)?;
     let cfg = rustls::ServerConfig::builder_with_provider(provider)
         .with_protocol_versions(&[&rustls::version::TLS13])

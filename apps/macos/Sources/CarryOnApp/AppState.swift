@@ -299,12 +299,14 @@ final class CarryModel {
 @MainActor
 @Observable
 final class TopologyModel {
-    /// Ephemeral local identity for the pilot card. The KEY DER is SECRET
-    /// (§22.3): it lives only in this process — never persisted, never logged.
+    /// The DURABLE local identity (PLAT-002, stage 5): restored from
+    /// Keychain-held DERs, so the pin stays stable across launches. The KEY
+    /// DER is SECRET (§22.3) — it exists in memory only inside the engine.
     private(set) var localIdentity: DeviceIdentity?
     private(set) var localPin: String = ""
 
-    // Trust store persisted as JSON (pins are fingerprints, not secrets).
+    // Trust store persisted under the Keychain (stage-5 brief: secure
+    // storage; pins are fingerprints, not secrets, EVD-006-clean either way).
     var trust: TrustStore?
     private(set) var records: [TrustRecord] = []
     private var trustJSON: String {
@@ -312,14 +314,24 @@ final class TopologyModel {
     }
 
     init() {
-        trustJSON = UserDefaults.standard.string(forKey: "carryon.trust.json") ?? "{\"peers\":{}}"
+        // Keychain first (PLAT-002, stage 5). The pilot's pre-stage-5
+        // UserDefaults copy migrates once, then lives sealed.
+        if let t = SecureStore.loadTrust(), let j = try? t.toJSON() {
+            trustJSON = j
+        } else {
+            trustJSON = UserDefaults.standard.string(forKey: "carryon.trust.json") ?? "{\"peers\":{}}"
+            if let t = try? TrustStore.fromJSON(trustJSON) {
+                trust = t
+                persistTrust()
+            }
+        }
         reloadTrust()
         Task { await makeIdentity() }
     }
 
     private func makeIdentity() async {
         do {
-            let id = try DeviceIdentity.generate(name: Host.current().localizedName ?? "mac")
+            let id = try SecureStore.loadOrCreateIdentity(name: Host.current().localizedName ?? "carryon-mac")
             localIdentity = id
             localPin = try id.pinHex()
         } catch {
@@ -328,10 +340,34 @@ final class TopologyModel {
     }
 
     private func reloadTrust() {
-        if let t = try? TrustStore.fromJSON(trustJSON) {
+        if let t = trust {
+            records = (try? t.records()) ?? []
+        } else if let t = try? TrustStore.fromJSON(trustJSON) {
             trust = t
             records = (try? t.records()) ?? []
         }
+    }
+
+    /// Persist the current trust store to the Keychain (and the UserDefaults
+    /// mirror for visibility/debugging — pins only, never keys).
+    private func persistTrust() {
+        guard let t = trust, let j = try? t.toJSON() else { return }
+        trustJSON = j
+        try? SecureStore.saveTrust(json: j)
+    }
+
+    /// §18.4.6-7: record a genuinely paired peer (stage-5 QR/provisional
+    /// pairing) into the persisted store — sealed into the Keychain.
+    func recordPairing(name: String, pinHex: String, utc: String) {
+        let baseJSON = trustJSON.isEmpty ? "{\"peers\":{}}" : trustJSON
+        guard let merged = try? TrustStore.fromJSON(baseJSON) else { return }
+        // Never resurrect a revoked pin (§18.4.9 fail-closed).
+        let persisted = (try? merged.records()) ?? []
+        if persisted.first(where: { $0.pin_hex == pinHex })?.revoked == true { return }
+        _ = try? merged.pair(name: name, pinHex: pinHex, utc: utc)
+        trust = merged
+        persistTrust()
+        records = (try? merged.records()) ?? []
     }
 
     /// Merge the paired trust stores produced by a demo run into the persisted one.
@@ -370,10 +406,131 @@ final class TopologyModel {
     func revoke(_ record: TrustRecord) {
         guard let trust else { return }
         _ = try? trust.revoke(pinHex: record.pin_hex)
-        if let json = try? trust.toJSON() {
-            trustJSON = json
-        }
+        persistTrust()
         records = (try? trust.records()) ?? []
+    }
+}
+
+/// The stage-5 pairing model (§18.4): arm the destination (QR + six-digit
+/// code), join as source (payload paste / typed code — the honest fallback:
+/// no camera scanner in this pilot), mutual verification-string confirm,
+/// mutual pin, and §18.4.9 revocation. All blocking FFI runs detached
+/// (PairingFlow's discipline); events marshal back to the main actor.
+@MainActor
+@Observable
+final class PairingModel {
+    enum Role: Equatable { case idle, destination, source }
+
+    var role: Role = .idle
+    var armed: PairingArmed?
+    var awaiting: PairingState?
+    var result: String?
+    var events: [String] = []
+
+    // Source-side entry fields.
+    var srcAddr: String = ""
+    var srcCode: String = ""
+    var srcPayload: String = ""
+
+    private var confirmDecision: CheckedContinuation<Bool, Never>?
+
+    func log(_ s: String) { events.append(s) }
+
+    /// §18.4.1 — arm this Mac as the pairing destination.
+    func armDestination(topology: TopologyModel) {
+        guard let identity = topology.localIdentity else {
+            log("identity not loaded yet")
+            return
+        }
+        do {
+            let a = try PairingFlow.armDestination(identity: identity,
+                                                   deviceName: Host.current().localizedName ?? "carryon-mac")
+            armed = a
+            role = .destination
+            log("armed: \(a.displayAddr)  code \(a.code)")
+        } catch {
+            log("arm failed: \(error)")
+        }
+    }
+
+    /// §18.4.3-7 — accept + hold for the local user's confirm.
+    func awaitPairing(topology: TopologyModel) {
+        guard let armed, let identity = topology.localIdentity else { return }
+        Task {
+            let state = await PairingFlow.awaitPairing(armed: armed, identity: identity) { step in
+                await self.userConfirm(step)
+            } onEvent: { [weak self] line in
+                Task { @MainActor in self?.log(line) }
+            }
+            self.awaiting = nil
+            finish(state, topology: topology)
+        }
+    }
+
+    /// §18.4.2-5 — join a destination (QR payload paste / typed code fallback).
+    func joinDestination(topology: TopologyModel) {
+        guard let identity = topology.localIdentity else {
+            log("identity not loaded yet")
+            return
+        }
+        let addr = srcAddr, code = srcCode, payload = srcPayload.trimmingCharacters(in: .whitespacesAndNewlines)
+        role = .source
+        Task {
+            let state = await PairingFlow.joinDestination(
+                identity: identity, addr: addr, code: code,
+                payloadURI: payload.isEmpty ? nil : payload,
+                confirm: { step in
+                    await self.userConfirm(step)
+                },
+                onEvent: { [weak self] line in
+                    Task { @MainActor in self?.log(line) }
+                })
+            self.awaiting = nil
+            finish(state, topology: topology)
+        }
+    }
+
+    /// §18.4.5: hold the flow at the local user's decision (both sides).
+    private func userConfirm(_ step: PairingState) async -> Bool {
+        await withCheckedContinuation { cont in
+            Task { @MainActor in
+                self.awaiting = step
+                self.confirmDecision = cont
+            }
+        }
+    }
+
+    func confirmTap(_ yes: Bool) {
+        confirmDecision?.resume(returning: yes)
+        confirmDecision = nil
+        if !yes { awaiting = nil }
+    }
+
+    private func finish(_ state: PairingState, topology: TopologyModel) {
+        switch state {
+        case .paired(let name, let pin, _):
+            topology.recordPairing(name: name, pinHex: pin, utc: PairingFlow.utcNow())
+            result = "paired: \(name) (\(String(pin.prefix(16)))…) — trust persisted (Keychain)"
+            log("paired + persisted (§18.4.6-7)")
+        case .refused(let why):
+            result = "REFUSED: \(why)"
+        case .cancelled:
+            result = "cancelled — nothing pinned"
+        default:
+            break
+        }
+        armed?.close()
+        armed = nil
+        role = .idle
+    }
+
+    func reset() {
+        role = .idle
+        armed?.close()
+        armed = nil
+        awaiting = nil
+        result = nil
+        events = []
     }
 }
 
@@ -384,6 +541,7 @@ final class AppState {
     var demo = DemoModel()
     var topology = TopologyModel()
     var carry = CarryModel()
+    var pairing = PairingModel()
     /// Engine-side discovery (stage 4): one shared advertiser/browser — the
     /// engine owns the §18.3 TXT contract; screens drive it foreground-first.
     let discovery = EngineDiscovery()
@@ -416,6 +574,7 @@ final class AppState {
     enum Pane: String, CaseIterable, Identifiable, Hashable {
         case demo = "Demo"
         case carry = "Carry File"
+        case pairing = "Pairing"
         case topology = "Topology"
         case sessions = "Sessions"
         case evidence = "Evidence"
@@ -425,6 +584,7 @@ final class AppState {
             switch self {
             case .demo: return "play.rectangle"
             case .carry: return "paperplane"
+            case .pairing: return "key.horizontal"
             case .topology: return "point.3.connected.trianglepath.dotted"
             case .sessions: return "rectangle.stack"
             case .evidence: return "checkmark.seal"

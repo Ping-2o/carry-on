@@ -75,8 +75,10 @@ fun TopologyScreen() {
                 ),
             )
         }
+        // PLAT-002 (stage 5): the identity is durable — restored from
+        // Keystore-wrapped DERs, pin stable across launches (§18.4).
         Text(
-            text = "Identity is per-app-start in this pilot; durable secure storage is PLAT-002 (TARGET).",
+            text = "Durable identity (PLAT-002, stage 5): key DER sealed under AndroidKeyStore — pin stable across launches.",
             style = ConsoleTextStyle,
             color = MaterialTheme.colorScheme.secondary,
         )

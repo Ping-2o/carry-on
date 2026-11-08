@@ -116,6 +116,11 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
+    // Stage 5 (§18.4.1): QR RENDERING ONLY (pure-Java encoder, no camera, no
+    // permission). Scanning on this pilot is the honest manual fallback — the
+    // payload text + six-digit code are typed/compared by the human.
+    implementation("com.google.zxing:core:3.5.3")
+
     // JVM unit tests (the zombie-isolation guard test; runs via
     // gradlew :app:testDebugUnitTest in CI).
     testImplementation("junit:junit:4.13.2")

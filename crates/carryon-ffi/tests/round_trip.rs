@@ -15,7 +15,9 @@ use tempfile::tempdir;
 use carryon_ffi::abi_core::*;
 use carryon_ffi::abi_net::*;
 use carryon_ffi::abi_transfer::*;
-use carryon_ffi::handle::{CarryonCore, CarryonIdentity, CarryonListener, CarryonTrust};
+use carryon_ffi::handle::{
+    CarryonCore, CarryonIdentity, CarryonListener, CarryonSession, CarryonTrust,
+};
 
 /// Read an out-string and free it.
 unsafe fn take_string(p: *mut c_char) -> String {
@@ -159,6 +161,260 @@ fn ffi_identity_persist_roundtrip() {
 }
 
 /// Drive a full handoff over TLS via the FFI: source serves, destination imports.
+#[test]
+fn ffi_pairing_qr_provisional_channel_and_negatives() {
+    unsafe {
+        // ---- identities for two "devices"
+        let src = carryon_identity_generate(cstr("mac-source").as_ptr());
+        let dst = carryon_identity_generate(cstr("a04-dest").as_ptr());
+        assert!(!src.is_null() && !dst.is_null());
+
+        let mut src_pin_p: *mut c_char = ptr::null_mut();
+        let mut dst_pin_p: *mut c_char = ptr::null_mut();
+        assert_eq!(carryon_identity_pin_hex(src, &mut src_pin_p), 0);
+        assert_eq!(carryon_identity_pin_hex(dst, &mut dst_pin_p), 0);
+        let src_pin = take_string(src_pin_p);
+        let dst_pin = take_string(dst_pin_p);
+
+        // ---- QR payload format + parse round-trip (§18.4.1-2)
+        let mut uri_p: *mut c_char = ptr::null_mut();
+        let rc = carryon_pairing_payload_format(
+            cstr("Galaxy A04").as_ptr(),
+            cstr("192.168.1.20:48961").as_ptr(),
+            cstr(&dst_pin).as_ptr(),
+            cstr("428913").as_ptr(),
+            &mut uri_p,
+        );
+        assert_eq!(rc, 0, "payload_format");
+        let uri = take_string(uri_p);
+        assert!(uri.starts_with("carryon://pair?v=1&"));
+
+        let mut parsed_p: *mut c_char = ptr::null_mut();
+        let rc = carryon_pairing_payload_parse(cstr(&uri).as_ptr(), &mut parsed_p);
+        assert_eq!(rc, 0, "payload_parse");
+        let parsed = take_string(parsed_p);
+        assert!(parsed.contains(&dst_pin), "parsed carries the dest pin");
+        assert!(parsed.contains("192.168.1.20:48961"));
+
+        // Negative: a malformed payload fails closed.
+        let mut bad_p: *mut c_char = ptr::null_mut();
+        let rc = carryon_pairing_payload_parse(cstr("carryon://pair?v=1&n=x").as_ptr(), &mut bad_p);
+        assert_ne!(rc, 0, "malformed payload must fail");
+        assert!(bad_p.is_null());
+
+        // ---- pairing code (§18.4.1-2): six digits, deterministic
+        let mut code_p: *mut c_char = ptr::null_mut();
+        let rc = carryon_pairing_code(cstr(&dst_pin).as_ptr(), 48961, &mut code_p);
+        assert_eq!(rc, 0, "pairing_code");
+        let code = take_string(code_p);
+        assert_eq!(code.len(), 6);
+        assert!(code.chars().all(|c| c.is_ascii_digit()));
+
+        // ---- verification string (§18.4.4): order-independent, 6 hex
+        let mut vs1_p: *mut c_char = ptr::null_mut();
+        let mut vs2_p: *mut c_char = ptr::null_mut();
+        let rc = carryon_pairing_verification_string(
+            cstr(&src_pin).as_ptr(),
+            cstr(&dst_pin).as_ptr(),
+            &mut vs1_p,
+        );
+        assert_eq!(rc, 0, "vs src,dst");
+        let rc = carryon_pairing_verification_string(
+            cstr(&dst_pin).as_ptr(),
+            cstr(&src_pin).as_ptr(),
+            &mut vs2_p,
+        );
+        assert_eq!(rc, 0, "vs dst,src");
+        let vs1 = take_string(vs1_p);
+        let vs2 = take_string(vs2_p);
+        assert_eq!(vs1, vs2, "VS is order-independent");
+        assert_eq!(vs1.len(), 6);
+
+        // Negative: a third device's pin gives a DIFFERENT string (MITM model).
+        let eve = carryon_identity_generate(cstr("eve").as_ptr());
+        let mut eve_pin_p: *mut c_char = ptr::null_mut();
+        carryon_identity_pin_hex(eve, &mut eve_pin_p);
+        let eve_pin = take_string(eve_pin_p);
+        let mut vs3_p: *mut c_char = ptr::null_mut();
+        let rc = carryon_pairing_verification_string(
+            cstr(&src_pin).as_ptr(),
+            cstr(&eve_pin).as_ptr(),
+            &mut vs3_p,
+        );
+        assert_eq!(rc, 0);
+        assert_ne!(vs1, take_string(vs3_p), "a swapped cert must change the VS");
+
+        // ---- provisional pairing channel over loopback (§18.4.3)
+        let listener = carryon_listener_bind(cstr("127.0.0.1:0").as_ptr());
+        assert!(!listener.is_null());
+        let mut addr_p: *mut c_char = ptr::null_mut();
+        assert_eq!(carryon_listener_addr(listener, &mut addr_p), 0);
+        let addr = take_string(addr_p);
+
+        let l_thread = listener as usize;
+        let dst_u = dst as usize;
+        let srv = thread::spawn(move || {
+            let s = carryon_session_accept_pairing(
+                l_thread as *const CarryonListener,
+                dst_u as *const CarryonIdentity,
+            );
+            assert!(!s.is_null(), "accept_pairing");
+            s as usize
+        });
+        let wire = carryon_session_connect_pairing(cstr(&addr).as_ptr(), src);
+        assert!(!wire.is_null(), "connect_pairing");
+        let server = srv.join().unwrap() as *mut CarryonSession;
+
+        // Both sides read the TRUE peer pin; both know it is the provisional channel.
+        let mut peer_p: *mut c_char = ptr::null_mut();
+        assert_eq!(carryon_session_peer_pin_hex(wire, &mut peer_p), 0);
+        assert_eq!(
+            take_string(peer_p),
+            dst_pin,
+            "source sees the destination's pin"
+        );
+        let mut peer_p: *mut c_char = ptr::null_mut();
+        assert_eq!(carryon_session_peer_pin_hex(server, &mut peer_p), 0);
+        assert_eq!(
+            take_string(peer_p),
+            src_pin,
+            "destination sees the source's pin"
+        );
+        let mut is_pairing = false;
+        assert_eq!(carryon_session_is_pairing(wire, &mut is_pairing), 0);
+        assert!(is_pairing);
+        let mut is_pairing = false;
+        assert_eq!(carryon_session_is_pairing(server, &mut is_pairing), 0);
+        assert!(is_pairing);
+
+        // User-confirm on both sides modeled as the VS match (§18.4.5), then
+        // each side pins the peer (§18.4.6) — pair_devices semantics, wrapped.
+        let trust_a = carryon_trust_from_json(cstr("{\"peers\":{}}").as_ptr());
+        let trust_b = carryon_trust_from_json(cstr("{\"peers\":{}}").as_ptr());
+        assert_eq!(
+            carryon_trust_pair(
+                trust_a,
+                cstr("a04-dest").as_ptr(),
+                cstr(&dst_pin).as_ptr(),
+                cstr("t").as_ptr()
+            ),
+            0
+        );
+        assert_eq!(
+            carryon_trust_pair(
+                trust_b,
+                cstr("mac-source").as_ptr(),
+                cstr(&src_pin).as_ptr(),
+                cstr("t").as_ptr()
+            ),
+            0
+        );
+
+        // Content transfer on the provisional channel must be refused (§18.5):
+        // serve_cut against a pairing session fails closed.
+        let dir = tempdir().unwrap();
+        let core = carryon_core_open(cstr(dir.path().to_str().unwrap()).as_ptr());
+        assert!(!core.is_null());
+        let mut info: *mut c_char = ptr::null_mut();
+        let _rc = carryon_register_adapter(
+            core,
+            cstr("org.carryon.graph").as_ptr(),
+            cstr(r#"{"sample":true}"#).as_ptr(),
+            &mut info,
+        );
+        let _ = take_string(info);
+        let mut sid: *mut c_char = ptr::null_mut();
+        let _rc = carryon_create_session(
+            core,
+            cstr(r#"{"adapter_id":"org.carryon.graph","title":"g","privacy":"public","authority_mode":"read_only_replica"}"#).as_ptr(),
+            &mut sid,
+        );
+        let _session_id = take_string(sid);
+        let rc = carryon_serve_cut(core, wire);
+        assert_ne!(
+            rc, 0,
+            "serve on a provisional pairing session must fail closed"
+        );
+
+        // ---- §18.4.9 negative: revoke the source → a pinned reconnect is refused
+        let mut revoked = false;
+        assert_eq!(
+            carryon_trust_revoke(trust_b, cstr(&src_pin).as_ptr(), &mut revoked),
+            0
+        );
+        assert!(revoked);
+        let mut trusted = true;
+        assert_eq!(
+            carryon_trust_is_trusted(trust_b, cstr(&src_pin).as_ptr(), &mut trusted),
+            0
+        );
+        assert!(!trusted, "revoked pin is not trusted");
+
+        let listener2 = carryon_listener_bind(cstr("127.0.0.1:0").as_ptr());
+        let mut addr2_p: *mut c_char = ptr::null_mut();
+        assert_eq!(carryon_listener_addr(listener2, &mut addr2_p), 0);
+        let addr2 = take_string(addr2_p);
+        let l2 = listener2 as usize;
+        let dst_u2 = dst as usize;
+        let trust_b_u = trust_b as usize;
+        let srv = thread::spawn(move || {
+            let s = carryon_session_accept(
+                l2 as *const CarryonListener,
+                dst_u2 as *const CarryonIdentity,
+                trust_b_u as *const CarryonTrust,
+            );
+            if s.is_null() {
+                return -1i32; // rejected during the handshake (fail closed)
+            }
+            // The rejection may surface lazily: force I/O on the server side
+            // HERE (inside the thread), so the peer unblocks and the session
+            // is dropped — the same discipline as unpaired_peer_fails_closed.
+            let mut out_p: *mut c_char = ptr::null_mut();
+            let rc = carryon_session_server_negotiate(s, cstr("[]").as_ptr(), &mut out_p);
+            if !out_p.is_null() {
+                carryon_ffi::strings::carryon_string_free(out_p);
+            }
+            carryon_session_free(s);
+            rc
+        });
+        let refused = carryon_session_connect(cstr(&addr2).as_ptr(), src, trust_a);
+        // The client either fails at connect (null → refused) or at first I/O
+        // (non-zero rc) — both are refused, fail closed (§18.4.9).
+        let client_refused: Option<i32> = if refused.is_null() {
+            None
+        } else {
+            let mut out_p: *mut c_char = ptr::null_mut();
+            let rc = carryon_session_client_negotiate(refused, cstr("[]").as_ptr(), &mut out_p);
+            if !out_p.is_null() {
+                carryon_ffi::strings::carryon_string_free(out_p);
+            }
+            carryon_session_free(refused);
+            Some(rc)
+        };
+        let server_rc = srv.join().unwrap();
+        assert!(
+            if let Some(rc) = client_refused {
+                rc != 0
+            } else {
+                true
+            },
+            "revoked peer must be refused on the client side (connect or I/O)"
+        );
+        assert_ne!(server_rc, 0, "server must reject the revoked client");
+
+        carryon_session_free(wire);
+        carryon_session_free(server);
+        carryon_trust_free(trust_a);
+        carryon_trust_free(trust_b);
+        carryon_core_free(core);
+        carryon_listener_free(listener);
+        carryon_listener_free(listener2);
+        carryon_identity_free(src);
+        carryon_identity_free(dst);
+        carryon_identity_free(eve);
+    }
+}
+
 #[test]
 fn ffi_handoff_loopback_import() {
     unsafe {

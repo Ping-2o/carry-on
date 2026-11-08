@@ -39,7 +39,7 @@ pub use discovery::{
 pub use discovery_mdns::{MdnsAdvertiser, MdnsBrowser, PEER_CACHE_TTL};
 pub use error::{AuthCode, NetError, ProtoCode, Result, TransferCode};
 pub use identity::{DeviceIdentity, Pin};
-pub use pairing::{pair_devices, PairingData};
+pub use pairing::{pair_devices, pairing_code, verification_string, PairingData, PairingPayload};
 pub use transport::Session;
 pub use trust::TrustStore;
 pub use wire::{Envelope, Message, PROTOCOL_MAJOR, PROTOCOL_MINOR};

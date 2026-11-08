@@ -104,6 +104,22 @@ object CarryOnFfi {
     external fun trustRevoke(trust: Long, pinHex: String, out: BooleanArray): Int
     external fun trustFree(trust: Long)
 
+    // ---- Net: identity restore (PLAT-002) + QR pairing (ABI 1.2, §18.4) ---------
+
+    /** PLAT-002 restore: rehydrate the durable identity from Keystore-held
+     * DER bytes (stable pin across launches, §18.4). */
+    external fun identityFromDer(name: String, cert: ByteArray, key: ByteArray): Long
+    /** §18.4.1: the destination's QR payload URI bytes. */
+    external fun pairingPayloadFormat(
+        deviceName: String, addr: String, pinHex: String, code: String
+    ): ByteArray?
+    /** §18.4.2: strict parse -> `{version,device_name,addr,pin_hex,code}` JSON bytes. */
+    external fun pairingPayloadParse(uri: String): ByteArray?
+    /** §18.4.4: the short verification string (6 hex) both devices display. */
+    external fun pairingVerificationString(pinAHex: String, pinBHex: String): ByteArray?
+    /** §18.4.1-2: the six-digit pairing code shown beside the QR. */
+    external fun pairingCode(pinHex: String, seed: Long): ByteArray?
+
     // ---- Net: listener / session -----------------------------------------------
 
     external fun listenerBind(addr: String): Long
@@ -111,6 +127,14 @@ object CarryOnFfi {
     external fun listenerFree(listener: Long)
     external fun sessionConnect(addr: String, id: Long, trust: Long): Long
     external fun sessionAccept(listener: Long, id: Long, trust: Long): Long
+    /** §18.4.3 provisional pairing channel: pin recorded, not pre-trusted. */
+    external fun sessionConnectPairing(addr: String, id: Long): Long
+    /** §18.4.3 provisional accept: the connecting source's pin is recorded. */
+    external fun sessionAcceptPairing(listener: Long, id: Long): Long
+    /** The peer pin recorded on this session (public fingerprint). */
+    external fun sessionPeerPinHex(session: Long): ByteArray?
+    /** Whether this is the provisional pairing channel (content refused). */
+    external fun sessionIsPairing(session: Long, out: BooleanArray): Int
     external fun sessionClientNegotiate(session: Long, featuresJson: String): ByteArray?
     external fun sessionServerNegotiate(session: Long, featuresJson: String): ByteArray?
     external fun sessionFree(session: Long)

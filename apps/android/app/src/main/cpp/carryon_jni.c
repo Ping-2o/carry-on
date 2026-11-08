@@ -618,6 +618,144 @@ Java_com_carryon_app_ffi_CarryOnFfi_sessionFree(JNIEnv *env, jobject thiz,
     carryon_session_free((CarryonSession *)h2p(session));
 }
 
+/* ---- Net: identity restore (PLAT-002) + QR pairing (ABI 1.2, §18.4) ------ */
+
+/* carryon_identity_from_der — the PLAT-002 restore path: the app rehydrates
+ * its durable identity from Keystore-held DER bytes (stable pin across
+ * launches). The key DER arrives from Keystore-decrypted bytes only. */
+JNIEXPORT jlong JNICALL
+Java_com_carryon_app_ffi_CarryOnFfi_identityFromDer(JNIEnv *env, jobject thiz,
+                                                    jstring name,
+                                                    jbyteArray cert,
+                                                    jbyteArray key) {
+    (void)thiz;
+    const char *n = borrow_utf(env, name);
+    if (!n || !cert || !key) {
+        release_utf(env, name, n);
+        return 0;
+    }
+    jbyte *ce = (*env)->GetByteArrayElements(env, cert, NULL);
+    jbyte *ke = (*env)->GetByteArrayElements(env, key, NULL);
+    jsize cn = (*env)->GetArrayLength(env, cert);
+    jsize kn = (*env)->GetArrayLength(env, key);
+    CarryonIdentity *id = (ce && ke)
+        ? carryon_identity_from_der(n, (const uint8_t *)ce, (size_t)cn,
+                                    (const uint8_t *)ke, (size_t)kn)
+        : NULL;
+    if (ce) (*env)->ReleaseByteArrayElements(env, cert, ce, JNI_ABORT);
+    if (ke) (*env)->ReleaseByteArrayElements(env, key, ke, JNI_ABORT);
+    release_utf(env, name, n);
+    return p2h(id);
+}
+
+/* carryon_pairing_payload_format — §18.4.1: the destination's QR URI. */
+JNIEXPORT jbyteArray JNICALL
+Java_com_carryon_app_ffi_CarryOnFfi_pairingPayloadFormat(JNIEnv *env, jobject thiz,
+                                                         jstring device_name,
+                                                         jstring addr,
+                                                         jstring pin_hex,
+                                                         jstring code) {
+    (void)thiz;
+    const char *n = borrow_utf(env, device_name);
+    const char *a = borrow_utf(env, addr);
+    const char *k = borrow_utf(env, pin_hex);
+    const char *r = borrow_utf(env, code);
+    char *out = NULL;
+    jint rc = (n && a && k && r)
+        ? carryon_pairing_payload_format(n, a, k, r, &out)
+        : CARRYON_ERR_NULL_ARG;
+    release_utf(env, device_name, n);
+    release_utf(env, addr, a);
+    release_utf(env, pin_hex, k);
+    release_utf(env, code, r);
+    return out_string_result(env, rc, out);
+}
+
+/* carryon_pairing_payload_parse — §18.4.2: strict, fail-closed parse. */
+JNIEXPORT jbyteArray JNICALL
+Java_com_carryon_app_ffi_CarryOnFfi_pairingPayloadParse(JNIEnv *env, jobject thiz,
+                                                        jstring uri) {
+    (void)thiz;
+    const char *u = borrow_utf(env, uri);
+    char *out = NULL;
+    jint rc = u ? carryon_pairing_payload_parse(u, &out) : CARRYON_ERR_NULL_ARG;
+    release_utf(env, uri, u);
+    return out_string_result(env, rc, out);
+}
+
+/* carryon_pairing_verification_string — §18.4.4: both devices' short string. */
+JNIEXPORT jbyteArray JNICALL
+Java_com_carryon_app_ffi_CarryOnFfi_pairingVerificationString(JNIEnv *env, jobject thiz,
+                                                              jstring pin_a_hex,
+                                                              jstring pin_b_hex) {
+    (void)thiz;
+    const char *a = borrow_utf(env, pin_a_hex);
+    const char *b = borrow_utf(env, pin_b_hex);
+    char *out = NULL;
+    jint rc = (a && b)
+        ? carryon_pairing_verification_string(a, b, &out)
+        : CARRYON_ERR_NULL_ARG;
+    release_utf(env, pin_a_hex, a);
+    release_utf(env, pin_b_hex, b);
+    return out_string_result(env, rc, out);
+}
+
+/* carryon_pairing_code — the six-digit code shown with the QR (§18.4.1-2). */
+JNIEXPORT jbyteArray JNICALL
+Java_com_carryon_app_ffi_CarryOnFfi_pairingCode(JNIEnv *env, jobject thiz,
+                                                jstring pin_hex, jlong seed) {
+    (void)thiz;
+    const char *k = borrow_utf(env, pin_hex);
+    char *out = NULL;
+    jint rc = k ? carryon_pairing_code(k, (uint64_t)seed, &out) : CARRYON_ERR_NULL_ARG;
+    release_utf(env, pin_hex, k);
+    return out_string_result(env, rc, out);
+}
+
+/* ---- Net: provisional pairing channel (§18.4.3) -------------------------- */
+
+JNIEXPORT jlong JNICALL
+Java_com_carryon_app_ffi_CarryOnFfi_sessionConnectPairing(JNIEnv *env, jobject thiz,
+                                                          jstring addr, jlong id) {
+    (void)thiz;
+    const char *a = borrow_utf(env, addr);
+    CarryonSession *s = a
+        ? carryon_session_connect_pairing(a, (const CarryonIdentity *)h2p(id))
+        : NULL;
+    release_utf(env, addr, a);
+    return p2h(s);
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_carryon_app_ffi_CarryOnFfi_sessionAcceptPairing(JNIEnv *env, jobject thiz,
+                                                         jlong listener, jlong id) {
+    (void)env; (void)thiz;
+    CarryonSession *s = carryon_session_accept_pairing(
+        (const CarryonListener *)h2p(listener), (const CarryonIdentity *)h2p(id));
+    return p2h(s);
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_com_carryon_app_ffi_CarryOnFfi_sessionPeerPinHex(JNIEnv *env, jobject thiz,
+                                                      jlong session) {
+    (void)thiz;
+    char *out = NULL;
+    jint rc = carryon_session_peer_pin_hex((const CarryonSession *)h2p(session), &out);
+    return out_string_result(env, rc, out);
+}
+
+JNIEXPORT jint JNICALL
+Java_com_carryon_app_ffi_CarryOnFfi_sessionIsPairing(JNIEnv *env, jobject thiz,
+                                                     jlong session,
+                                                     jbooleanArray out) {
+    (void)thiz;
+    bool pairing = false;
+    jint rc = carryon_session_is_pairing((const CarryonSession *)h2p(session), &pairing);
+    if (rc == CARRYON_OK) put_bool(env, out, pairing ? JNI_TRUE : JNI_FALSE);
+    return rc;
+}
+
+
 /* ---- Transfer (handoff) -------------------------------------------------- */
 
 /* Blocking: runs until the peer's import_cut finishes. Kotlin calls this on a

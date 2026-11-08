@@ -6,7 +6,10 @@ use crate::ffi_guard;
 use crate::handle::{as_mut, as_ref, free, to_handle};
 use crate::handle::{CarryonIdentity, CarryonListener, CarryonSession, CarryonTrust};
 use crate::strings::{borrow_str, write_out_string};
-use carryon_core::carryon_net::{pair_devices, DeviceIdentity, Session, TrustStore};
+use carryon_core::carryon_net::{
+    pair_devices, pairing_code, verification_string, DeviceIdentity, PairingPayload, Pin, Session,
+    TrustStore,
+};
 use std::ffi::c_char;
 use std::net::TcpListener;
 use std::sync::Arc;
@@ -159,6 +162,131 @@ pub unsafe extern "C" fn carryon_pair_devices(
             Err(e) => {
                 set_last_error(e.to_string());
                 PANIC
+            }
+        }
+    })
+}
+
+/* ---- Stage 5: QR pairing payload + provisional pairing channel (§18.4) ---- */
+
+/// Format a destination's QR pairing payload (§18.4.1) as a `carryon://pair`
+/// URI into `*out_uri`. All fields validated; a bad field fails closed.
+///
+/// # Safety
+/// All C strings valid UTF-8; `out_uri` writable.
+#[no_mangle]
+pub unsafe extern "C" fn carryon_pairing_payload_format(
+    device_name: *const c_char,
+    addr: *const c_char,
+    pin_hex: *const c_char,
+    code: *const c_char,
+    out_uri: *mut *mut c_char,
+) -> i32 {
+    ffi_guard!(PANIC, {
+        let (Some(n), Some(a), Some(k), Some(r)) = (
+            borrow_str(device_name).ok(),
+            borrow_str(addr).ok(),
+            borrow_str(pin_hex).ok(),
+            borrow_str(code).ok(),
+        ) else {
+            set_last_error("payload field null");
+            return crate::errors::CARRYON_ERR_NULL_ARG;
+        };
+        match PairingPayload::new(n, a, k, r) {
+            Ok(p) => write_out_string(out_uri, p.to_uri()),
+            Err(e) => {
+                set_last_error(e.to_string());
+                PANIC
+            }
+        }
+    })
+}
+
+/// Parse a scanned/entered pairing payload (§18.4.2) into a JSON object
+/// `{"version":1,"device_name":…,"addr":…,"pin_hex":…,"code":…}` written to
+/// `*out_json`. Strict: unknown scheme/version, duplicates, or malformed
+/// fields fail closed.
+///
+/// # Safety
+/// `uri` valid UTF-8; `out_json` writable.
+#[no_mangle]
+pub unsafe extern "C" fn carryon_pairing_payload_parse(
+    uri: *const c_char,
+    out_json: *mut *mut c_char,
+) -> i32 {
+    ffi_guard!(PANIC, {
+        let Some(u) = borrow_str(uri).ok() else {
+            set_last_error("uri null");
+            return crate::errors::CARRYON_ERR_NULL_ARG;
+        };
+        match PairingPayload::parse(u) {
+            Ok(p) => {
+                let json = serde_json::json!({
+                    "version": p.version,
+                    "device_name": p.device_name,
+                    "addr": p.addr,
+                    "pin_hex": p.pin_hex,
+                    "code": p.code,
+                });
+                write_out_string(out_json, json.to_string())
+            }
+            Err(e) => {
+                set_last_error(e.to_string());
+                PANIC
+            }
+        }
+    })
+}
+
+/// The short verification string both pairing devices display and a user
+/// confirms matches (§18.4.4): derived from BOTH pins (order-independent), so
+/// a MITM swapping either certificate produces a different string. Six hex.
+///
+/// # Safety
+/// Both pins are 64-hex C strings; `out_vs` writable.
+#[no_mangle]
+pub unsafe extern "C" fn carryon_pairing_verification_string(
+    pin_a_hex: *const c_char,
+    pin_b_hex: *const c_char,
+    out_vs: *mut *mut c_char,
+) -> i32 {
+    ffi_guard!(PANIC, {
+        let (Some(a), Some(b)) = (borrow_str(pin_a_hex).ok(), borrow_str(pin_b_hex).ok()) else {
+            set_last_error("pin null");
+            return crate::errors::CARRYON_ERR_NULL_ARG;
+        };
+        let (Some(pa), Some(pb)) = (Pin::from_hex(a), Pin::from_hex(b)) else {
+            set_last_error("pin must be 64 hex");
+            return crate::errors::CARRYON_ERR_BAD_JSON;
+        };
+        write_out_string(out_vs, verification_string(&pa, &pb))
+    })
+}
+
+/// The six-digit pairing code a destination displays with its QR (§18.4.1-2)
+/// and a source echoes. `seed` is any fresh per-pairing counter (e.g. the
+/// listener port). The code is the human channel of §18.4.2 — the destination
+/// refuses a mismatching echo; the mutual confirmation remains the
+/// verification string (§18.4.4).
+///
+/// # Safety
+/// `pin_hex` a 64-hex C string; `out_code` writable.
+#[no_mangle]
+pub unsafe extern "C" fn carryon_pairing_code(
+    pin_hex: *const c_char,
+    seed: u64,
+    out_code: *mut *mut c_char,
+) -> i32 {
+    ffi_guard!(PANIC, {
+        let Some(h) = borrow_str(pin_hex).ok() else {
+            set_last_error("pin null");
+            return crate::errors::CARRYON_ERR_NULL_ARG;
+        };
+        match Pin::from_hex(h) {
+            Some(pin) => write_out_string(out_code, pairing_code(&pin, seed)),
+            None => {
+                set_last_error("pin must be 64 hex");
+                crate::errors::CARRYON_ERR_BAD_JSON
             }
         }
     })
@@ -321,6 +449,104 @@ pub unsafe extern "C" fn carryon_session_accept(
                 std::ptr::null_mut()
             }
         }
+    })
+}
+
+/// Connect as the client over the **provisional pairing channel** (§18.4.3):
+/// TLS 1.3 with full signature verification, but the server's pin is recorded,
+/// not pre-trusted; content on this session is refused (§18.5). Read the
+/// recorded pin with `carryon_session_peer_pin_hex`, check the mode with
+/// `carryon_session_is_pairing`.
+///
+/// # Safety
+/// `addr` valid; `id` live.
+#[no_mangle]
+pub unsafe extern "C" fn carryon_session_connect_pairing(
+    addr: *const c_char,
+    id: *const CarryonIdentity,
+) -> *mut CarryonSession {
+    ffi_guard!(std::ptr::null_mut(), {
+        let a = match borrow_str(addr) {
+            Ok(s) => s,
+            Err(_) => return std::ptr::null_mut(),
+        };
+        let Some(id) = as_ref(id) else {
+            set_last_error("identity handle null");
+            return std::ptr::null_mut();
+        };
+        match Session::connect_pairing(a, id) {
+            Ok(s) => to_handle(s),
+            Err(e) => {
+                set_last_error(e.to_string());
+                std::ptr::null_mut()
+            }
+        }
+    })
+}
+
+/// Accept one connection on the **provisional pairing channel** (§18.4.3): the
+/// client's pin is recorded for the pairing exchange, not pre-trusted; content
+/// on this session is refused (§18.5).
+///
+/// # Safety
+/// `listener`/`id` live.
+#[no_mangle]
+pub unsafe extern "C" fn carryon_session_accept_pairing(
+    listener: *const CarryonListener,
+    id: *const CarryonIdentity,
+) -> *mut CarryonSession {
+    ffi_guard!(std::ptr::null_mut(), {
+        let (Some(l), Some(id)) = (as_ref(listener), as_ref(id)) else {
+            set_last_error("listener or identity handle null");
+            return std::ptr::null_mut();
+        };
+        match Session::accept_pairing(l, id) {
+            Ok(s) => to_handle(s),
+            Err(e) => {
+                set_last_error(e.to_string());
+                std::ptr::null_mut()
+            }
+        }
+    })
+}
+
+/// The peer pin recorded on this session (pinned or provisional) as 64 hex
+/// into `*out_hex`. A public fingerprint (never a secret).
+///
+/// # Safety
+/// `session` live; `out_hex` writable.
+#[no_mangle]
+pub unsafe extern "C" fn carryon_session_peer_pin_hex(
+    session: *const CarryonSession,
+    out_hex: *mut *mut c_char,
+) -> i32 {
+    ffi_guard!(PANIC, {
+        let Some(s) = as_ref(session) else {
+            return BAD_HANDLE;
+        };
+        write_out_string(out_hex, s.peer_pin().to_hex())
+    })
+}
+
+/// Whether this session is the provisional pairing channel (§18.4.3) into
+/// `*out`. Provisional sessions refuse content (§18.5) — pair, then reconnect.
+///
+/// # Safety
+/// `session` live; `out` writable.
+#[no_mangle]
+pub unsafe extern "C" fn carryon_session_is_pairing(
+    session: *const CarryonSession,
+    out: *mut bool,
+) -> i32 {
+    ffi_guard!(PANIC, {
+        let Some(s) = as_ref(session) else {
+            return BAD_HANDLE;
+        };
+        if out.is_null() {
+            return NULL;
+        }
+        *out = s.is_pairing();
+        CARRYON_OK
     })
 }
 
