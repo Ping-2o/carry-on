@@ -201,7 +201,16 @@ impl Core {
     /// Answers `CutRequest` with the sealed cut's manifest and `TransferRequest`
     /// with object bytes read from the local store, until `ImportComplete` or
     /// `Abort`. Read-only: serving never mutates source state.
+    ///
+    /// §18.4.3/§18.5 fail-closed guard: a provisional pairing channel never
+    /// carries content — refuse up front, before any wire I/O.
     pub fn serve_cut(&mut self, session: &mut Session) -> Result<()> {
+        if session.is_pairing() {
+            return Err(crate::error::CoreError::auth(
+                crate::error::AuthCode::Permission,
+                "serve_cut on a provisional pairing channel refused — pair, then reconnect with the pinned trust (§18.4/§18.5)",
+            ));
+        }
         loop {
             match session.recv()? {
                 Message::CutRequest {
@@ -357,6 +366,14 @@ impl Core {
         remote_session: &str,
         remote_cut: u64,
     ) -> Result<ImportOutcome> {
+        // §18.4.3/§18.5 fail-closed guard: a provisional pairing channel never
+        // carries content — refuse before the first wire message.
+        if session.is_pairing() {
+            return Err(crate::error::CoreError::auth(
+                crate::error::AuthCode::Permission,
+                "import_cut on a provisional pairing channel refused — pair, then reconnect with the pinned trust (§18.4/§18.5)",
+            ));
+        }
         // NOTE: the suspend flag is NOT cleared here — a shell may set it before or
         // during the call. It is cleared only when a resume begins.
         session.send(Message::CutRequest {
@@ -409,6 +426,13 @@ impl Core {
         session: &mut Session,
         token: &ImportResume,
     ) -> Result<ImportOutcome> {
+        // §18.4.3/§18.5 fail-closed guard (same as import_cut).
+        if session.is_pairing() {
+            return Err(crate::error::CoreError::auth(
+                crate::error::AuthCode::Permission,
+                "resume_import on a provisional pairing channel refused — pair, then reconnect with the pinned trust (§18.4/§18.5)",
+            ));
+        }
         self.clear_suspend();
         session.send(Message::CutRequest {
             session: token.remote_session.clone(),

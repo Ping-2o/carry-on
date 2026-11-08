@@ -48,6 +48,10 @@ let package = Package(
             name: "carryon-filehandoff-smoke",
             dependencies: ["CarryOnKit"]
         ),
+        .executableTarget(
+            name: "carryon-pairing-smoke",
+            dependencies: ["CarryOnKit"]
+        ),
         .testTarget(
             name: "CarryOnKitTests",
             dependencies: ["CarryOnKit", "CCarryon"]

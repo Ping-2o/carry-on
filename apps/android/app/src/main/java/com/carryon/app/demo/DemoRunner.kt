@@ -452,7 +452,7 @@ class DemoRunner(
             val coreDst = withContext(Dispatchers.IO) { Core.open(dstDir.absolutePath) }
             dstCore = coreDst
             val abi = abiVersion()
-            ui.log("abi", "engine ${abi.major}.${abi.minor} (expect 1.1)")
+            ui.log("abi", "engine ${abi.major}.${abi.minor} (expect 1.2)")
             ui.log("core.src", "opened ${srcDir.absolutePath}")
             ui.log("core.dst", "opened ${dstDir.absolutePath}")
             coreSrc.setForeground(true)

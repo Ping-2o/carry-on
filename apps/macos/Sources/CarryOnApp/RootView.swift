@@ -37,6 +37,7 @@ struct RootView: View {
             switch app.pane {
             case .demo: DemoView()
             case .carry: CarryFileView()
+            case .pairing: PairingView()
             case .topology: TopologyView()
             case .sessions: SessionsView()
             case .evidence: EvidenceView()
@@ -55,9 +56,10 @@ struct RootView: View {
         switch pane {
         case .demo: return "1"
         case .carry: return "2"
-        case .topology: return "3"
-        case .sessions: return "4"
-        case .evidence: return "5"
+        case .pairing: return "3"
+        case .topology: return "4"
+        case .sessions: return "5"
+        case .evidence: return "6"
         }
     }
 }

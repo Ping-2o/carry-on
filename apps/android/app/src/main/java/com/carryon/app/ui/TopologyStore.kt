@@ -1,12 +1,13 @@
 /*
  * TopologyStore.kt — app-process state for the Live Device Topology screen.
  *
- * - Local node card: a per-process engine Identity (pin shown TRUNCATED; the key
- *   DER is never touched — §22.3). Durable secure storage is PLAT-002 (TARGET);
- *   this pilot regenerates per app start and says so.
- * - Trust records: real engine TrustStore JSON persisted in app storage via
- *   carryon_trust_to_json / carryon_trust_from_json; revoke via
- *   carryon_trust_revoke (§18.4.9).
+ * - Local node card: the DURABLE engine identity (PLAT-002, stage 5) — restored
+ *   from Keystore-wrapped DERs, so the pin stays stable across launches; the
+ *   key DER never touches disk (§22.3, EVD-006).
+ * - Trust records: real engine TrustStore JSON persisted under the same
+ *   Keystore master key via KeystoreIdentityStore; revoke via
+ *   carryon_trust_revoke (§18.4.9) — trust_generation bumps, reconnect fails
+ *   closed.
  * - Sessions: recorded from demo runs with EXACT §16.2/plan.md readiness states
  *   (Idle, Preparing, CutProposed, CutSealed, Importing, ActionReady,
  *   ReadOnlyActive, Failed, Inconclusive, Aborted) — never the bare "Ready".
@@ -21,7 +22,7 @@ import com.carryon.app.ffi.Trust
 import com.carryon.app.ffi.TrustRecord
 import com.carryon.app.ffi.abiVersion
 import com.carryon.app.demo.DemoState
-import java.io.File
+import com.carryon.app.secure.KeystoreIdentityStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -59,8 +60,6 @@ data class SessionRow(
 
 class TopologyStore(private val context: Context) {
 
-    private val trustFile = File(context.filesDir, "trust.json")
-
     private val _identity = MutableStateFlow<IdentityCard?>(null)
     val identity: StateFlow<IdentityCard?> = _identity.asStateFlow()
 
@@ -74,9 +73,12 @@ class TopologyStore(private val context: Context) {
     private var engineIdentity: Identity? = null
     private var engineTrust: Trust? = null
 
-    /** Lazily generate the local identity + load persisted trust. IO-safe. */
+    /** Lazily restore the DURABLE identity from Keystore (PLAT-002) + load the
+     *  sealed trust store. IO-safe; app start never blocks on Keystore. */
     suspend fun ensureLoaded(): IdentityCard? = withContext(Dispatchers.IO) {
-        val id = engineIdentity ?: Identity.generate(deviceName()).also { engineIdentity = it }
+        val id = engineIdentity
+            ?: KeystoreIdentityStore.loadOrCreateIdentity(context, deviceName())
+                .also { engineIdentity = it }
         val abi = abiVersion()
         val card = IdentityCard(
             deviceName = deviceName(),
@@ -95,20 +97,15 @@ class TopologyStore(private val context: Context) {
         (Build.MODEL ?: "carryon-device").take(24).ifBlank { "carryon-device" }
 
     private fun loadTrust(): Trust = try {
-        if (trustFile.exists()) {
-            Trust.fromJson(trustFile.readText())
-        } else {
-            Trust.empty()
-        }
+        val json = KeystoreIdentityStore.loadTrust(context)
+        if (json != null) Trust.fromJson(json) else Trust.empty()
     } catch (_: Exception) {
         Trust.empty() // corrupt store -> fail open as empty (no peers), never crash
     }
 
     private fun persistTrust() {
         engineTrust?.let { t ->
-            runCatching {
-                trustFile.writeText(t.toJson())
-            }
+            runCatching { KeystoreIdentityStore.saveTrust(context, t.toJson()) }
         }
     }
 
@@ -126,6 +123,19 @@ class TopologyStore(private val context: Context) {
         }
     }
 
+    /** §18.4.6-7: record a genuinely paired peer (QR/provisional pairing, stage
+     *  5) — the pin came from the engine's provisional channel + the user's
+     *  verification-string confirmation; persists sealed. */
+    fun recordPairing(deviceName: String, pinHex: String, utc: String) {
+        val t = engineTrust ?: return
+        if (pinHex.isBlank()) return
+        runCatching {
+            t.pair(deviceName.ifBlank { "peer" }, pinHex, utc)
+            persistTrust()
+            _trust.update { t.records() }
+        }
+    }
+
     /** §18.4.9 revocation — bumps trust_generation; reconnect fails closed. */
     fun revoke(pinHex: String) {
         val t = engineTrust ?: return
@@ -134,6 +144,12 @@ class TopologyStore(private val context: Context) {
             persistTrust()
             _trust.update { t.records() }
         }
+    }
+
+    /** The durable engine identity handle (pairing flows); lazily loaded. */
+    suspend fun durableIdentity(): Identity? {
+        ensureLoaded()
+        return engineIdentity
     }
 
     /** Record the completed demo run's mirror session with its exact state. */

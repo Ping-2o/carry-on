@@ -1,0 +1,10 @@
+Building for debugging...
+[Planning deferred tasks]
+[1 / 9]
+Build complete! (0.73 secs)
+QR payload pinned SM-A045F (1ab8a76465f85010…) — normal pinned connect
+verification string: f31006 — confirm on BOTH devices (§18.4.4-5)
+identity_pin:  48ec632e3b3949779cb2fd3aac053f4d3955299a47fb338d508f30f72a7d3235  (durable — Keychain, PLAT-002)
+dest_pin: 1ab8a76465f85010…
+verify:   f31006  ← compare with the DESTINATION screen (auto-confirm in smoke)
+paired:  1ab8a76465f85010… pinned, trust persisted (Keychain)

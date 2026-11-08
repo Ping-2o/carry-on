@@ -271,6 +271,9 @@ impl From<carryon_net::NetError> for CoreError {
                     | carryon_net::AuthCode::Unpaired
                     | carryon_net::AuthCode::Revoked => AuthCode::Permission,
                     carryon_net::AuthCode::Handshake => AuthCode::Permission,
+                    // §18.4 pairing-channel misuse / malformed payload — an
+                    // auth failure like the others (fails closed, AUTH_*).
+                    carryon_net::AuthCode::Pairing => AuthCode::Permission,
                 },
                 msg,
             ),

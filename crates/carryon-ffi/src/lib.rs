@@ -31,8 +31,11 @@ pub mod strings;
 /// 1.1: `carryon_import_cut` / `carryon_resume_import` result JSON gains the
 /// additive `partial_budget` shape (§6.8 progressive budget admission); no
 /// signature changes.
+/// 1.2 (stage 5, §18.4): QR pairing payload (format/parse), pairing code,
+/// verification string, provisional pairing channel (connect/accept), peer pin,
+/// is-pairing. Append-only: no existing signature changed.
 pub const CARRYON_ABI_MAJOR: u32 = 1;
-pub const CARRYON_ABI_MINOR: u32 = 1;
+pub const CARRYON_ABI_MINOR: u32 = 2;
 
 /// Write the ABI version into the out-params. Lets a shell check compatibility at
 /// load time against the header's `#define`s.

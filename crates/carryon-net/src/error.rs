@@ -47,6 +47,8 @@ pub enum AuthCode {
     Revoked,
     /// TLS handshake failed.
     Handshake,
+    /// Malformed or mismatched pairing payload / pairing-channel misuse (§18.4).
+    Pairing,
 }
 
 /// Transfer-family codes (§24 `TRANSFER_*`).

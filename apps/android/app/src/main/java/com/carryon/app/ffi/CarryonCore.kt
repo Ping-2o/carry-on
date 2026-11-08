@@ -398,6 +398,17 @@ class Identity private constructor(internal val handle: Long) : Closeable {
             }
             return Identity(h)
         }
+
+        /** PLAT-002 restore: rehydrate the durable identity from DER bytes
+         *  held in platform secure storage (Keystore-wrapped, §18.4). The
+         *  pin stays stable across launches. */
+        fun fromDer(name: String, certDer: ByteArray, keyDer: ByteArray): Identity {
+            val h = CarryOnFfi.identityFromDer(name, certDer, keyDer)
+            if (h == 0L) {
+                throw CoreException(Err.UNKNOWN, "identity_from_der: ${lastErrorMessage()}")
+            }
+            return Identity(h)
+        }
     }
 
     /** SHA-256 pin hex of the certificate DER — the pairing fingerprint. */
@@ -405,6 +416,18 @@ class Identity private constructor(internal val handle: Long) : Closeable {
 
     /** Truncated fingerprint for display (§22.3). */
     fun shortPin(): String = pinHex().take(16) + "…"
+
+    /** Certificate DER (public) — for persisting in secure storage. */
+    fun certDer(): ByteArray = sizedBytes { buf, len ->
+        CarryOnFfi.identityCertDer(handle, buf, len)
+    }
+
+    /** PRIVATE KEY DER — **SECRET** (EVD-006/§22.3). The ONLY caller is the
+     *  Keystore-backed identity store (PLAT-002): route straight to
+     *  AndroidKeyStore wrapping; never log, display, or bundle. */
+    fun keyDer(): ByteArray = sizedBytes { buf, len ->
+        CarryOnFfi.identityKeyDer(handle, buf, len)
+    }
 
     override fun close() {
         if (!closed) {
@@ -521,6 +544,37 @@ class Session private constructor(internal val handle: Long) : Closeable {
             }
             return Session(h)
         }
+
+        /** §18.4.3 provisional pairing channel (client): the destination's pin
+         *  is recorded, not pre-trusted; content on this session is refused. */
+        fun connectPairing(addr: String, identity: Identity): Session {
+            val h = CarryOnFfi.sessionConnectPairing(addr, identity.handle)
+            if (h == 0L) {
+                throw CoreException(Err.UNKNOWN, "session_connect_pairing($addr): ${lastErrorMessage()}")
+            }
+            return Session(h)
+        }
+
+        /** §18.4.3 provisional pairing channel (server): the connecting
+         *  source's pin is recorded for the pairing exchange only. */
+        fun acceptPairing(listener: Listener, identity: Identity): Session {
+            val h = CarryOnFfi.sessionAcceptPairing(listener.handle, identity.handle)
+            if (h == 0L) {
+                throw CoreException(Err.UNKNOWN, "session_accept_pairing: ${lastErrorMessage()}")
+            }
+            return Session(h)
+        }
+    }
+
+    /** The peer pin recorded on this session (public fingerprint, §18.4.6). */
+    fun peerPinHex(): String = requireOut(CarryOnFfi.sessionPeerPinHex(handle))
+
+    /** Whether this is the provisional pairing channel (§18.4.3): pairing
+     *  traffic only; serve/import are refused closed (§18.5). */
+    fun isPairing(): Boolean {
+        val out = booleanArrayOf(false)
+        check(CarryOnFfi.sessionIsPairing(handle, out))
+        return out[0]
     }
 
     private fun check(rc: Int) {
@@ -553,12 +607,48 @@ class Session private constructor(internal val handle: Long) : Closeable {
 
 /* ---- free functions ---------------------------------------------------------- */
 
-/** Check the engine ABI at load: expect 1.1 (append-only within major 1). */
+/** Check the engine ABI at load: expect 1.2 (append-only within major 1). */
 fun abiVersion(): AbiVersion {
     val v = CarryOnFfi.abiVersion()
         ?: throw CoreException(Err.UNKNOWN, "abi_version returned null")
     return AbiVersion(v[0], v[1])
 }
+
+/** §18.4.4: the short verification string (6 hex) both pairing devices
+ *  display and the user confirms matches. Order-independent. */
+fun pairingVerificationString(pinAHex: String, pinBHex: String): String =
+    requireOut(CarryOnFfi.pairingVerificationString(pinAHex, pinBHex))
+
+/** §18.4.1-2: the six-digit pairing code displayed beside the destination's
+ *  QR (derived from its pin + a fresh seed, e.g. the listener port). */
+fun pairingCode(pinHex: String, seed: Long): String =
+    requireOut(CarryOnFfi.pairingCode(pinHex, seed))
+
+/** §18.4.1: format the destination's QR payload URI from its parts. */
+fun pairingPayloadFormat(deviceName: String, addr: String, pinHex: String, code: String): String =
+    requireOut(CarryOnFfi.pairingPayloadFormat(deviceName, addr, pinHex, code))
+
+/** §18.4.2: strict parse of a scanned/entered payload (fail closed).
+ *  -> [PairingPayload] (addr, pin_hex, code — the source's pairing data). */
+fun pairingPayloadParse(uri: String): PairingPayload {
+    val o = JSONObject(requireOut(CarryOnFfi.pairingPayloadParse(uri)))
+    return PairingPayload(
+        version = o.getInt("version"),
+        deviceName = o.getString("device_name"),
+        addr = o.getString("addr"),
+        pinHex = o.getString("pin_hex"),
+        code = o.getString("code"),
+    )
+}
+
+/** The parsed §18.4.1-2 pairing payload: all data, nothing executable (§3.8). */
+data class PairingPayload(
+    val version: Int,
+    val deviceName: String,
+    val addr: String,
+    val pinHex: String,
+    val code: String,
+)
 
 /** Mutual pin pairing (§18.4): each side receives its half of the trust store. */
 fun pairDevices(a: Identity, b: Identity, utc: String): PairingResult {
