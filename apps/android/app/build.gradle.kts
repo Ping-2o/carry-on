@@ -109,7 +109,7 @@ dependencies {
     // Real org.json for JVM unit tests: the android.jar org.json classes are
     // stubbed in local unit tests and throw "not mocked" (the JSON-parse
     // regression tests need a working JSONObject/JSONArray).
-    testImplementation("org.json:json:20250517")
+    testImplementation("org.json:json:20260814")
 
     // Instrumented tests (device only; the FFI smoke test loads the real engine).
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
