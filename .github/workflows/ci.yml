@@ -59,7 +59,7 @@ jobs:
       swift: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.swift == 'true' }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v4
         id: filter
         if: github.event_name != 'workflow_dispatch'
         with:
