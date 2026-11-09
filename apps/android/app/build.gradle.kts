@@ -98,10 +98,15 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
-    // Stage 5 (§18.4.1): QR RENDERING ONLY (pure-Java encoder, no camera, no
-    // permission). Scanning on this pilot is the honest manual fallback — the
-    // payload text + six-digit code are typed/compared by the human.
+    // Stage 5 (§18.4.1-2): QR rendering AND decoding (pure Java, no Play
+    // services). Camera frames come from CameraX (#26); CAMERA is a runtime
+    // permission requested only when the user taps "Scan QR".
     implementation("com.google.zxing:core:3.5.4")
+    val cameraxVersion = "1.4.1"
+    implementation("androidx.camera:camera-camera2:$cameraxVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+    implementation("androidx.camera:camera-view:$cameraxVersion")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
 
     // JVM unit tests (the zombie-isolation guard test; runs via
     // gradlew :app:testDebugUnitTest in CI).

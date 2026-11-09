@@ -23,9 +23,10 @@
  *                    destination's decision in round 2.
  *
  * Labels (§2 law): loopback join → OBSERVED (LOCAL); a join over the LAN to
- * a real second device → PHYSICAL. Camera scanning is NOT implemented in
- * this pilot (honest fallback: the human reads the QR payload text / the
- * six-digit code); no platform is "supported" (§30 unrun).
+ * a real second device → PHYSICAL. The source may scan the QR with the
+ * camera (PairingScreen, #26; TARGET until a device run) or type/paste it;
+ * either way the payload reaches joinDestination as text and the ENGINE
+ * parses it here (fail closed); no platform is "supported" (§30 unrun).
  *
  * Secrets law (EVD-006/§22.3): the transcript the flows emit contains device
  * names, pins (public fingerprints), the code, and the verification string —
