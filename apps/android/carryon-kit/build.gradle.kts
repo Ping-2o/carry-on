@@ -12,12 +12,15 @@
  *
  * Claim labels (spec §2): the AAR is IMPLEMENTED (builds); the engine calls it
  * wraps are OBSERVED on a device (instrumented tests) and the same contract
- * scenarios run on the host JVM against a desktop shim (contract tests). No
- * signed release artifact (PLAT-006 out of scope).
+ * scenarios run on the host JVM against a desktop shim (contract tests).
+ * Maven publication + PGP signing are wired for the SDK release workflow
+ * (#22, docs/SDK-VERSIONING.md); nothing has been published from it yet.
  */
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
+    id("maven-publish")
+    id("signing")
 }
 
 // SDK version follows the engine ABI major.minor (plan.md stage 9): ABI 1.3 →
@@ -53,7 +56,7 @@ android {
         consumerProguardFiles("consumer-rules.pro")
         // ABI metadata in the merged manifest (consumers can read it).
         manifestPlaceholders["carryonAbiMajor"] = "1"
-        manifestPlaceholders["carryonAbiMinor"] = "2"
+        manifestPlaceholders["carryonAbiMinor"] = "3"
     }
 
     externalNativeBuild {
@@ -96,6 +99,14 @@ android {
         }
     }
 
+    // Maven publication of the release AAR (#22). The sources jar ships with
+    // it; a Javadoc jar is not produced yet (Dokka is not wired).
+    publishing {
+        singleVariant("release") {
+            withSourcesJar()
+        }
+    }
+
     // ---- host-JVM contract tests ------------------------------------------
     // The SAME contract scenarios as the Swift SDK run on the host JVM against
     // a desktop JNI shim (Scripts/build_desktop_shim.sh). The engine + shim are
@@ -103,6 +114,68 @@ android {
     // engine-level tests skip (pure-logic tests still run everywhere).
     testOptions {
         unitTests.isReturnDefaultValues = false
+    }
+}
+
+// ---- Maven publication (#22, docs/SDK-VERSIONING.md) -----------------------
+// dev.carryon:carryon-kit:<version>. Always publishable to a local staging repo
+// (build/staging-repo) so CI can attach it to a GitHub Release; GitHub Packages
+// only when the SDK release workflow hands over credentials. PGP-signed only
+// when CARRYON_SIGNING_KEY is set, so local and PR builds are unchanged.
+publishing {
+    publications {
+        register<MavenPublication>("release") {
+            groupId = "dev.carryon"
+            artifactId = "carryon-kit"
+            version = project.version.toString()
+            afterEvaluate {
+                from(components["release"])
+            }
+            pom {
+                name.set("Carry-On Kit")
+                description.set("Android SDK (AAR) over the Carry-On engine C ABI, append-only within major 1.")
+                url.set("https://github.com/Ping-2o/carry-on")
+                licenses {
+                    license {
+                        name.set("MIT")
+                        url.set("https://opensource.org/licenses/MIT")
+                    }
+                    license {
+                        name.set("Apache-2.0")
+                        url.set("https://www.apache.org/licenses/LICENSE-2.0")
+                    }
+                }
+                scm {
+                    url.set("https://github.com/Ping-2o/carry-on")
+                    connection.set("scm:git:https://github.com/Ping-2o/carry-on.git")
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = "staging"
+            url = uri(layout.buildDirectory.dir("staging-repo"))
+        }
+        val ghPackagesToken = System.getenv("CARRYON_GH_PACKAGES_TOKEN")
+        if (!ghPackagesToken.isNullOrBlank()) {
+            maven {
+                name = "GitHubPackages"
+                url = uri("https://maven.pkg.github.com/Ping-2o/carry-on")
+                credentials {
+                    username = System.getenv("CARRYON_GH_PACKAGES_USER")
+                    password = ghPackagesToken
+                }
+            }
+        }
+    }
+}
+
+signing {
+    val signingKey = System.getenv("CARRYON_SIGNING_KEY")
+    if (!signingKey.isNullOrBlank()) {
+        useInMemoryPgpKeys(signingKey, System.getenv("CARRYON_SIGNING_PASSWORD"))
+        sign(publishing.publications)
     }
 }
 
