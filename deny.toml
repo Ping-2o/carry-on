@@ -15,7 +15,8 @@ ignore = []
 # Every license here is compatible with shipping the engine as
 # MIT OR Apache-2.0. Copyleft (GPL / LGPL / AGPL) is NOT allowed in the Rust
 # graph. The GPL-2.0 libzim used by Kiwix builds is a C++ library linked
-# outside Cargo; see the License section of the README.
+# outside Cargo (cargo-deny cannot see it); see the License section of the
+# README and docs/kiwix-bridge/LICENSING.md.
 allow = [
   "MIT",
   "MIT-0",
