@@ -1,0 +1,288 @@
+# SDK release: CarryOnKit (Swift) + carryon-kit (Android AAR) (issue #22).
+#
+# Tags: sdk-vX.Y.Z (app releases use v* in release.yml; the namespaces never
+# overlap). Manual runs build everything but publish nothing.
+#
+# Fail closed: the abi-gate job refuses to build when the SDK version does not
+# follow the engine ABI (docs/SDK-VERSIONING.md) or the tag does not match it.
+# The draft GitHub Release is created only for a tag AND a PGP-signed AAR.
+# GitHub Packages publishing is opt-in (repository variable
+# SDK_PUBLISH_GITHUB_PACKAGES == 'true').
+#
+# Labels law (spec section 2): building the artifacts is not "a sample app on a
+# real device"; that item stays open until it is run and recorded as evidence.
+# The Kiwix backend is never enabled here (docs/kiwix-bridge/LICENSING.md).
+
+name: SDK release
+
+on:
+  push:
+    tags: ["sdk-v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: sdk-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  NDK_VERSION: "27.2.12479018"
+
+jobs:
+  abi-gate:
+    name: SDK version follows the ABI
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      abi: ${{ steps.v.outputs.abi }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check every version source (fail closed)
+        id: v
+        run: |
+          set -e
+          H=crates/carryon-ffi/include/carryon.h
+          MAJOR="$(awk '/^#define CARRYON_ABI_MAJOR/ { gsub("u", "", $3); print $3 }' "$H")"
+          MINOR="$(awk '/^#define CARRYON_ABI_MINOR/ { gsub("u", "", $3); print $3 }' "$H")"
+          KIT="$(awk -F'"' '/^version = / { print $2 }' apps/android/carryon-kit/build.gradle.kts)"
+          SWIFT="$(awk -F'"' '/public static let version = / { print $2 }' sdk/swift/Sources/CarryOnKit/KitVersion.swift)"
+          MANIFEST="$(awk -F'"' '/dev.carryon.kit.SDK_VERSION/ { getline; print $2 }' apps/android/carryon-kit/src/main/AndroidManifest.xml)"
+          MANIFEST_MINOR="$(awk -F'"' '/dev.carryon.kit.ABI_MINOR/ { getline; print $2 }' apps/android/carryon-kit/src/main/AndroidManifest.xml)"
+          echo "ABI $MAJOR.$MINOR | kit $KIT | swift $SWIFT | manifest $MANIFEST (ABI minor $MANIFEST_MINOR)"
+          fail() { echo "::error::$1"; exit 1; }
+          [ -n "$MAJOR" ] && [ -n "$MINOR" ] || fail "could not read the ABI version from $H"
+          [ -n "$KIT" ] || fail "could not read the carryon-kit version"
+          [ "$KIT" = "$SWIFT" ] && [ "$KIT" = "$MANIFEST" ] || fail "SDK versions disagree: kit=$KIT swift=$SWIFT manifest=$MANIFEST"
+          [ "$MANIFEST_MINOR" = "$MINOR" ] || fail "manifest ABI_MINOR=$MANIFEST_MINOR but carryon.h says $MINOR"
+          case "$KIT" in
+            "$MAJOR.$MINOR."*) ;;
+            *) fail "SDK $KIT does not follow ABI $MAJOR.$MINOR" ;;
+          esac
+          case "$GITHUB_REF" in
+            refs/tags/sdk-v*)
+              [ "${GITHUB_REF_NAME#sdk-v}" = "$KIT" ] || fail "tag $GITHUB_REF_NAME does not match SDK $KIT"
+              ;;
+          esac
+          echo "version=$KIT" >> "$GITHUB_OUTPUT"
+          echo "abi=$MAJOR.$MINOR" >> "$GITHUB_OUTPUT"
+
+  swift:
+    name: Swift package (prebuilt engine + checksum)
+    needs: abi-gate
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/carryon-target
+      V: ${{ needs.abi-gate.outputs.version }}
+      ABI: ${{ needs.abi-gate.outputs.abi }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build the static engine + xcframework (default engine, no Kiwix)
+        run: sdk/swift/Scripts/build_engine_static.sh
+      - name: SDK sources still match the app
+        run: sdk/swift/Scripts/sync_from_app.sh --check
+      - name: Zip the engine + compute the SwiftPM checksum
+        run: |
+          set -e
+          mkdir -p dist
+          ZIP="CarryOnEngine-$V.xcframework.zip"
+          (cd sdk/swift/Vendor && ditto -c -k --keepParent CarryOnEngine.xcframework "$GITHUB_WORKSPACE/dist/$ZIP")
+          SUM="$(cd sdk/swift && swift package compute-checksum "$GITHUB_WORKSPACE/dist/$ZIP")"
+          [ -n "$SUM" ] || { echo "::error::empty checksum"; exit 1; }
+          echo "$SUM  $ZIP" > "dist/$ZIP.checksum"
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+          echo "SUM=$SUM" >> "$GITHUB_ENV"
+      - name: Assemble + build the SwiftPM distribution tree
+        run: |
+          set -e
+          TREE="$RUNNER_TEMP/CarryOnKit"
+          rm -rf "$TREE"
+          mkdir -p "$TREE/Sources"
+          cp -R sdk/swift/Sources/CCarryon sdk/swift/Sources/CarryOnKit "$TREE/Sources/"
+          cp LICENSE-MIT LICENSE-APACHE "$TREE/"
+          URL="https://github.com/$GITHUB_REPOSITORY/releases/download/sdk-v$V/$ZIP"
+          write_manifest() {
+          cat > "$TREE/Package.swift" <<EOF
+          // swift-tools-version:5.9
+          // CarryOnKit $V (engine ABI $ABI, append-only within major 1).
+          // Distribution manifest generated by .github/workflows/sdk-release.yml.
+          // The engine is a prebuilt static archive; SwiftPM verifies its checksum.
+          import PackageDescription
+
+          let package = Package(
+              name: "CarryOnKit",
+              platforms: [.macOS(.v14)],
+              products: [
+                  .library(name: "CarryOnKit", targets: ["CarryOnKit"]),
+              ],
+              targets: [
+                  $1,
+                  .target(
+                      name: "CCarryon",
+                      dependencies: ["CarryOnEngine"],
+                      publicHeadersPath: "include",
+                      linkerSettings: [
+                          .linkedFramework("Security"),
+                          .linkedFramework("CoreFoundation"),
+                          .linkedLibrary("resolv"),
+                      ]
+                  ),
+                  .target(name: "CarryOnKit", dependencies: ["CCarryon"]),
+              ]
+          )
+          EOF
+          }
+          # 1) Prove the trimmed tree builds against the archive we just zipped.
+          cp -R sdk/swift/Vendor/CarryOnEngine.xcframework "$TREE/"
+          write_manifest '.binaryTarget(name: "CarryOnEngine", path: "CarryOnEngine.xcframework")'
+          swift build --package-path "$TREE"
+          rm -rf "$TREE/CarryOnEngine.xcframework" "$TREE/.build"
+          # 2) The shipped manifest: remote archive pinned by checksum.
+          write_manifest ".binaryTarget(name: \"CarryOnEngine\", url: \"$URL\", checksum: \"$SUM\")"
+          cp "$TREE/Package.swift" "dist/Package-$V.swift"
+          (cd "$RUNNER_TEMP" && ditto -c -k --keepParent CarryOnKit "$GITHUB_WORKSPACE/dist/CarryOnKit-$V-spm.zip")
+          (cd dist && shasum -a 256 ./*.zip > SHA256SUMS-swift.txt)
+          cat dist/SHA256SUMS-swift.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdk-swift
+          path: dist/
+          retention-days: 14
+
+  android:
+    name: Android AAR (Maven, PGP-signed)
+    needs: abi-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      signed: ${{ steps.secrets.outputs.signed }}
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+      V: ${{ needs.abi-gate.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Signing secrets present?
+        id: secrets
+        env:
+          KEY: ${{ secrets.SDK_PGP_PRIVATE_KEY }}
+          PW: ${{ secrets.SDK_PGP_PASSPHRASE }}
+        run: |
+          if [ -n "$KEY" ] && [ -n "$PW" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SDK PGP secrets are not set: building an UNSIGNED Maven repo, nothing will be published."
+          fi
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v6
+      - name: NDK cache (keyed by version, shared with ci.yml)
+        uses: actions/cache@v6
+        with:
+          path: ~/ndk-cache.tgz
+          key: android-ndk-${{ env.NDK_VERSION }}
+      - name: Install NDK + SDK components (same procedure as ci.yml)
+        run: |
+          set -e
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKM" ]; then
+            cd "$RUNNER_TEMP"
+            curl -sS -o cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            unzip -q cmdtools.zip -d cmdtools-tmp
+            mkdir -p "$ANDROID_HOME/cmdline-tools"
+            mv cmdtools-tmp/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
+            cd "$GITHUB_WORKSPACE"
+          fi
+          if [ -f "$HOME/ndk-cache.tgz" ]; then
+            mkdir -p "$ANDROID_HOME/ndk"
+            tar -xzf "$HOME/ndk-cache.tgz" -C "$ANDROID_HOME/ndk"
+          elif [ ! -d "$ANDROID_HOME/ndk/$NDK_VERSION" ]; then
+            yes | "$SDKM" --install "ndk;$NDK_VERSION" > /dev/null
+            tar -czf "$HOME/ndk-cache.tgz" -C "$ANDROID_HOME/ndk" "$NDK_VERSION"
+          fi
+          yes | "$SDKM" --install "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" > /dev/null
+      - name: Cross-compile + fetch the engine .so (default engine, no Kiwix)
+        run: apps/android/Scripts/fetch_engine_lib.sh
+        env:
+          NDK: /usr/local/lib/android/sdk/ndk/${{ env.NDK_VERSION }}
+          WORK: ${{ github.workspace }}
+      - name: Test + publish to the staging repo
+        working-directory: apps/android
+        env:
+          CARRYON_SIGNING_KEY: ${{ secrets.SDK_PGP_PRIVATE_KEY }}
+          CARRYON_SIGNING_PASSWORD: ${{ secrets.SDK_PGP_PASSPHRASE }}
+        run: ./gradlew :carryon-kit:testDebugUnitTest :carryon-kit:publishReleasePublicationToStagingRepository --no-daemon
+      - name: Signatures present when signed (fail closed)
+        if: steps.secrets.outputs.signed == 'true'
+        run: |
+          set -e
+          D="apps/android/carryon-kit/build/staging-repo/dev/carryon/carryon-kit/$V"
+          for f in "carryon-kit-$V.aar" "carryon-kit-$V.pom" "carryon-kit-$V-sources.jar"; do
+            [ -f "$D/$f.asc" ] || { echo "::error::missing signature $D/$f.asc"; exit 1; }
+          done
+      - name: Collect artifacts + checksums
+        env:
+          SIGNED: ${{ steps.secrets.outputs.signed }}
+        run: |
+          set -e
+          SUFFIX=""
+          if [ "$SIGNED" != "true" ]; then SUFFIX="-unsigned"; fi
+          mkdir -p dist
+          REPO_DIR=apps/android/carryon-kit/build/staging-repo
+          cp "$REPO_DIR/dev/carryon/carryon-kit/$V/carryon-kit-$V.aar" "dist/carryon-kit-$V$SUFFIX.aar"
+          (cd "$REPO_DIR" && zip -qr "$GITHUB_WORKSPACE/dist/carryon-kit-$V-maven-repo$SUFFIX.zip" .)
+          (cd dist && sha256sum ./*.aar ./*.zip > SHA256SUMS-android.txt)
+          cat dist/SHA256SUMS-android.txt
+      - name: Publish to GitHub Packages (opt-in)
+        if: startsWith(github.ref, 'refs/tags/sdk-v') && steps.secrets.outputs.signed == 'true' && vars.SDK_PUBLISH_GITHUB_PACKAGES == 'true'
+        working-directory: apps/android
+        env:
+          CARRYON_SIGNING_KEY: ${{ secrets.SDK_PGP_PRIVATE_KEY }}
+          CARRYON_SIGNING_PASSWORD: ${{ secrets.SDK_PGP_PASSPHRASE }}
+          CARRYON_GH_PACKAGES_USER: ${{ github.actor }}
+          CARRYON_GH_PACKAGES_TOKEN: ${{ github.token }}
+        run: ./gradlew :carryon-kit:publishReleasePublicationToGitHubPackagesRepository --no-daemon
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdk-android
+          path: dist/
+          retention-days: 14
+
+  release:
+    name: Draft GitHub Release (signed AAR + Swift archive)
+    needs: [abi-gate, swift, android]
+    if: startsWith(github.ref, 'refs/tags/sdk-v') && needs.android.outputs.signed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      V: ${{ needs.abi-gate.outputs.version }}
+    steps:
+      - name: Download this run's artifacts
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --dir dist
+      - name: Refuse anything unsigned
+        run: |
+          if ls dist/*/*-unsigned* > /dev/null 2>&1; then
+            echo "error: unsigned artifact in a release run" >&2
+            exit 1
+          fi
+      - name: Create the draft release
+        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --generate-notes --title "Carry-On SDK $V" dist/*/*
