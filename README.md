@@ -137,10 +137,15 @@ Licensed under either of
 
 at your option, as declared in [`Cargo.toml`](Cargo.toml).
 
-**Third-party note:** engines built with the Kiwix backend statically link
-[libzim](https://github.com/openzim/libzim), which is licensed under GPL-2.0.
-Distributing such binaries is subject to the GPL's terms. The default engine and the
-CI builds do not include libzim.
+**Third-party note (Kiwix):** builds with the Kiwix backend link
+[libzim](https://github.com/openzim/libzim), which is licensed under GPL-2.0. That
+covers the Android engine built with `CARRYON_KIWIX=1` (static libzim inside
+`libcarryon_ffi.so`, so any APK that bundles it), the macOS `carryon_kiwix`
+companion driver, and `carryon-adapter-kiwix` built with its default `zim-backend`
+feature. Distributing such binaries is subject to the GPL's terms. The default
+engine, the CI builds and the SDKs do not include libzim. Full artifact list and
+the proposed release policy:
+[`docs/kiwix-bridge/LICENSING.md`](docs/kiwix-bridge/LICENSING.md).
 
 ### Contribution
 
