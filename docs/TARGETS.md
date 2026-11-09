@@ -1,7 +1,7 @@
 # Carry-On engineering targets
 
 Explicit, checkable engineering targets for the continuation engine, each with a claim
-label (per [`AGENTS.md`](../AGENTS.md) §2: `PROVED` / `IMPLEMENTED` / `OBSERVED` / `TARGET`
+label (per [the spec](../CROSS-PLATFORM-ENGINE-SPEC.md) §2: `PROVED` / `IMPLEMENTED` / `OBSERVED` / `TARGET`
 / `OPTIONAL` / `RESEARCH` / `UNSUPPORTED`) and a pointer to the evidence that supports it.
 Labels are law: none is upgraded without the evidence it requires. A loopback run on
 `127.0.0.1` is LOCAL evidence, not physical cross-device evidence; no platform is

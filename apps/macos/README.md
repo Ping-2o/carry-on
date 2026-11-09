@@ -65,7 +65,7 @@ open dist/CarryOn.app
 ```
 
 `build_engine.sh` defaults `CARGO_TARGET_DIR` to the repo's canonical external
-dir (AGENTS.md); override by exporting your own before calling.
+dir (see [Build notes](../../CONTRIBUTING.md#build-notes)); override by exporting your own before calling.
 
 ## What the demo does (stages 1–8)
 

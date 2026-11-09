@@ -657,7 +657,7 @@ fn run_strategy_as(cfg: &BenchConfig, strat: char) -> StrategyOutcome {
     }
 
     // Close the client session before joining so the serving thread's final `recv`
-    // returns (the device gotcha documented in AGENTS.md).
+    // returns (the loopback gotcha in CONTRIBUTING.md → Build notes).
     drop(s);
     src.join().unwrap();
     let _ = std::fs::remove_dir_all(&src_dir);

@@ -416,7 +416,7 @@ public actor DemoPipeline {
             log("listener", addr)
             log("tls", "1.3, mutual certificate pinning (§18.5)")
             // The client handshake needs the server: run connect + accept as a
-            // task-group pair (AGENTS.md loopback note).
+            // task-group pair (loopback note in CONTRIBUTING.md).
             var client: NetSession?
             var server: NetSession?
             try await withThrowingTaskGroup(of: (String, NetSession).self) { group in

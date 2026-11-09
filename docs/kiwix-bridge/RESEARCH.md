@@ -2,7 +2,7 @@
 
 Research date: 2026-10-28. All citations are to real files at the pinned commits
 below (clones under `/Volumes/ADATA ELITE SE880/compilation/`). Claim labels per
-`AGENTS.md` §2. Nothing here upgrades a label without a log.
+`CROSS-PLATFORM-ENGINE-SPEC.md` §2. Nothing here upgrades a label without a log.
 
 ## 0. Pinned sources
 
