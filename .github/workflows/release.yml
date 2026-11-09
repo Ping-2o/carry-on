@@ -1,0 +1,293 @@
+# Release: signed, distributable apps (PLAT-006, issue #21).
+#
+# Runs on v* tags (and by hand). Each platform job builds its release artifact
+# and signs it ONLY when that platform's secrets are present. Without secrets
+# the job still builds, uploads an UNSIGNED workflow artifact and reports
+# signed=false. Nothing is published then. The GitHub Release is created only
+# for a v* tag AND only when both platforms produced signed artifacts, as a
+# DRAFT for the owner to review (notes from .github/release.yml).
+#
+# Labels law (spec section 2): a green run here is not PLAT-006 evidence on its
+# own. The install check on a clean device / Mac is still required
+# (docs/RELEASING.md).
+#
+# The Kiwix backend is never enabled here (docs/kiwix-bridge/LICENSING.md):
+# release artifacts stay MIT OR Apache-2.0.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # Same NDK as ci.yml and ndkVersion in apps/android/app/build.gradle.kts.
+  NDK_VERSION: "27.2.12479018"
+
+jobs:
+  android:
+    name: Android release (APK + AAB)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    outputs:
+      signed: ${{ steps.secrets.outputs.signed }}
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+    steps:
+      - uses: actions/checkout@v7
+      - name: Signing secrets present?
+        id: secrets
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PW: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KS" ] && [ -n "$KS_PW" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PW" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Android signing secrets are not set: building an UNSIGNED artifact, nothing will be published."
+          fi
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v6
+      - name: NDK cache (keyed by version, shared with ci.yml)
+        uses: actions/cache@v6
+        with:
+          path: ~/ndk-cache.tgz
+          key: android-ndk-${{ env.NDK_VERSION }}
+      - name: Install NDK + SDK components (same procedure as ci.yml)
+        run: |
+          set -e
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKM" ]; then
+            cd "$RUNNER_TEMP"
+            curl -sS -o cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            unzip -q cmdtools.zip -d cmdtools-tmp
+            mkdir -p "$ANDROID_HOME/cmdline-tools"
+            mv cmdtools-tmp/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
+            cd "$GITHUB_WORKSPACE"
+          fi
+          if [ -f "$HOME/ndk-cache.tgz" ]; then
+            mkdir -p "$ANDROID_HOME/ndk"
+            tar -xzf "$HOME/ndk-cache.tgz" -C "$ANDROID_HOME/ndk"
+          elif [ ! -d "$ANDROID_HOME/ndk/$NDK_VERSION" ]; then
+            yes | "$SDKM" --install "ndk;$NDK_VERSION" > /dev/null
+            tar -czf "$HOME/ndk-cache.tgz" -C "$ANDROID_HOME/ndk" "$NDK_VERSION"
+          fi
+          yes | "$SDKM" --install "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" > /dev/null
+      - name: Cross-compile + fetch the engine .so (default engine, no Kiwix)
+        run: apps/android/Scripts/fetch_engine_lib.sh
+        env:
+          NDK: /usr/local/lib/android/sdk/ndk/${{ env.NDK_VERSION }}
+          WORK: ${{ github.workspace }}
+      - name: Decode the keystore (temp file, deleted at job end)
+        if: steps.secrets.outputs.signed == 'true'
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          umask 077
+          printf '%s' "$KS" | base64 --decode > "$RUNNER_TEMP/carryon-release.jks"
+          echo "CARRYON_KEYSTORE_FILE=$RUNNER_TEMP/carryon-release.jks" >> "$GITHUB_ENV"
+      - name: Build the release APK + AAB
+        working-directory: apps/android
+        env:
+          CARRYON_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          CARRYON_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          CARRYON_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew :app:assembleRelease :app:bundleRelease --no-daemon
+      - name: Verify the APK signature
+        if: steps.secrets.outputs.signed == 'true'
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs apps/android/app/build/outputs/apk/release/app-release.apk
+      - name: Collect artifacts + checksums
+        env:
+          SIGNED: ${{ steps.secrets.outputs.signed }}
+        run: |
+          set -e
+          VERSION="$(printf '%s' "${GITHUB_REF_NAME#v}" | tr '/' '-')"
+          SUFFIX=""
+          if [ "$SIGNED" != "true" ]; then SUFFIX="-unsigned"; fi
+          mkdir -p dist
+          if [ "$SIGNED" = "true" ]; then
+            cp apps/android/app/build/outputs/apk/release/app-release.apk "dist/carry-on-android-$VERSION.apk"
+          else
+            cp apps/android/app/build/outputs/apk/release/app-release-unsigned.apk "dist/carry-on-android-$VERSION$SUFFIX.apk"
+          fi
+          cp apps/android/app/build/outputs/bundle/release/app-release.aab "dist/carry-on-android-$VERSION$SUFFIX.aab"
+          (cd dist && sha256sum ./*.apk ./*.aab > SHA256SUMS-android.txt)
+          cat dist/SHA256SUMS-android.txt
+      - name: Delete the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/carryon-release.jks"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android-release
+          path: dist/
+          retention-days: 14
+
+  macos:
+    name: macOS release (Developer ID + notarized .dmg)
+    runs-on: macos-15
+    timeout-minutes: 60
+    outputs:
+      signed: ${{ steps.secrets.outputs.signed }}
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/carryon-target
+    steps:
+      - uses: actions/checkout@v7
+      - name: Signing secrets present?
+        id: secrets
+        env:
+          P12: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          P12_PW: ${{ secrets.MACOS_CERT_PASSWORD }}
+          IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          APP_PW: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          if [ -n "$P12" ] && [ -n "$P12_PW" ] && [ -n "$IDENTITY" ] && [ -n "$APPLE_ID" ] && [ -n "$TEAM" ] && [ -n "$APP_PW" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::macOS signing/notarization secrets are not set: building an ad-hoc (LOCAL-ONLY) artifact, nothing will be published."
+          fi
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build + vendor the engine dylib
+        run: apps/macos/Scripts/build_engine.sh
+      - name: Assemble the bundle (ad-hoc signed + headless smoke)
+        run: apps/macos/Scripts/make_app.sh
+      - name: Stamp the version from the tag
+        run: |
+          set -e
+          PLIST=apps/macos/dist/CarryOn.app/Contents/Info.plist
+          case "$GITHUB_REF" in
+            refs/tags/v*)
+              VERSION="${GITHUB_REF_NAME#v}"
+              SHORT="${VERSION%%-*}"
+              /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $SHORT" "$PLIST"
+              /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $GITHUB_RUN_NUMBER" "$PLIST"
+              ;;
+          esac
+          /usr/libexec/PlistBuddy -c "Set :NSHumanReadableCopyright Copyright © 2026 Carry-On contributors." "$PLIST"
+      - name: Import the Developer ID certificate (temporary keychain)
+        if: steps.secrets.outputs.signed == 'true'
+        env:
+          P12: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          P12_PW: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          set -e
+          KEYCHAIN="$RUNNER_TEMP/carryon-signing.keychain-db"
+          KEYCHAIN_PW="$(openssl rand -hex 24)"
+          umask 077
+          printf '%s' "$P12" | base64 --decode > "$RUNNER_TEMP/carryon-cert.p12"
+          security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/carryon-cert.p12" -P "$P12_PW" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PW" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/carryon-cert.p12"
+      - name: Sign (Developer ID, hardened runtime) or re-sign ad-hoc
+        env:
+          SIGNED: ${{ steps.secrets.outputs.signed }}
+          IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: |
+          set -e
+          APP=apps/macos/dist/CarryOn.app
+          if [ "$SIGNED" = "true" ]; then
+            codesign --force --timestamp --options runtime --sign "$IDENTITY" "$APP/Contents/Frameworks/libcarryon_ffi.dylib"
+            codesign --force --timestamp --options runtime --sign "$IDENTITY" "$APP"
+          else
+            codesign --force --sign - "$APP/Contents/Frameworks/libcarryon_ffi.dylib"
+            codesign --force --sign - "$APP"
+          fi
+          codesign --verify --strict --deep --verbose=2 "$APP"
+      - name: Notarize + staple the app
+        if: steps.secrets.outputs.signed == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          APP_PW: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -e
+          APP=apps/macos/dist/CarryOn.app
+          ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/CarryOn.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/CarryOn.zip" --apple-id "$APPLE_ID" --team-id "$TEAM" --password "$APP_PW" --wait --output-format json > "$RUNNER_TEMP/notary-app.json"
+          python3 -c 'import json,sys; s=json.load(open(sys.argv[1]))["status"]; print("notary:", s); sys.exit(0 if s == "Accepted" else 1)' "$RUNNER_TEMP/notary-app.json"
+          xcrun stapler staple "$APP"
+          spctl --assess --type execute --verbose "$APP"
+      - name: Build the .dmg (+ sign, notarize, staple when signed)
+        env:
+          SIGNED: ${{ steps.secrets.outputs.signed }}
+          IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          APP_PW: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -e
+          VERSION="$(printf '%s' "${GITHUB_REF_NAME#v}" | tr '/' '-')"
+          SUFFIX=""
+          if [ "$SIGNED" != "true" ]; then SUFFIX="-unsigned"; fi
+          mkdir -p dist
+          DMG="dist/carry-on-macos-$VERSION$SUFFIX.dmg"
+          hdiutil create -volname "Carry-On" -srcfolder apps/macos/dist/CarryOn.app -ov -format UDZO "$DMG"
+          if [ "$SIGNED" = "true" ]; then
+            codesign --force --timestamp --sign "$IDENTITY" "$DMG"
+            xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --team-id "$TEAM" --password "$APP_PW" --wait --output-format json > "$RUNNER_TEMP/notary-dmg.json"
+            python3 -c 'import json,sys; s=json.load(open(sys.argv[1]))["status"]; print("notary:", s); sys.exit(0 if s == "Accepted" else 1)' "$RUNNER_TEMP/notary-dmg.json"
+            xcrun stapler staple "$DMG"
+            spctl --assess --type open --context context:primary-signature --verbose "$DMG"
+          fi
+          (cd dist && shasum -a 256 ./*.dmg > SHA256SUMS-macos.txt)
+          cat dist/SHA256SUMS-macos.txt
+      - name: Delete the temporary keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/carryon-signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/carryon-cert.p12"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos-release
+          path: dist/
+          retention-days: 14
+
+  release:
+    name: Draft GitHub Release (signed artifacts only)
+    needs: [android, macos]
+    if: startsWith(github.ref, 'refs/tags/v') && needs.android.outputs.signed == 'true' && needs.macos.outputs.signed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download this run's artifacts
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --dir dist
+      - name: Refuse anything unsigned
+        run: |
+          if ls dist/*/*-unsigned.* > /dev/null 2>&1; then
+            echo "error: unsigned artifact in a release run" >&2
+            exit 1
+          fi
+      - name: Create the draft release (notes from .github/release.yml)
+        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --generate-notes --title "Carry-On $GITHUB_REF_NAME" dist/*/*

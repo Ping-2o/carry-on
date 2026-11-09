@@ -6,8 +6,10 @@
  * it as a normal project dependency — the same AAR a third-party customer
  * would. The app owns no C ABI code anymore.
  *
- * Labels (spec §2): build-ready TARGET; demo OBSERVED (LOCAL); no signing
- * (PLAT-006). See README.md for the honest claim table.
+ * Labels (spec §2): build-ready TARGET; demo OBSERVED (LOCAL). Release signing
+ * is wired only for the release workflow (#21, docs/RELEASING.md); PLAT-006
+ * stays unproven until a signed build installs on a clean device. See
+ * README.md for the honest claim table.
  */
 plugins {
     id("com.android.application")
@@ -41,8 +43,26 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Release signing (#21, docs/RELEASING.md). Configured ONLY when the release
+    // workflow hands over a keystore through the environment; local and PR
+    // builds stay unsigned exactly as before. Secrets never live in the repo.
+    val releaseKeystore = System.getenv("CARRYON_KEYSTORE_FILE")
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("CARRYON_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("CARRYON_KEY_ALIAS")
+                keyPassword = System.getenv("CARRYON_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (releaseKeystore != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
