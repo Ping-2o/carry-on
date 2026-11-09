@@ -1,16 +1,21 @@
 /*
  * PairingScreen.kt — the stage-5 PIN/QR pairing UI (spec §18.4):
- * destination arm (QR + six-digit code), source join (payload paste / typed
- * code — the honest fallback: NO camera scanner in this pilot), verification
- * string confirmation on both sides, and the §18.4.9 revoke UX.
+ * destination arm (QR + six-digit code), source join (camera QR scan, #26,
+ * or payload paste / typed code as the fallback), verification string
+ * confirmation on both sides, and the §18.4.9 revoke UX.
  *
  * Labels (§2 law): the run's evidence class derives from the address the
- * source dials (loopback = LOCAL; LAN = PHYSICAL). Camera scan not
- * implemented — manual entry of the short code/payload IS the §18.4.2
- * "enters pairing data" path, honestly labeled.
+ * source dials (loopback = LOCAL; LAN = PHYSICAL). The camera scan is TARGET
+ * until a device run is recorded. A scanned code is only a candidate: the
+ * engine parses it (fail closed) and the join then takes exactly the
+ * pasted-text path. CAMERA is requested only when the user taps "Scan QR".
  */
 package com.carryon.app.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -37,16 +42,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.unit.dp
 import com.carryon.app.pairing.PairingArmed
 import com.carryon.app.pairing.PairingFlow
 import com.carryon.app.pairing.PairingState
+import com.carryon.app.pairing.QrScanGate
+import com.carryon.app.pairing.QrScanResult
 import com.carryon.app.ui.AppGraph
 import com.carryon.app.ui.components.AsciiBox
 import com.carryon.app.ui.components.AsciiRule
 import com.carryon.app.ui.theme.ConsoleTextStyle
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
+import dev.carryon.kit.pairingPayloadParse
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 
@@ -100,8 +110,37 @@ fun PairingScreen() {
     var srcAddr by remember { mutableStateOf("") }
     var srcCode by remember { mutableStateOf("") }
     var srcPayload by remember { mutableStateOf("") }
+    var scanning by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     fun log(s: String) { events = (events + s).takeLast(30) }
+
+    // §18.4.2 camera path (#26): the scanned text is a CANDIDATE only. The
+    // engine parses it (fail closed), the fields are prefilled for review, and
+    // "Connect & pair" then takes exactly the pasted-text path (pinned connect).
+    fun acceptScan(raw: String) {
+        when (val screened = QrScanGate.screen(raw)) {
+            is QrScanResult.Rejected -> log("scan rejected: ${screened.why} (fail closed, nothing filled)")
+            is QrScanResult.Candidate -> try {
+                val p = pairingPayloadParse(screened.payload)
+                srcPayload = screened.payload
+                srcAddr = p.addr
+                srcCode = p.code
+                log("scanned ${p.deviceName} @ ${p.addr}: engine-validated; check it, then Connect & pair")
+            } catch (e: Exception) {
+                srcPayload = ""
+                log("scanned code refused by the engine (${e.message}): fail closed, nothing filled")
+            }
+        }
+    }
+
+    val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            scanning = true
+        } else {
+            log("camera permission denied: type the code or paste the payload instead")
+        }
+    }
 
     Column(
         modifier = Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
@@ -111,7 +150,7 @@ fun PairingScreen() {
         Text(
             "QR + six-digit code on the destination; the source enters/pastes pairing data.\n" +
                 "Both screens must show the SAME verification string — confirm on BOTH.\n" +
-                "DISCLOSURE: pilot UI; camera scan NOT implemented (manual entry is the honest fallback);\n" +
+                "DISCLOSURE: pilot UI; camera scan is TARGET (no device run recorded), typing/pasting stays as the fallback;\n" +
                 "no platform is supported (§30 unrun).",
             style = ConsoleTextStyle,
             color = MaterialTheme.colorScheme.secondary,
@@ -195,10 +234,30 @@ fun PairingScreen() {
 
         // ---- source ----
         if (role == "source") {
-            AsciiBox(title = "SOURCE — ENTER PAIRING DATA", lines = listOf(
-                "type the destination's address + six-digit code,",
-                "and (QR path) paste its payload text if you can copy it.",
+            AsciiBox(title = "SOURCE — SCAN OR ENTER PAIRING DATA", lines = listOf(
+                "scan the destination's QR with the camera, or type its",
+                "address + six-digit code (and paste the payload text if you can).",
             ))
+            if (scanning) {
+                QrScannerView(
+                    onScanned = { text ->
+                        scanning = false
+                        acceptScan(text)
+                    },
+                    onError = { why ->
+                        scanning = false
+                        log("camera unavailable: $why (type or paste instead)")
+                    },
+                    modifier = Modifier.size(280.dp),
+                )
+                TextButton(onClick = { scanning = false }) { Text("Stop scanning") }
+            } else {
+                OutlinedButton(onClick = {
+                    val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                        PackageManager.PERMISSION_GRANTED
+                    if (granted) scanning = true else cameraPermission.launch(Manifest.permission.CAMERA)
+                }) { Text("Scan QR (camera)") }
+            }
             OutlinedTextField(
                 value = srcAddr,
                 onValueChange = { srcAddr = it },
