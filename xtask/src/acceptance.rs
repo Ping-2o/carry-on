@@ -993,7 +993,7 @@ fn checklist(scenarios: &[ScenarioResult]) -> Vec<CheckRow> {
         pass("Correctness", "authority ambiguity blocks conflicting writes", format!("{} (AUTH-004)", s("S4"))),
         pass("Correctness", "interrupted operations are not counted as successes", format!("{}, {}", s("S2"), s("S3"))),
         // ---- §30 Evidence ----
-        pass("Evidence", "reproducible build and test instructions exist", "AGENTS.md green gate; this harness: cargo run -p xtask -- acceptance"),
+        pass("Evidence", "reproducible build and test instructions exist", "CONTRIBUTING.md green gate (= CI); this harness: cargo run -p xtask -- acceptance"),
         pass("Evidence", "physical cross-platform runs produce independently verifiable bundles", "stages 3/5 PHYSICAL bundles (evidence/20261107-a04-demo, 20261108-a04-l0l1, 20261108-a04-pairing); S8 proves bundle verification"),
         pass("Evidence", "performance includes overhead and losing cases", "xtask bench (mean/p95/CI, lose/tie/win) + bench-aggregate (Mac→A04 campaign)"),
         pass("Evidence", "claims distinguish local, simulated, physical, externally reviewed evidence", "labels are law in this report: executable = LOCAL; PHYSICAL pointers named; externally reviewed = none yet (see deferred security review)"),

@@ -346,7 +346,7 @@ class Core private constructor(internal val handle: Long) : Closeable {
         requireOut(CarryOnFfi.executeAction(handle, cutJson, actionReqJson))
 
     /** Continue an imported (mirror) session: the adapter id is DATA naming a
-     *  compiled-in adapter (§3.8/§7.4), here `imported` per AGENTS.md. */
+     *  compiled-in adapter (§3.8/§7.4), here `imported` (the mirror-session adapter id). */
     fun executeActionAs(
         cutJson: String, actionReqJson: String, adapterId: String
     ): String = requireOut(CarryOnFfi.executeActionAs(handle, cutJson, actionReqJson, adapterId))
@@ -715,7 +715,7 @@ fun pairDevices(a: Identity, b: Identity, utc: String): PairingResult {
     )
 }
 
-/** Deterministic mirror session id for an imported session (AGENTS.md: adapter id
+/** Deterministic mirror session id for an imported session (adapter id
  *  `imported`; use execute_action_as to continue). */
 fun mirrorSessionId(remoteSession: String): String =
     requireOut(CarryOnFfi.mirrorSessionId(remoteSession))

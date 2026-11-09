@@ -66,6 +66,20 @@ App and SDK builds are described under "Build and verify" in the README. CI buil
 the macOS app with the demo smoke, the Android app with the `carryon-kit` AAR, and
 the Swift SDK on every PR.
 
+## Build notes
+
+- **One `CARGO_TARGET_DIR` per checkout.** Never share a target dir between
+  worktrees or clones: a shared dir once leaked a stale `carryon-core` rmeta from
+  one branch into another branch's build (2026-10-29, see `docs/FRONTIER.md`). The
+  app and SDK build scripts default to the maintainer's external-storage dir;
+  export your own `CARGO_TARGET_DIR` to override it.
+- **`cargo` outside a login shell.** The scripts fall back to `~/.cargo/bin`
+  (the rustup default) when `cargo` is not on `PATH`, for example inside Xcode or
+  Gradle builds.
+- **Loopback TLS.** The client handshake needs the server: run connect and accept
+  concurrently (a task-group pair or two threads), and close the client session
+  before joining the serving thread so its final `recv` returns.
+
 ## Engine rules of thumb
 
 - **The C ABI is append-only.** Never change or remove an existing symbol or struct

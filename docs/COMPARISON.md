@@ -4,7 +4,7 @@ Carry-On is a **cooperative cross-platform continuation engine**: you begin supp
 on one device and continue a *declared, typed action* on another. It is deliberately **not**
 process/memory migration and **not** a way to run foreign application binaries — an
 application is supported only through files, standard activation, or an explicit typed
-adapter (see [`AGENTS.md`](../AGENTS.md) and the spec).
+adapter (see the [spec](../CROSS-PLATFORM-ENGINE-SPEC.md) and [`CONTRIBUTING.md`](../CONTRIBUTING.md)).
 
 This table compares Carry-On with the common alternatives. Every Carry-On claim is tied to
 a spec section / requirement id or a measured result; see [`TARGETS.md`](TARGETS.md) for the

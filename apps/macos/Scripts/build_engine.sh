@@ -4,7 +4,7 @@
 #
 #   Scripts/build_engine.sh
 #
-# - Honors the repo law (AGENTS.md): heavy builds go on external storage via
+# - Honors the build notes (CONTRIBUTING.md): heavy builds go on external storage via
 #   CARGO_TARGET_DIR (defaulted here to the repo's canonical external dir).
 # - The dylib's install name is rewritten to @rpath/libcarryon_ffi.dylib so the
 #   app bundle (Contents/Frameworks) and dev builds (absolute Vendor rpath) both
@@ -16,12 +16,12 @@ set -eu
 app_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_root="$(cd "$app_dir/../.." && pwd)"
 
-# cargo may live in ~/.cargo/bin (hosted-env note in AGENTS.md).
+# cargo may live in ~/.cargo/bin (see CONTRIBUTING.md, "Build notes").
 if ! command -v cargo >/dev/null 2>&1 && [ -x "$HOME/.cargo/bin/cargo" ]; then
     export PATH="$HOME/.cargo/bin:$PATH"
 fi
 
-# Repo canonical external target dir (AGENTS.md); override by exporting your own.
+# Repo canonical external target dir (CONTRIBUTING.md); override by exporting your own.
 : "${CARGO_TARGET_DIR:=/Volumes/ADATA ELITE SE880/compilation/target}"
 export CARGO_TARGET_DIR
 

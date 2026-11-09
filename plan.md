@@ -199,7 +199,7 @@ apps/README.md                   # overview + §2 claim table (Agent C)
 apps/macos/**                    # Agent A (see macOS specifics)
 apps/android/**                  # Agent B (see Android specifics)
 docs/FRONTIER.md                 # Phase-4 pilot note (Agent C)
-AGENTS.md                        # apps pointer in workspace layout (Agent C)
+CONTRIBUTING.md                  # apps pointer in workspace layout (Agent C; originally the private maintainer notes)
 ```
 
 ## Verification (final gate, orchestrated)
