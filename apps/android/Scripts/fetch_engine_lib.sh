@@ -16,7 +16,7 @@
 #   NDK        — Android NDK root (default: the machine's external-storage NDK r27c).
 #   WORK       — heavy build/output dir (default: same external dir as the shells).
 #                NEVER share a CARGO_TARGET_DIR across worktrees/checkouts (see
-#                AGENTS.md: shared dirs caused a real incident 2026-10-29).
+#                CONTRIBUTING.md: shared dirs caused a real incident 2026-10-29).
 #   CARGO_TARGET_DIR — exact target dir override (worktree-specific dirs:
 #                .../target-kiwix, .../target-artcraft). Defaults to $WORK/target.
 #   REPO       — this repository's root (default: computed from this script's path).
