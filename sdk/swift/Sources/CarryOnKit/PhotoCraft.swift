@@ -17,6 +17,11 @@
  * channels and loopback TLS on one machine. A second Mac is not involved, so
  * nothing is PHYSICAL and no platform becomes "supported" (§30 unrun).
  *
+ * AUTHORITY (#24, L4 §21.2): the pane shows who holds single-writer authority
+ * and offers an explicit hand-over (the engine's serve/request authority
+ * transfer on one more hop). Carry-On refuses its own writes when it is not the
+ * single writer: two-writer attempts fail closed (PhotoCraftAuthority.refusal).
+ *
  * Secrets (EVD-006): the control bearer token is passed to the engine as a
  * FILE PATH only; it is read inside Rust and never returned. This layer never
  * logs it and never displays it. Pins are certificate fingerprints.
@@ -357,6 +362,8 @@ public enum PhotoCraftEvent: Sendable {
     case descriptor(PhotoCraftDescriptor)
     case progress(PhotoCraftProgress)
     case served(connections: Int, bytesSent: UInt64)
+    /// Single-writer authority as this side now knows it (#24).
+    case authority(PhotoCraftAuthorityReport)
     case finished(PhotoCraftResult)
     case failed(String)
 }
@@ -370,6 +377,107 @@ public struct PhotoCraftResult: Sendable {
     public var wireBytes: UInt64
     public var seconds: Double
     public var restore: PhotoCraftRestoreReport?
+}
+
+// ---- single-writer authority in the pane (L4, #24; pure, testable) -----------
+
+/// Who may write the carried PhotoCraft session, as this pane knows it. Only
+/// .origin and .thisInstance let Carry-On write; everything else fails closed.
+public enum PhotoCraftAuthorityState: String, Sendable, Equatable, CaseIterable {
+    /// No carry has touched authority here: a fresh local session is its own single writer.
+    case origin
+    /// This instance received authority by an explicit hand-over (engine may_mutate = true).
+    case thisInstance
+    /// The other instance holds it; this one is a read-only replica.
+    case peer
+    /// A hand-over is on the wire (offer, accept, receipts).
+    case handingOver
+    /// Both sides claim authority: two writers. Refused until §21.3 recovery.
+    case conflict
+    /// Nobody provably holds it (a hand-over died mid-way). Refused until §21.3 recovery.
+    case ambiguous
+
+    /// The holder line the pane shows.
+    public var holder: String {
+        switch self {
+        case .origin: return "this instance (origin, single writer)"
+        case .thisInstance: return "this instance (received by hand-over)"
+        case .peer: return "the other instance (this one is a read-only replica)"
+        case .handingOver: return "hand-over in flight"
+        case .conflict: return "CONFLICT: both instances claim authority"
+        case .ambiguous: return "AMBIGUOUS: no instance provably holds authority"
+        }
+    }
+
+    /// Carry-On may write (seal a new cut of the live app) only as the single writer.
+    public var mayWrite: Bool { self == .origin || self == .thisInstance }
+}
+
+/// What the pane is about to do.
+public enum PhotoCraftWriteAttempt: String, Sendable, Equatable {
+    /// Capture the live app and seal a new cut: a write by this instance.
+    case send
+    /// Receive a carried session as a read-only replica.
+    case receive
+    /// Receive, then take single-writer authority (explicit hand-over).
+    case receiveAndTakeAuthority
+}
+
+public struct PhotoCraftAuthorityReport: Sendable, Equatable {
+    public var state: PhotoCraftAuthorityState
+    /// The engine's own answer (carryon_may_mutate) when the report was made.
+    public var mayMutate: Bool
+    /// The transfer receipt set JSON (new_epoch, receipts): data only, no secrets.
+    public var receiptJSON: String?
+    public var detail: String
+
+    public init(state: PhotoCraftAuthorityState, mayMutate: Bool,
+                receiptJSON: String? = nil, detail: String) {
+        self.state = state
+        self.mayMutate = mayMutate
+        self.receiptJSON = receiptJSON
+        self.detail = detail
+    }
+}
+
+public enum PhotoCraftAuthority {
+    /// The client feature that asks the source for a hand-over on this hop.
+    public static let handOverRequest = "org.carryon.photocraft.ux.authority=request"
+
+    /// A hop that asks for authority (and is not the final done-ack).
+    public static func isHandOverRequest(features: [String]) -> Bool {
+        features.contains(handOverRequest) && !PhotoCraftDescriptor.isDone(features: features)
+    }
+
+    /// Combine this core's may_mutate with what the transfer says about the peer.
+    /// Two claims are a CONFLICT, no claim is AMBIGUOUS: both fail closed.
+    public static func reconcile(localMayMutate: Bool, peerHolds: Bool) -> PhotoCraftAuthorityState {
+        switch (localMayMutate, peerHolds) {
+        case (true, true): return .conflict
+        case (true, false): return .thisInstance
+        case (false, true): return .peer
+        case (false, false): return .ambiguous
+        }
+    }
+
+    /// The pane's gate: nil when allowed, otherwise why it is refused (fail closed).
+    public static func refusal(_ attempt: PhotoCraftWriteAttempt,
+                               state: PhotoCraftAuthorityState) -> String? {
+        switch state {
+        case .conflict:
+            return "two writers claim this session; refused until §21.3 recovery (fail closed)"
+        case .ambiguous:
+            return "no instance provably holds authority; refused until §21.3 recovery (fail closed)"
+        case .handingOver:
+            return "a hand-over is in flight; wait for its receipts"
+        case .peer:
+            return attempt == .send
+                ? "the other instance holds authority; a new cut here would be a second writer (fail closed). Take it back with Receive + hand-over first."
+                : nil
+        case .origin, .thisInstance:
+            return nil
+        }
+    }
 }
 
 // ---- the engine budget as JSON (all fields; §6.8) ----------------------------
@@ -411,13 +519,17 @@ public struct PhotoCraftReceiveConfig: Sendable {
     public var live: PhotoCraftLiveConfig
     public var sourceAddr: String
     public var sourcePin: String
+    /// Explicit opt-in (#24): after a verified restore, ask the source for
+    /// single-writer authority. Off by default: receiving alone makes a replica.
+    public var takeAuthority: Bool
     public var dataDir: String
     public var windowBytes: UInt64
     public var identity: DeviceIdentity
 
     public init(live: PhotoCraftLiveConfig, sourceAddr: String, sourcePin: String,
                 dataDir: String, windowBytes: UInt64 = 256 * 1024,
-                identity: DeviceIdentity) {
+                identity: DeviceIdentity, takeAuthority: Bool = false) {
+        self.takeAuthority = takeAuthority
         self.live = live
         self.sourceAddr = sourceAddr
         self.sourcePin = sourcePin
@@ -476,6 +588,36 @@ public enum PhotoCraftSender {
             guard let net = try? NetSession.accept(listener: listener, identity: cfg.identity, trust: trust)
             else { break }
             let theirs = (try? net.serverNegotiate(features: descriptor.features)) ?? []
+            if PhotoCraftAuthority.isHandOverRequest(features: theirs) {
+                // Explicit hand-over (#24): the receiver asked for single-writer
+                // authority after its verified restore. BLOCKING until it accepts.
+                emit(.authority(PhotoCraftAuthorityReport(
+                    state: .handingOver, mayMutate: true,
+                    detail: "the receiver asked for authority; offering it (§21.2)")))
+                do {
+                    let receipts = try engine.serveAuthorityTransfer(
+                        session: net, sessionID: session, cutNumber: cut.number)
+                    // An unreadable may_mutate counts as "still a writer": with the
+                    // peer now holding it, that reconciles to CONFLICT (fail closed).
+                    let local = (try? engine.mayMutate(sessionID: session)) ?? true
+                    emit(.authority(PhotoCraftAuthorityReport(
+                        state: PhotoCraftAuthority.reconcile(localMayMutate: local, peerHolds: true),
+                        mayMutate: local, receiptJSON: receipts,
+                        detail: local
+                            ? "the transfer returned but this core still may mutate"
+                            : "handed over: this instance is a read-only replica now")))
+                } catch {
+                    // Which side committed is unknown here: fail closed.
+                    let local = (try? engine.mayMutate(sessionID: session)) ?? false
+                    emit(.authority(PhotoCraftAuthorityReport(
+                        state: .ambiguous, mayMutate: local,
+                        detail: "hand-over failed: \(error.localizedDescription)")))
+                    emit(.console("authority hand-over failed: \(error.localizedDescription)"))
+                }
+                if let c = try? net.byteCounters() { sent += c.sent }
+                net.teardown()
+                continue
+            }
             if PhotoCraftDescriptor.isDone(features: theirs) {
                 if let c = try? net.byteCounters() { sent += c.sent }
                 net.teardown()
@@ -594,6 +736,54 @@ public enum PhotoCraftReceiver {
         guard restore.oracle.checked && restore.oracle.agreed else {
             engine.close()
             throw CarryonError(code: -4, message: "restore oracle disagreed: \(restore.oracle.detail)")
+        }
+
+        // Authority (#24). Only an explicit opt-in asks for a hand-over; the mirror
+        // must not already claim authority (that would be a second writer, so it
+        // is refused before anything moves). Without the opt-in this side is a
+        // read-only replica and the source stays the single writer.
+        if cfg.takeAuthority {
+            let before = (try? engine.mayMutate(sessionID: mirror)) ?? true
+            if before {
+                emit(.authority(PhotoCraftAuthorityReport(
+                    state: .conflict, mayMutate: true,
+                    detail: "the mirror already claims authority; refusing a second writer")))
+                engine.close()
+                throw CarryonError(code: -4, message: "two writers: the mirror already claims authority (fail closed)")
+            }
+            emit(.authority(PhotoCraftAuthorityReport(
+                state: .handingOver, mayMutate: false,
+                detail: "asking the source for single-writer authority (§21.2)")))
+            do {
+                let hop = try NetSession.connect(addr: cfg.sourceAddr, identity: cfg.identity, trust: trust)
+                defer { hop.teardown() }
+                _ = try hop.clientNegotiate(features: [PhotoCraftDescriptor.marker,
+                                                       PhotoCraftAuthority.handOverRequest])
+                let receipts = try engine.requestAuthorityTransfer(
+                    session: hop, mirrorSessionID: mirror, adapterID: restore.adapterID)
+                let after = (try? engine.mayMutate(sessionID: mirror)) ?? false
+                emit(.authority(PhotoCraftAuthorityReport(
+                    state: PhotoCraftAuthority.reconcile(localMayMutate: after, peerHolds: false),
+                    mayMutate: after, receiptJSON: receipts,
+                    detail: after
+                        ? "this instance holds single-writer authority now"
+                        : "the transfer returned but this core may not mutate")))
+                emit(.console("authority: taken over (may_mutate \(after))"))
+            } catch {
+                let local = (try? engine.mayMutate(sessionID: mirror)) ?? false
+                emit(.authority(PhotoCraftAuthorityReport(
+                    state: .ambiguous, mayMutate: local,
+                    detail: "hand-over failed: \(error.localizedDescription)")))
+                emit(.console("authority hand-over failed: \(error.localizedDescription)"))
+            }
+        } else {
+            let local = (try? engine.mayMutate(sessionID: mirror)) ?? true
+            emit(.authority(PhotoCraftAuthorityReport(
+                state: PhotoCraftAuthority.reconcile(localMayMutate: local, peerHolds: true),
+                mayMutate: local,
+                detail: local
+                    ? "the mirror claims authority without a hand-over"
+                    : "read-only replica: no hand-over was requested; the source stays the single writer")))
         }
 
         // Acknowledge: one last hop so the sender stops serving.
