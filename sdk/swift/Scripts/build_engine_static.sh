@@ -27,7 +27,7 @@ if ! command -v cargo >/dev/null 2>&1 && [ -x "$HOME/.cargo/bin/cargo" ]; then
     export PATH="$HOME/.cargo/bin:$PATH"
 fi
 
-# Repo canonical external target dir (AGENTS.md); override by exporting your own.
+# Repo canonical external target dir (CONTRIBUTING.md); override by exporting your own.
 : "${CARGO_TARGET_DIR:=/Volumes/ADATA ELITE SE880/compilation/target}"
 export CARGO_TARGET_DIR
 
