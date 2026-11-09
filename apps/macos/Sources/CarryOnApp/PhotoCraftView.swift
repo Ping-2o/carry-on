@@ -9,6 +9,9 @@
  * two-Mac story — two app instances on ONE Mac — is a two-window demo.
  *
  * Labels are law: every run is OBSERVED (LOCAL); the footer says so per run.
+ *
+ * Authority (#24): the pane shows the single-writer holder, offers an explicit
+ * hand-over on receive, and refuses a second writer (fail closed).
  */
 
 import AppKit
@@ -64,6 +67,21 @@ final class PhotoCraftModel {
     private(set) var identityPin: String = ""
     var consoleLines: [String] = []
     var lastError: String?
+
+    /// Single-writer authority as this pane knows it (#24). Deliberately NOT
+    /// cleared by reset(): forgetting it would let a replica write again.
+    private(set) var authority: PhotoCraftAuthorityState = .origin
+    private(set) var authorityDetail = "no hand-over yet: a fresh local session is its own single writer"
+    private(set) var authorityReceipt: String?
+    /// Explicit opt-in before a receive: take authority after a verified restore.
+    var takeAuthority = false
+    /// Why the next send would be refused (fail closed), if it would.
+    var sendRefusal: String? { PhotoCraftAuthority.refusal(.send, state: authority) }
+    /// Why the next receive would be refused (fail closed), if it would.
+    var receiveRefusal: String? {
+        PhotoCraftAuthority.refusal(takeAuthority ? .receiveAndTakeAuthority : .receive,
+                                    state: authority)
+    }
 
     private let d = UserDefaults.standard
     private var identity: DeviceIdentity?
@@ -135,6 +153,7 @@ final class PhotoCraftModel {
 
     func send() async {
         guard !running, configValid, pinValid, let identity else { return }
+        if let why = sendRefusal { lastError = "refused: \(why)"; return }
         reset()
         running = true
         let token = UUID()
@@ -154,11 +173,16 @@ final class PhotoCraftModel {
         } catch {
             guard runToken == token else { return }
             lastError = error.localizedDescription
+            if authority == .handingOver {
+                authority = .ambiguous
+                authorityDetail = "the run failed during a hand-over; refused until §21.3 recovery"
+            }
         }
     }
 
     func receive() async {
         guard !running, configValid, receivePeerValid, let identity else { return }
+        if let why = receiveRefusal { lastError = "refused: \(why)"; return }
         reset()
         running = true
         let token = UUID()
@@ -167,7 +191,7 @@ final class PhotoCraftModel {
         let cfg = PhotoCraftReceiveConfig(
             live: liveConfig, sourceAddr: peerAddr, sourcePin: peerPin,
             dataDir: dataDir + "/receive", windowBytes: windowBytes,
-            identity: identity)
+            identity: identity, takeAuthority: takeAuthority)
         do {
             _ = try await Task.detached { [weak self] in
                 try PhotoCraftReceiver.run(cfg) { [weak self] event in
@@ -178,6 +202,10 @@ final class PhotoCraftModel {
         } catch {
             guard runToken == token else { return }
             lastError = error.localizedDescription
+            if authority == .handingOver {
+                authority = .ambiguous
+                authorityDetail = "the run failed during a hand-over; refused until §21.3 recovery"
+            }
         }
     }
 
@@ -193,6 +221,11 @@ final class PhotoCraftModel {
         case .descriptor: break
         case .progress(let p): progress = p
         case .served: break
+        case .authority(let a):
+            authority = a.state
+            authorityDetail = a.detail
+            authorityReceipt = a.receiptJSON
+            consoleLines.append("authority: \(a.state.rawValue) · may_mutate \(a.mayMutate) · \(a.detail)")
         case .finished(let r): result = r
         case .failed(let why): lastError = why
         }
@@ -211,6 +244,7 @@ struct PhotoCraftView: View {
                 liveConfigBox(model)
                 liveCard
                 rolePicker(model)
+                authorityBox(model)
                 if model.mode == .send { sendBox(model) } else { receiveBox(model) }
                 if let p = model.progress { progressBox(p, model: model) }
                 if let r = model.result { resultBox(r) }
@@ -297,6 +331,39 @@ struct PhotoCraftView: View {
         .disabled(model.running)
     }
 
+    private func authorityBox(_ model: PhotoCraftModel) -> some View {
+        GroupBox("Authority: single writer (L4)") {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text("holder").font(Theme.monoSmall).foregroundStyle(.secondary)
+                        .frame(width: 92, alignment: .leading)
+                    Text(model.authority.holder)
+                        .font(Theme.mono)
+                        .foregroundStyle(authorityColor(model.authority))
+                }
+                Text(model.authorityDetail)
+                    .font(Theme.monoSmall).foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                if let receipt = model.authorityReceipt {
+                    Text("receipts: \(receipt)")
+                        .font(Theme.monoSmall).foregroundStyle(.secondary)
+                        .lineLimit(2).truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
+                Text("Carry-On refuses its own writes when it is not the single writer (fail closed). PhotoCraft itself is not locked (no fork), so edits typed directly into a replica's window are outside this guarantee.")
+                    .font(Theme.monoSmall).foregroundStyle(.secondary)
+            }.padding(6).frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func authorityColor(_ s: PhotoCraftAuthorityState) -> Color {
+        switch s {
+        case .origin, .thisInstance: return Theme.ok
+        case .peer, .handingOver: return Theme.wire
+        case .conflict, .ambiguous: return Theme.failed
+        }
+    }
+
     private func sendBox(_ model: PhotoCraftModel) -> some View {
         @Bindable var model = model
         return GroupBox("Send to a second instance") {
@@ -317,8 +384,13 @@ struct PhotoCraftView: View {
                     } label: {
                         Label(model.running ? "Serving…" : "Cut & send session", systemImage: "paperplane.fill")
                     }
-                    .disabled(model.running || !model.configValid || !model.pinValid)
+                    .disabled(model.running || !model.configValid || !model.pinValid || model.sendRefusal != nil)
                 }
+                if let why = model.sendRefusal {
+                    Text("send refused: \(why)").font(Theme.monoSmall).foregroundStyle(Theme.failed)
+                }
+                Text("If the receiver asks for authority, this instance hands it over on the wire and becomes a read-only replica.")
+                    .font(Theme.monoSmall).foregroundStyle(.secondary)
                 if let addr = model.listenAddr {
                     HStack(spacing: 8) {
                         Text("listening \(addr)").font(Theme.mono).textSelection(.enabled)
@@ -347,7 +419,14 @@ struct PhotoCraftView: View {
                     } label: {
                         Label(model.running ? "Receiving…" : "Receive & restore", systemImage: "tray.and.arrow.down.fill")
                     }
-                    .disabled(model.running || !model.configValid || !model.receivePeerValid)
+                    .disabled(model.running || !model.configValid || !model.receivePeerValid || model.receiveRefusal != nil)
+                }
+                Toggle("Hand over authority to this instance after a verified restore (explicit, L4)",
+                       isOn: $model.takeAuthority)
+                    .font(Theme.monoSmall)
+                    .disabled(model.running)
+                if let why = model.receiveRefusal {
+                    Text("receive refused: \(why)").font(Theme.monoSmall).foregroundStyle(Theme.failed)
                 }
                 Text("this side's pin \(model.identityPin.prefix(12))…  (copy it to the sender)")
                     .font(Theme.monoSmall).foregroundStyle(.secondary)
