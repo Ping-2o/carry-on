@@ -18,6 +18,10 @@
  *             reader.navigate ON THIS DEVICE (the L4 story: the position
  *             physically moved) → evidence bundle + verify.
  *
+ *   asset     reader.asset {path} (read-only, #25): one ZIM entry for the
+ *             reader WebView. Never waits for a run: if one holds the engine,
+ *             the asset simply 404s.
+ *
  * Labels (§2): a run with the mac peer is PHYSICAL (two machines, LAN TLS);
  * with 127.0.0.1 it is LOCAL. Never "supported" (§30 unrun).
  *
@@ -85,6 +89,29 @@ class KiwixRunner(
     fun setZimPath(path: String) = _state.update { if (it.running) it else it.copy(zimPath = path) }
 
     fun setStrategy(s: KiwixStrategy) = _state.update { if (it.running) it else it.copy(strategy = s) }
+
+    /** One ZIM asset for the reader WebView (#25): the read-only reader.asset
+     *  action on the CURRENT session + cut. Blocking; called from the WebView's
+     *  request thread. Never waits behind a run (tryLock): while a run owns the
+     *  engine, or on any error or digest mismatch, the result is null (404). */
+    fun readAsset(path: String): KiwixAsset? {
+        if (!mutex.tryLock()) return null
+        try {
+            val c = core ?: return null
+            val s = _state.value
+            if (!s.zimOpen || s.sessionId.isBlank()) return null
+            val json = c.executeActionAs(
+                cutRefJson(s.sessionId, s.cutNumber),
+                """{"class":"reader.asset","params":{"path":${jsonStr(path)}}}""",
+                KIWIX_ADAPTER_ID,
+            )
+            return KiwixAsset.parseActionResult(json)
+        } catch (e: Exception) {
+            return null
+        } finally {
+            mutex.unlock()
+        }
+    }
 
     /** Open the ZIM + restore the reading session. `articlePath` is a REAL ZIM
      *  entry (e.g. "index"); `scrollY` is where the previous device left off. */
