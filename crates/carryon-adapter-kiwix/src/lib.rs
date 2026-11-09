@@ -616,6 +616,46 @@ impl KiwixAdapter {
         self.zim_bytes.as_ref().map(|b| b.len() as u64).unwrap_or(0)
     }
 
+    /// `reader.asset` (#25): one ZIM entry (image, CSS, …) by path, so the
+    /// reader UI can render the article with its assets. Read-only: it never
+    /// touches the session, the generation or the cut. Fail closed: no real
+    /// backend, an unknown entry, or an entry above [`ASSET_MAX_BYTES`] is an
+    /// error, never a fabricated body. Callers re-check `sha256`.
+    pub fn asset_output(&self, path: &str) -> Result<serde_json::Value, AdapterError> {
+        if !asset_path_ok(path) {
+            return Err(AdapterError::Incompatible("reader.asset: invalid path".into()));
+        }
+        #[cfg(feature = "zim-backend")]
+        if let Some(src) = &self.zim_source {
+            let item = src
+                .archive
+                .item(path)
+                .map_err(|e| AdapterError::Incompatible(format!("zim entry: {e}")))?;
+            let size = item.size();
+            if size > ASSET_MAX_BYTES {
+                return Err(AdapterError::OutOfRange(format!(
+                    "asset {path} is {size} bytes (cap {ASSET_MAX_BYTES})"
+                )));
+            }
+            let mimetype = item
+                .mimetype()
+                .map_err(|e| AdapterError::Incompatible(format!("zim mimetype: {e}")))?;
+            let data = item
+                .read_range(0, size)
+                .map_err(|e| AdapterError::Incompatible(format!("zim read: {e}")))?;
+            return Ok(serde_json::json!({
+                "path": path,
+                "mimetype": mimetype,
+                "size": data.len(),
+                "sha256": hex_sha256(&data),
+                "data_b64": base64_encode(&data),
+            }));
+        }
+        Err(AdapterError::Incompatible(
+            "UNSUPPORTED: reader.asset requires the libzim backend".into(),
+        ))
+    }
+
     fn version(&self, object_id: &str) -> ObjectVersionWire {
         ObjectVersionWire {
             object_id: object_id.into(),
@@ -645,6 +685,7 @@ impl Adapter for KiwixAdapter {
                 "reader.restore".into(),
                 "reader.navigate".into(),
                 "library.materialize".into(),
+                "reader.asset".into(),
             ],
             permissions: vec!["user_selected_file".into()],
             network_access: false,
@@ -790,6 +831,12 @@ impl Adapter for KiwixAdapter {
                     optional,
                 })
             }
+            // Read-only (#25): one ZIM asset for the reader UI.
+            "reader.asset" => Ok(DependencyPlanWire {
+                prerequisites: vec![self.version(SCHEMA_SESSION), self.version(SCHEMA_META)],
+                provenance: vec![self.version(SCHEMA_META)],
+                optional: Vec::new(),
+            }),
             // Optional bulk: materialize ZIM byte ranges locally so libzim
             // can open the file natively (RESEARCH §2.2). The core's budget
             // admission refuses over-budget imports before bytes move.
@@ -987,6 +1034,27 @@ impl Adapter for KiwixAdapter {
                     },
                 })
             }
+            // Read-only (#25): one ZIM asset for the reader UI. No state
+            // change: no generation bump, no history entry, no new cut.
+            "reader.asset" => {
+                let path = req
+                    .params
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| AdapterError::Internal("reader.asset: no path".into()))?;
+                let output = self.asset_output(path)?;
+                let output_hash = hex_sha256(&serde_json::to_vec(&output).unwrap_or_default());
+                Ok(ActionResultWire {
+                    output,
+                    output_hash: output_hash.clone(),
+                    oracle: OracleOutcome {
+                        checked: true,
+                        agreed: true,
+                        output_hash,
+                        detail: format!("asset {path} served from the local zim (read-only)"),
+                    },
+                })
+            }
             // Optional bulk: acknowledge a range request. Actual bytes flow
             // through `read_object` chunking; the action only validates the
             // range and fails closed when no bulk is attached.
@@ -1130,4 +1198,91 @@ fn hex_sha256(bytes: &[u8]) -> String {
     let mut h = Sha256::new();
     h.update(bytes);
     hex(&h.finalize())
+}
+
+/// Largest single ZIM entry `reader.asset` serves (#25). Article assets are
+/// images/CSS of a few KB to a few MB; anything bigger is refused.
+pub const ASSET_MAX_BYTES: u64 = 4 * 1024 * 1024;
+
+/// ZIM entry paths `reader.asset` accepts: non-empty, bounded, no control
+/// characters (the archive lookup itself fails closed on unknown entries).
+fn asset_path_ok(path: &str) -> bool {
+    !path.is_empty() && path.len() <= 1024 && !path.chars().any(char::is_control)
+}
+
+/// Standard base64 (RFC 4648, padded) for asset bytes in the action output.
+#[cfg_attr(not(feature = "zim-backend"), allow(dead_code))]
+fn base64_encode(bytes: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let b0 = u32::from(chunk[0]);
+        let b1 = u32::from(chunk.get(1).copied().unwrap_or(0));
+        let b2 = u32::from(chunk.get(2).copied().unwrap_or(0));
+        let n = (b0 << 16) | (b1 << 8) | b2;
+        let sym = |shift: u32| char::from(TABLE[((n >> shift) & 63) as usize]);
+        out.push(sym(18));
+        out.push(sym(12));
+        out.push(if chunk.len() > 1 { sym(6) } else { '=' });
+        out.push(if chunk.len() > 2 { sym(0) } else { '=' });
+    }
+    out
+}
+
+#[cfg(test)]
+mod asset_tests {
+    use super::*;
+
+    #[test]
+    fn base64_matches_rfc4648_vectors() {
+        let cases: [(&[u8], &str); 7] = [
+            (b"", ""),
+            (b"f", "Zg=="),
+            (b"fo", "Zm8="),
+            (b"foo", "Zm9v"),
+            (b"foob", "Zm9vYg=="),
+            (b"fooba", "Zm9vYmE="),
+            (b"foobar", "Zm9vYmFy"),
+        ];
+        for (input, want) in cases {
+            assert_eq!(base64_encode(input), want);
+        }
+    }
+
+    #[test]
+    fn asset_paths_are_validated() {
+        assert!(asset_path_ok("I/image.png"));
+        assert!(asset_path_ok("_assets_/style.css"));
+        assert!(!asset_path_ok(""));
+        assert!(!asset_path_ok("I/a\nb.png"));
+        assert!(!asset_path_ok(&"a".repeat(2000)));
+    }
+
+    #[test]
+    fn reader_asset_fails_closed_without_a_real_zim() {
+        let state = Session {
+            zim: ZimIdentity {
+                uuid: "u".into(),
+                filename: "none.zim".into(),
+                size: 0,
+                bulk_sha256: String::new(),
+            },
+            position: ReadingPosition {
+                article_path: "A/Index".into(),
+                article_title: "Index".into(),
+                scroll_y: 0,
+                tab_index: 0,
+                opaque_platform_state: None,
+            },
+            bookmarks: Vec::new(),
+            history: Vec::new(),
+            settings: ReadingSettings {
+                text_zoom: 100,
+                theme: "system".into(),
+            },
+        };
+        let adapter = KiwixAdapter::new("s", state);
+        assert!(adapter.asset_output("I/image.png").is_err());
+        assert!(adapter.asset_output("").is_err());
+    }
 }

@@ -150,6 +150,61 @@ object KiwixRender {
     }
 }
 
+/** One ZIM asset (image, CSS, …) from the read-only reader.asset action
+ *  (#25). The bytes are re-hashed here: a digest or size mismatch drops the
+ *  asset (fail closed, the WebView gets a 404) instead of rendering it. */
+class KiwixAsset(val path: String, val mimeType: String, val bytes: ByteArray) {
+    companion object {
+        fun parseActionResult(json: String): KiwixAsset? = try {
+            val o = JSONObject(json).getJSONObject("output")
+            val bytes = java.util.Base64.getDecoder().decode(o.getString("data_b64"))
+            val want = o.getString("sha256").lowercase(java.util.Locale.ROOT)
+            val got = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
+                .joinToString("") { b -> "%02x".format(b.toInt() and 0xff) }
+            val mime = o.optString("mimetype").substringBefore(';').trim()
+            when {
+                got != want -> null
+                o.getLong("size") != bytes.size.toLong() -> null
+                else -> KiwixAsset(
+                    path = o.getString("path"),
+                    mimeType = if (mime.isEmpty() || mime.any { it.isISOControl() || it.isWhitespace() }) {
+                        "application/octet-stream"
+                    } else {
+                        mime
+                    },
+                    bytes = bytes,
+                )
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+}
+
+/** URL <-> ZIM path mapping for the reader WebView (#25). Only
+ *  https://kiwix.local/<zim path> is ours; every other URL is blocked. */
+object KiwixAssets {
+    const val HOST = "kiwix.local"
+
+    /** Base URL for an article, so its relative asset links resolve to ZIM paths. */
+    fun baseUrlFor(articlePath: String): String =
+        java.net.URI("https", HOST, "/" + articlePath.trimStart('/'), null).toASCIIString()
+
+    /** The ZIM path a WebView request asks for, or null when the URL is not ours. */
+    fun zimPathFor(url: String): String? {
+        val uri = try {
+            java.net.URI(url)
+        } catch (e: java.net.URISyntaxException) {
+            return null
+        }
+        if (!uri.scheme.equals("https", ignoreCase = true)) return null
+        if (!uri.host.equals(HOST, ignoreCase = true)) return null
+        val path = uri.normalize().path?.removePrefix("/") ?: return null
+        if (path.isEmpty() || path.split('/').any { it == ".." }) return null
+        return path
+    }
+}
+
 object KiwixMetrics {
     /** bytes_before_first_action / ZIM size, in ppm (integer, no float UI). */
     fun ratioPpm(carried: Long, zimSize: Long): Long =

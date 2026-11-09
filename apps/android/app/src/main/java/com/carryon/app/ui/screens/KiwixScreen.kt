@@ -8,9 +8,11 @@
  *
  * Roles (§2 labels):
  *   open     — device-local read of the real ZIM through libzim (OBSERVED),
- *              rendered in a WebView (text-first: resources that are not part
- *              of the carried article may 404 — honest, the carry brings the
- *              position, not the book).
+ *              rendered in a WebView. Assets (images, CSS) are served from the
+ *              LOCAL ZIM by the read-only reader.asset action through
+ *              shouldInterceptRequest (#25); every other URL is blocked, and an
+ *              asset whose digest does not match is dropped (fail closed). The
+ *              carry still brings the position, not the book.
  *   serve    — this device offers its position to a peer (PHYSICAL when the
  *              peer is the mac, LOCAL on loopback).
  *   receive  — import the peer's position, restore it HERE, take authority,
@@ -18,7 +20,10 @@
  */
 package com.carryon.app.ui.screens
 
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,6 +55,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.carryon.app.kiwix.KIWIX_ADAPTER_ID
+import com.carryon.app.kiwix.KiwixAssets
 import com.carryon.app.kiwix.KiwixMetrics
 import com.carryon.app.kiwix.KiwixRender
 import com.carryon.app.kiwix.KiwixRunner
@@ -58,6 +64,7 @@ import com.carryon.app.ui.AppGraph
 import com.carryon.app.ui.components.KeyValueLine
 import com.carryon.app.ui.components.MonoConsole
 import com.carryon.app.ui.theme.ConsoleTextStyle
+import java.io.ByteArrayInputStream
 import java.io.File
 
 @Composable
@@ -88,6 +95,8 @@ fun KiwixScreen(runner: KiwixRunner = AppGraph.kiwixRunner) {
     var remoteCut by remember { mutableStateOf((launch?.getStringExtra("kiwix_cut") ?: "0").toLongOrNull() ?: 0L) }
     val autoRole = remember { launch?.getStringExtra("kiwix_auto") }
     val autoOpen = remember { launch?.getStringExtra("kiwix_open") == "1" }
+    // #25: render with assets from the local ZIM (default) or text-first.
+    var withAssets by remember { mutableStateOf(true) }
 
     // One-shot auto-open (cold start with the Intent above).
     LaunchedEffect(Unit) {
@@ -202,19 +211,27 @@ fun KiwixScreen(runner: KiwixRunner = AppGraph.kiwixRunner) {
         // ---- the article (real carried/restored bytes) ----
         Text("Article", style = MaterialTheme.typography.titleSmall)
         state.articleHtml?.let { html ->
+            FilterChip(
+                selected = withAssets,
+                onClick = { withAssets = !withAssets },
+                label = { Text(if (withAssets) "assets: from the local ZIM" else "assets: hidden (text-first)") },
+            )
             AndroidView(
                 factory = { ctx ->
                     WebView(ctx).apply {
                         settings.javaScriptEnabled = false // carried bytes are DATA (EVD-005)
+                        settings.allowFileAccess = false
+                        settings.allowContentAccess = false
                         settings.loadWithOverviewMode = true
                         settings.useWideViewPort = true
                         setBackgroundColor(0xFFFFFFFF.toInt())
+                        webViewClient = KiwixAssetClient(runner)
                     }
                 },
                 update = { wv ->
                     wv.loadDataWithBaseURL(
-                        "https://kiwix.local/",
-                        KiwixRender.textFirstHtml(html),
+                        KiwixAssets.baseUrlFor(state.articlePath),
+                        if (withAssets) html else KiwixRender.textFirstHtml(html),
                         "text/html",
                         "utf-8",
                         null,
@@ -355,4 +372,21 @@ fun KiwixScreen(runner: KiwixRunner = AppGraph.kiwixRunner) {
         )
         Spacer(Modifier.height(24.dp))
     }
+}
+
+/** Serves https://kiwix.local/<path> from the local ZIM (reader.asset, #25)
+ *  and blocks every other request: nothing is fetched from the network, and
+ *  links do not navigate (the position moves only through reader.navigate, L4). */
+private class KiwixAssetClient(private val runner: KiwixRunner) : WebViewClient() {
+    override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+        val url = request?.url?.toString() ?: return emptyResponse(403, "Blocked")
+        val path = KiwixAssets.zimPathFor(url) ?: return emptyResponse(403, "Blocked")
+        val asset = runner.readAsset(path) ?: return emptyResponse(404, "Not in ZIM")
+        return WebResourceResponse(asset.mimeType, null, ByteArrayInputStream(asset.bytes))
+    }
+
+    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean = true
+
+    private fun emptyResponse(code: Int, reason: String): WebResourceResponse =
+        WebResourceResponse("text/plain", "utf-8", code, reason, emptyMap(), ByteArrayInputStream(ByteArray(0)))
 }
